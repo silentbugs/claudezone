@@ -11,6 +11,7 @@ export class Controls {
   private adsToggled = false;
   private sprintToggled = false;
   private lastSprintTap = -1;
+  private lastSprintRelease = -1;
   private plateLatch = false;
   thirdPersonHeld = false;
   scoreboardHeld = false;
@@ -36,10 +37,11 @@ export class Controls {
     if (pp) P.prone = true;
     if (pr && s.proneMode === 'hold' && p.stance === Stance.Prone) P.prone = true;
     // sprint / tactical sprint
+    if (this.released('sprint')) this.lastSprintRelease = now;
     const sp = this.pressed('sprint');
     if (sp) {
       if (s.sprintMode === 'toggle') this.sprintToggled = !this.sprintToggled;
-      if (p.sprinting && (s.tacSprint === 'pressWhileSprinting' || now - this.lastSprintTap < 0.3)) P.tac = true;
+      if ((p.sprinting || this.down('forward')) && (s.tacSprint === 'pressWhileSprinting' || now - this.lastSprintTap < 0.3 || now - this.lastSprintRelease < 0.3)) P.tac = true;
       this.lastSprintTap = now;
     }
     if (this.pressed('ads') && s.adsMode === 'toggle') this.adsToggled = !this.adsToggled;
