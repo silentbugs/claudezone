@@ -48,7 +48,7 @@ export class TerrainMesh {
           float macro = fbm3(vWPos.xz / 90.0);
           float macro2 = fbm3(vWPos.xz / 23.0 + 7.0);
           float slope = 1.0 - clamp(vWNormal.y, 0.0, 1.0);
-          vec3 grass = texture(tLayers, vec3(uv, 0.0)).rgb;
+          vec3 grass = texture(tLayers, vec3(uv, 0.0)).rgb * vec3(0.92, 1.06, 0.72);
           vec3 dry = texture(tLayers, vec3(uv * 1.1, 1.0)).rgb;
           vec3 dirt = texture(tLayers, vec3(uv, 2.0)).rgb;
           vec3 bw = pow(abs(normalize(vWNormal)), vec3(4.0)); bw /= (bw.x + bw.y + bw.z);

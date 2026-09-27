@@ -18,7 +18,7 @@ function bladeTexture(): THREE.Texture {
     const x = 6 + Math.random() * (W - 12), h = H * (0.35 + Math.random() * 0.6), lean = (Math.random() - 0.5) * 26, w = 2.5 + Math.random() * 3.5;
     const grd = g.createLinearGradient(0, H, 0, H - h);
     const c = 0.75 + Math.random() * 0.3;
-    grd.addColorStop(0, `rgba(${105 * c},${108 * c},${66 * c},1)`); grd.addColorStop(1, `rgba(${178 * c},${172 * c},${118 * c},1)`);
+    grd.addColorStop(0, `rgba(${78 * c},${84 * c},${44 * c},1)`); grd.addColorStop(1, `rgba(${138 * c},${136 * c},${76 * c},1)`);
     g.fillStyle = grd;
     g.beginPath(); g.moveTo(x - w, H); g.quadraticCurveTo(x + lean * 0.3, H - h * 0.6, x + lean, H - h); g.quadraticCurveTo(x + lean * 0.3 + w * 0.3, H - h * 0.6, x + w, H); g.closePath(); g.fill();
   }
@@ -66,7 +66,7 @@ export class Foliage {
           float w = fbm3(ip.xz * 0.05 + uTime * 0.25) - 0.5;
           transformed.x += (w * 0.35 + sin(uTime * 2.1 + ip.x * 0.7) * 0.04) * h * h;
           transformed.z += (w * 0.2 + cos(uTime * 1.7 + ip.z * 0.6) * 0.04) * h * h;
-          vShade = 0.8 + 0.28 * h;`)
+          vShade = 0.95 + 0.15 * h;`)
         .replace('#include <beginnormal_vertex>', '#include <beginnormal_vertex>\n objectNormal = vec3(0.0, 1.0, 0.0);');
       sh.fragmentShader = sh.fragmentShader
         .replace('#include <common>', '#include <common>\nvarying float vShade;')
