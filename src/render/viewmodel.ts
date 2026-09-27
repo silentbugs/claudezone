@@ -1,8 +1,10 @@
 /** First-person arms + weapon, rendered in their own pass so they never clip into walls. */
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { WEAPON } from '../data/weapons';
 import { describeGun, gunGeometry } from './gunModel';
+import { models } from './models';
 import { Player, Phase } from '../sim/types';
 
 function part(geo: THREE.BufferGeometry, color: number, x: number, y: number, z: number, rx = 0, ry = 0, rz = 0) {
@@ -23,9 +25,20 @@ function limb(ax: number, ay: number, az: number, bx: number, by: number, bz: nu
   g.translate(ax, ay, az);
   return part(g, color, 0, 0, 0);
 }
-function armsGeometry(sleeve: number, pistol: boolean): THREE.BufferGeometry {
+function armsGeometry(sleeve: number, pistol: boolean, glb = false): THREE.BufferGeometry {
   const glove = 0x2e2d2a;
-  const gripZ = pistol ? 0.05 : 0.1, guardZ = pistol ? 0.04 : -0.3;
+  // the CC0 gun models put their origin at the receiver: grip just behind it, handguard ~0.17 m ahead
+  const gripZ = glb ? (pistol ? 0.035 : 0.085) : pistol ? 0.05 : 0.1, guardZ = glb ? (pistol ? 0.03 : -0.17) : pistol ? 0.04 : -0.3;
+  if (glb) {
+    // gloved fists wrapped around the model's grip and handguard
+    const fist = (w: number, h: number, d: number) => new RoundedBoxGeometry(w, h, d, 2, 0.018);
+    return mergeGeometries([
+      part(fist(0.05, 0.075, 0.075), glove, 0.004, pistol ? -0.055 : -0.06, gripZ),
+      limb(0.006, -0.07, gripZ + 0.03, 0.08, -0.3, gripZ + 0.24, 0.036, sleeve),
+      part(fist(0.055, 0.045, 0.09), glove, pistol ? -0.022 : -0.004, pistol ? -0.06 : -0.035, guardZ),
+      limb(pistol ? -0.025 : -0.01, pistol ? -0.075 : -0.05, guardZ + 0.035, pistol ? -0.1 : -0.17, -0.3, guardZ + 0.26, 0.036, sleeve),
+    ].map((g) => { g.deleteAttribute('uv'); return g; }))!;
+  }
   return mergeGeometries([
     // right hand on the grip, forearm running back and down out of frame
     part(B(0.06, 0.08, 0.1), glove, 0.005, -0.075, gripZ),
@@ -47,6 +60,8 @@ export class ViewModel {
   private flash: THREE.Mesh;
   private flashLight = new THREE.PointLight(0xffc070, 0, 6, 2);
   private key = '';
+  private glb: THREE.Object3D | null = null;
+  private armsGlbRifle = armsGeometry(0x4d5140, false, true); private armsGlbPistol = armsGeometry(0x4d5140, true, true);
   muzzle = 0.6; sight = 0.06; scope = false; optic = false;
   private swayX = 0; swayY = 0; private bobT = 0; private kick = 0; private kickRot = 0; private flashT = 0;
   private swap = 0; private lastCur = -1; private lastId = '';
@@ -102,7 +117,21 @@ export class ViewModel {
     this.root.visible = !hidden;
     if (hidden) return;
     const k = `${w!.id}:${w!.rarity}`;
-    if (k !== this.key) { this.key = k; const g = describeGun(WEAPON[w!.id], w!.rarity); this.gun.geometry.dispose(); this.gun.geometry = gunGeometry(g); this.muzzle = g.muzzle; this.sight = g.sight; this.scope = g.scope; this.optic = g.optic; this.arms.geometry = WEAPON[w!.id].cls === 'pistol' ? this.armsPistol : this.armsRifle; }
+    if (k !== this.key) {
+      this.key = k;
+      const pistolArms = WEAPON[w!.id].cls === 'pistol';
+      if (this.glb) { this.root.remove(this.glb); this.glb = null; }
+      const m = models.gun(w!.id, w!.rarity);
+      if (m) {
+        this.glb = m.obj; this.root.add(m.obj); this.gun.visible = false;
+        this.muzzle = m.muzzle; this.sight = m.sight; this.scope = m.scope; this.optic = m.optic;
+        this.arms.geometry = pistolArms ? this.armsGlbPistol : this.armsGlbRifle;
+      } else {
+        const g = describeGun(WEAPON[w!.id], w!.rarity); this.gun.geometry.dispose(); this.gun.geometry = gunGeometry(g);
+        this.muzzle = g.muzzle; this.sight = g.sight; this.scope = g.scope; this.optic = g.optic;
+        this.arms.geometry = pistolArms ? this.armsPistol : this.armsRifle;
+      }
+    }
     if (p.cur !== this.lastCur || w!.id !== this.lastId) { this.swap = 1; this.lastCur = p.cur; this.lastId = w!.id; }
     this.swap = Math.max(0, this.swap - dt * 2.2);
     const ads = p.ads;
@@ -115,7 +144,8 @@ export class ViewModel {
     const bx = Math.sin(this.bobT) * bobA, by = -Math.abs(Math.cos(this.bobT)) * bobA;
     this.kick = Math.max(0, this.kick - dt * 14); this.kickRot = Math.max(0, this.kickRot - dt * 10);
     const S = 0.7, pistol = WEAPON[w!.id].cls === 'pistol';
-    const hip = pistol ? new THREE.Vector3(0.1, -0.13, -0.48) : new THREE.Vector3(0.12, -0.14, -0.36), aim = new THREE.Vector3(0, -this.sight * S, pistol ? -0.5 : -0.36);
+    const g = !!this.glb;
+    const hip = pistol ? new THREE.Vector3(0.1, g ? -0.11 : -0.13, g ? -0.42 : -0.48) : new THREE.Vector3(g ? 0.13 : 0.12, g ? -0.15 : -0.14, g ? -0.4 : -0.36), aim = new THREE.Vector3(0, -this.sight * S, pistol ? (g ? -0.4 : -0.5) : g ? -0.3 : -0.36);
     const pos = hip.clone().lerp(aim, ads);
     let rx = 0, ry = 0, rz = 0;
     if (sprinting) { const s = p.tacSprint > 0 ? 1 : 0.7; pos.x -= 0.05 * s; pos.y -= 0.06 * s; rx -= 0.35 * s; ry += 0.75 * s; rz += 0.25 * s; if (p.tacSprint > 0) { rx = 0.9; ry = 0.2; pos.y += 0.02; } }
@@ -133,9 +163,11 @@ export class ViewModel {
     this.root.position.set(pos.x + bx + this.swayX, pos.y + by + this.swayY, pos.z);
     this.root.rotation.set(rx + this.kickRot * 0.05 + this.swayY * 2, ry + this.swayX * 3, rz + this.swayX * 1.5, 'YXZ');
     // scope: hide the model when fully zoomed on a scoped weapon (overlay drawn by the HUD)
-    this.gun.visible = this.arms.visible = !(this.scope && ads > 0.92);
+    this.arms.visible = !(this.scope && ads > 0.92);
+    this.gun.visible = this.arms.visible && !this.glb;
+    if (this.glb) this.glb.visible = this.arms.visible;
     this.flashT -= dt;
-    this.flash.visible = this.flashT > 0 && this.gun.visible;
+    this.flash.visible = this.flashT > 0 && this.arms.visible;
     this.flash.position.set(0, 0.012, -this.muzzle - 0.05);
     this.flashLight.position.copy(this.flash.position);
     this.flashLight.intensity = this.flashT > 0 ? 8 : 0;

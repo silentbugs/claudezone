@@ -9,6 +9,7 @@ import type { Sim } from '../sim/sim';
 import { ItemKind, Item } from '../sim/types';
 import { WEAPON, RARITY_COLORS } from '../data/weapons';
 import { describeGun, gunGeometry } from './gunModel';
+import { models } from './models';
 
 function colored(geo: THREE.BufferGeometry, hex: number, emissive = 0) {
   const g = geo.index ? geo.toNonIndexed() : geo;
@@ -117,7 +118,7 @@ export class LootMeshes {
       let geo: THREE.BufferGeometry;
       if (key.startsWith('w:')) {
         const [, id, r] = key.split(':');
-        const g = gunGeometry(describeGun(WEAPON[id], +r));
+        const g = models.bakedGun(id, +r)?.clone() ?? gunGeometry(describeGun(WEAPON[id], +r));
         g.rotateZ(Math.PI / 2); // lying on its side
         g.computeBoundingBox(); g.translate(0, -g.boundingBox!.min.y, 0);
         geo = withEmit(g);

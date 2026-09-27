@@ -8,6 +8,7 @@ import { FixedStep } from '../core/loop';
 import { Input } from '../core/input';
 import { SceneMgr } from '../render/scene';
 import { Characters } from '../render/characters';
+import { Soldiers } from '../render/soldiers';
 import { ViewModel } from '../render/viewmodel';
 import { Effects } from '../render/effects';
 import { VehicleMeshes } from '../render/vehicles';
@@ -26,6 +27,7 @@ export class Match {
   sim: Sim;
   hud: Hud;
   chars = new Characters();
+  soldiers = new Soldiers();
   vm = new ViewModel();
   fx: Effects;
   vehMeshes = new VehicleMeshes();
@@ -58,7 +60,7 @@ export class Match {
     this.hud = new Hud(this.sim, tac, 0, settings);
     ui.appendChild(this.hud.root);
     this.fx = new Effects(this.sim, sm.scene);
-    sm.scene.add(this.chars.group);
+    sm.scene.add(this.chars.group); sm.scene.add(this.soldiers.group);
     sm.scene.add(this.vehMeshes.group);
     this.loot = new LootMeshes(this.sim); sm.scene.add(this.loot.group);
     this.chars.hidden = 0;
@@ -71,7 +73,7 @@ export class Match {
   }
 
   dispose() {
-    this.sm.scene.remove(this.chars.group); this.sm.scene.remove(this.fx.group); this.sm.scene.remove(this.vehMeshes.group); this.sm.scene.remove(this.loot.group);
+    this.sm.scene.remove(this.chars.group); this.sm.scene.remove(this.soldiers.group); this.sm.scene.remove(this.fx.group); this.sm.scene.remove(this.vehMeshes.group); this.sm.scene.remove(this.loot.group);
     this.hud.root.remove(); this.pauseEl?.remove(); this.fpsEl.remove(); this.closeSettings(); this.input.onUnlock = () => {};
     audio.stopLoops();
   }
@@ -305,6 +307,9 @@ export class Match {
     const fwd = new THREE.Vector3(); cam.getWorldDirection(fwd);
     audio.setListener(cam.position.x, cam.position.y, cam.position.z, fwd.x, fwd.y, fwd.z);
     // world
+    this.soldiers.hidden = this.chars.hidden;
+    this.soldiers.update(sim.players, a, cam.position, dt);
+    this.chars.skip = this.soldiers.ids;
     this.chars.update(sim.players, a, cam.position, dt, me.squad);
     this.fx.update(dt, a, cam.position, time, cam.fov);
     this.vehMeshes.update(sim.vehicles, a, dt, cam.position);

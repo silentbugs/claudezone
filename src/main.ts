@@ -1,3 +1,4 @@
+import { models } from './render/models';
 import '@fontsource/rajdhani/500.css';
 import '@fontsource/rajdhani/600.css';
 import '@fontsource/rajdhani/700.css';
@@ -19,7 +20,7 @@ const settings: Settings = loadSettings();
 async function boot() {
   const loading = document.createElement('div'); loading.className = 'loading'; loading.textContent = 'BUILDING VERDANSK...'; ui.appendChild(loading);
   const sm = new SceneMgr(canvas);
-  const [masks] = await Promise.all([loadMasksBrowser(), sm.loadPhotoMaterials()]);
+  const [masks] = await Promise.all([loadMasksBrowser(), sm.loadPhotoMaterials(), models.load()]);
   await new Promise((r) => setTimeout(r, 30));
   const world = generateWorld(masks, 1);
   sm.buildWorld(world);

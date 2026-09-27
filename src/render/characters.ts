@@ -51,6 +51,8 @@ export class Characters {
   private max: number;
   private phase = new Float32Array(200);
   hidden = -1; // local player id (first person)
+  /** players drawn by the skinned soldier renderer this frame */
+  skip: Set<number> = new Set();
   canopyOnly = false;
   private smooth: number[][] = [];
   private smoothAir: number[] = [];
@@ -84,7 +86,7 @@ export class Characters {
         if (this.canopyOnly && p.phase === Phase.Chute) { const yaw0 = p.pyaw + (p.yaw - p.pyaw) * alpha; const m = new THREE.Matrix4().compose(tmpV.set(p.px + (p.x - p.px) * alpha, p.py + (p.y - p.py) * alpha, p.pz + (p.z - p.pz) * alpha), tmpQ.setFromEuler(tmpE.set(0, yaw0, 0)), one); this.put('canopy', nc, m, 0x3a78c8); nc++; }
         continue;
       }
-      if (p.phase === Phase.Plane || p.phase === Phase.Dead || p.phase === Phase.Spectate) continue;
+      if (p.phase === Phase.Plane || p.phase === Phase.Dead || p.phase === Phase.Spectate || this.skip.has(p.id)) continue;
       const x = p.px + (p.x - p.px) * alpha, y = p.py + (p.y - p.py) * alpha, z = p.pz + (p.z - p.pz) * alpha;
       const d2 = (x - cam.x) ** 2 + (z - cam.z) ** 2;
       if (d2 > 700 * 700) continue;
