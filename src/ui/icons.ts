@@ -2,6 +2,9 @@
 const s = (body: string, vb = '0 0 24 24') => `<svg viewBox="${vb}" xmlns="http://www.w3.org/2000/svg">${body}</svg>`;
 
 export const ICON: Record<string, string> = {
+  lock: s('<rect x="5" y="10" width="14" height="11" rx="1.5" fill="currentColor"/><path d="M8 10V7a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="2.2"/>'),
+  // blueprint marker: drafting compass
+  blueprint: s('<circle cx="12" cy="4" r="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M11 6L5 21M13 6l6 15M7.5 15h9" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round"/>'),
   // armor plate: rectangle with both top corners chamfered ("shooter's cut"), stitched border
   plate: s('<path d="M6 2h12l3 4v15.5c0 .8-.7 1.5-1.5 1.5h-15c-.8 0-1.5-.7-1.5-1.5V6z" fill="#b9bcbf" stroke="#6d7074" stroke-width="1"/><path d="M7 4h10l2 2.8V20H5V6.8z" fill="none" stroke="#8d9094" stroke-width=".7" stroke-dasharray="1.2 .8"/><rect x="8" y="13" width="8" height="4" rx=".6" fill="#8a8e92"/><text x="12" y="10" font-size="3.4" text-anchor="middle" fill="#6d7074" font-family="sans-serif" font-weight="700">TOP</text>'),
   satchel: s('<path d="M6 6c0-2 2-4 6-4s6 2 6 4v14c0 1-1 2-2 2H8c-1 0-2-1-2-2z" fill="#9ea2a5" stroke="#5f6366"/><rect x="8" y="11" width="8" height="7" rx="1" fill="#7f8387" stroke="#5f6366"/><path d="M9 4h6" stroke="#5f6366" stroke-width="1.5"/>'),

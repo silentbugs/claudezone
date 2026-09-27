@@ -184,7 +184,7 @@ export const CLASS_NAMES: Record<WeaponClass, string> = { ar: 'Assault Rifle', s
 
 export const enum Rarity { Common = 0, Uncommon = 1, Rare = 2, Epic = 3, Legendary = 4, Loadout = 5 }
 export const RARITY_NAMES = ['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary', 'Loadout'];
-export const RARITY_COLORS = ['#d8d8d8', '#5fd35f', '#4aa3ff', '#b45cff', '#ffb52e', '#ff6fb5'];
+export const RARITY_COLORS = ['#d8d8d8', '#5fd35f', '#4aa3ff', '#b45cff', '#fa7c18', '#fb0a57'];
 /** Attachments per tier (2020): 0 / 1 / 3 / 4 / 5; custom loadout guns carry 5. */
 export const RARITY_ATTACH = [0, 1, 3, 4, 5, 5];
 

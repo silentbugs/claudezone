@@ -64,6 +64,7 @@ export class Hud {
   private hmT = 0; private hmGlyphT = 0; private bannerT = 0; private noteT = 0; private nameT = 0;
   private dmgArcs: { a: number; t: number; e: HTMLElement }[] = [];
   private last: Record<string, string> = {};
+  private cardKey = ''; private cardSince = 0;
   pings: { x: number; z: number; t: number }[] = [];
   private lastWeaponKey = '';
 
@@ -175,7 +176,7 @@ export class Hud {
       const ar = [0, 1, 2].map((i) => `<i><b style="transform:scaleX(${Math.max(0, Math.min(1, (p.armor - i * 50) / 50))})"></b></i>`).join('');
       const hp = p.phase === Phase.Downed ? (p.downT / 30) * 100 : Math.max(0, p.health);
       const badge = !p.alive && p.phase !== Phase.Downed ? `<div class="badge">${ICON.skull}</div>` : '';
-      return `<div class="card ${st} ${mine ? 'mine' : ''}"><div class="nm">${mine ? '<span class="star">★</span>' : ''}<span style="color:${mine ? '#fff' : col}">${p.name}</span>${p.phase === Phase.GulagWait || p.phase === Phase.Gulag ? ' <span style="opacity:.7">(Gulag)</span>' : ''}</div><div class="ar">${ar}</div><div class="hp"><i style="width:${hp}%"></i></div><div class="cash"><span>$${p.cash.toLocaleString()}</span>${p.selfRevive ? ICON.selfRevive : ''}</div>${badge}</div>`;
+      return `<div class="card ${st} ${mine ? 'mine' : ''}"><div class="nm">${mine ? '<span class="star">★</span>' : ''}<span style="color:${mine ? '#ffb65f' : col}">${p.name}</span>${p.phase === Phase.GulagWait || p.phase === Phase.Gulag ? ' <span style="opacity:.7">(Gulag)</span>' : ''}</div><div class="ar">${ar}</div><div class="hp"><i style="width:${hp}%"></i></div><div class="cash"><span>$${p.cash.toLocaleString()}</span>${p.selfRevive ? ICON.selfRevive : ''}</div>${badge}</div>`;
     };
     mates.forEach((p, i) => { sq += card(p, false, SQUAD_COLORS[i + 1]); });
     sq += card(view, true, '#fff');
@@ -183,7 +184,7 @@ export class Hud {
     // --- plates / gas mask next to your card
     const full = view.plates >= view.maxPlates;
     let inv = `<div class="it"><div class="row">${view.maxPlates > 5 ? ICON.satchel : ICON.plate}<span class="${full ? 'full' : ''}">${view.plates}</span></div>${this.k('plate')}</div>`;
-    if (view.hasMask) { const seg = Math.ceil((view.gasMask / 12) * 8); inv += `<div class="it"><div class="row">${ICON.gasMask}<div class="dura">${Array.from({ length: 8 }, (_, i) => `<i class="${i < seg ? 'on' : ''}"></i>`).join('')}</div></div></div>`; }
+    if (view.hasMask) { const seg = Math.ceil((view.gasMask / 12) * 6); inv += `<div class="it"><div class="row">${ICON.gasMask}<div class="dura">${Array.from({ length: 6 }, (_, i) => `<i class="${i < seg ? 'on' : ''}"></i>`).join('')}</div></div></div>`; }
     this.set('inv', this.inv, air ? '' : inv);
     // --- weapon block
     const w = view.weapons[view.cur];
@@ -276,8 +277,11 @@ export class Hud {
   /** The look-at card (Take / Swap / Open / Revive ...) with details and weapon stats. */
   private updateCard(me: Player) {
     const t = me.phase === Phase.Alive ? this.sim.interactTarget(me) : null;
-    if (!t) { this.lcard.style.display = 'none'; this.last.card = ''; return; }
-    let verb = 'Use', icon = '', t1 = t.label, t2 = '', extra = '', rc = '#9aa0a6';
+    if (!t) { this.lcard.style.display = 'none'; this.last.card = ''; this.cardKey = ''; return; }
+    let verb = 'Use', icon = '', t1 = t.label, t2 = '', extra = '', rc = '#9aa0a6', side = '', t0 = '', legendary = false;
+    const key = `${t.kind}:${t.id}`;
+    if (key !== this.cardKey) { this.cardKey = key; this.cardSince = performance.now(); }
+    const lingering = performance.now() - this.cardSince > 1200;
     const it: Item | undefined = t.kind === 'item' ? this.sim.itemById.get(t.id) : undefined;
     if (it) {
       verb = 'Take';
@@ -286,10 +290,17 @@ export class Hud {
           const d = WEAPON[it.weapon!], r = it.rarity ?? 0; rc = RARITY_COLORS[r];
           verb = me.weapons.every((x) => x) ? 'Swap' : 'Take';
           const bp = blueprintName(d.id, r);
-          icon = sil(d.id, r); t1 = bp ? `"${bp}"` : d.name; t2 = `${bp ? d.name + ' · ' : ''}${CLASS_NAMES[d.cls]} · <span style="color:${rc}">${RARITY_NAMES[r]}</span>`;
-          const att = attachmentsFor(d.id, r, it.id);
-          if (att.length) extra += `<div class="att">${att.join(' · ')}</div>`;
-          extra += this.statBars(d, r, me.weapons[me.cur] ? WEAPON[me.weapons[me.cur]!.id] : null);
+          // 2020 layout: blueprint name (rarity colour), weapon name, class; rarity + dots on the right
+          if (bp) t0 = `${ICON.blueprint}${bp}`;
+          t1 = d.name; t2 = CLASS_NAMES[d.cls];
+          const dots = r >= 5 ? 0 : r + 1; legendary = r === 4;
+          side = `<div class="rar"><i class="dia"></i><div><b>${r >= 5 ? 'Player' : RARITY_NAMES[r]}</b><div class="dots">${Array.from({ length: 5 }, (_, i) => `<u class="${i < dots ? 'on' : ''}"></u>`).join('')}</div></div></div>`;
+          // linger on a weapon to inspect it: attachments and stat comparison
+          if (lingering) {
+            const att = attachmentsFor(d.id, r, it.id);
+            if (att.length) extra += `<div class="att">${att.join(' · ')}</div>`;
+            extra += this.statBars(d, r, me.weapons[me.cur] ? WEAPON[me.weapons[me.cur]!.id] : null);
+          }
           break;
         }
         case ItemKind.Ammo: icon = ICON.ammo; t1 = `${AMMO_NAMES[it.ammo!]} x${it.n}`; t2 = 'Ammunition'; break;
@@ -311,9 +322,10 @@ export class Hud {
     else if (t.kind === 'balloon') { verb = 'Use'; icon = ICON.balloon; t1 = 'Redeploy Balloon'; t2 = 'Launch into the sky'; }
     else if (t.kind === 'box') { verb = 'Use'; icon = t.label.includes('Armor') ? ICON.armorBox : ICON.munitions; t1 = t.label.replace('Use ', ''); t2 = 'Squad field upgrade'; }
     else if (t.kind === 'turret' || t.kind === 'unman') { verb = t.kind === 'unman' ? 'Leave' : 'Use'; icon = ICON.turret; t1 = 'Shield Turret'; t2 = 'Mounted machine gun'; }
-    const html = `<div class="hd"><span>${this.k('interact')} ${verb}</span><span>${this.k('ping')} Ping</span></div><div class="sep"></div><div class="bd"><div class="ic">${icon}</div><div><div class="t1">${t1}</div><div class="t2">${t2}</div></div></div>${extra}`;
+    const html = `<div class="hd"><span>${this.k('interact')} ${verb}</span><span>${this.k('ping')} Ping</span></div><div class="bd">${icon ? `<div class="ic">${icon}</div>` : ''}<div class="tx">${t0 ? `<div class="t0">${t0}</div>` : ''}<div class="t1">${t1}</div><div class="t2">${t2}</div></div>${side}</div>${extra}<div class="glow"></div>`;
     this.lcard.style.setProperty('--rl', rc); this.lcard.style.setProperty('--rc', rc + '55');
     this.set('card', this.lcard, html);
+    this.lcard.classList.toggle('leg', legendary);
     this.lcard.style.display = 'block';
   }
 
@@ -418,25 +430,33 @@ export class Hud {
   openBuy(onBuy: (item: BuyId, arg?: number) => string | null, onClose: () => void) {
     this.closePanel();
     const me = this.sim.players[this.localId];
-    const p = el('div', 'buy');
+    const p = el('div', 'buy bs');
+    let sel = 0;
+    // 2020 layout: list of rows on the left (price right-aligned, red + padlock when unaffordable), detail card on the right
     const render = (err = '') => {
       const dead = this.sim.players.filter((q) => q.squad === me.squad && q.id !== me.id && q.phase === Phase.Dead);
-      const cats = ['Equipment', 'Killstreaks', 'Field Upgrades', 'Squad'];
-      let body = '';
-      for (const cat of cats) {
-        body += `<div class="bcat">${cat}</div><div class="bgrid">`;
-        for (const b of BUY_ITEMS.filter((x) => x.cat === cat)) {
-          if (b.id === 'buyback') {
-            if (!dead.length) body += `<div class="bit no"><div class="bic">${ICON.buyback}</div><div class="bn">Squad Buyback</div><div class="bd">No teammates to buy back</div><div class="bp">$${b.price.toLocaleString()}</div></div>`;
-            for (const q of dead) body += `<div class="bit ${me.cash < b.price ? 'no' : ''}" data-k="buyback" data-a="${q.id}"><div class="bic">${ICON.buyback}</div><div class="bn">Buyback ${q.name}</div><div class="bd">${b.desc}</div><div class="bp">$${b.price.toLocaleString()}</div></div>`;
-            continue;
-          }
-          body += `<div class="bit ${me.cash < b.price ? 'no' : ''}" data-k="${b.id}"><div class="bic">${ICON[b.icon]}</div><div class="bn">${b.name}</div><div class="bd">${b.desc}</div><div class="bp">$${b.price.toLocaleString()}</div></div>`;
-        }
-        body += '</div>';
+      const rows: { k: BuyId; a?: number; name: string; desc: string; price: number; icon: string; cat: string; ok: boolean }[] = [];
+      for (const b of BUY_ITEMS) {
+        if (b.id === 'buyback') {
+          if (!dead.length) rows.push({ k: 'buyback', name: 'Squad Buyback', desc: 'No teammates to buy back.', price: b.price, icon: b.icon, cat: b.cat, ok: false });
+          for (const q of dead) rows.push({ k: 'buyback', a: q.id, name: `Buyback ${q.name}`, desc: b.desc, price: b.price, icon: b.icon, cat: b.cat, ok: me.cash >= b.price });
+        } else rows.push({ k: b.id, name: b.name, desc: b.desc, price: b.price, icon: b.icon, cat: b.cat, ok: me.cash >= b.price });
       }
-      p.innerHTML = `<div class="bbox"><div class="bhead"><span>${ICON.cart} BUY STATION</span><span class="bcash">$${me.cash.toLocaleString()}</span></div>${body}<div class="berr">${err}</div><div class="bfoot">${this.k('interact')} / Esc to close</div></div>`;
-      p.querySelectorAll<HTMLElement>('.bit[data-k]').forEach((n) => n.onclick = () => { const e = onBuy(n.dataset.k as BuyId, n.dataset.a ? +n.dataset.a : undefined); render(e ?? ''); });
+      // one EQUIPMENT list sorted by price, as in the 2020 menu
+      rows.sort((x, y) => x.price - y.price || x.name.localeCompare(y.name));
+      sel = Math.min(sel, rows.length - 1);
+      let list = '<div class="bcat">Equipment</div>';
+      rows.forEach((r, i) => {
+        list += `<div class="brow ${r.ok ? '' : 'no'} ${i === sel ? 'sel' : ''}" data-i="${i}"><i class="lock">${r.ok ? '' : ICON.lock}</i><span class="bn">${r.name}</span><span class="bp">$${r.price}</span></div>`;
+      });
+      const s = rows[sel];
+      const detail = `<div class="bdet"><div class="bbig">${ICON[s.icon] ?? ''}</div><div class="btitle">${s.name}</div><div class="bband">${s.cat === 'Killstreaks' ? 'Killstreak' : s.cat === 'Field Upgrades' ? 'Field Upgrade' : s.cat}</div><div class="bdesc">${s.desc}</div></div>`;
+      p.innerHTML = `<div class="bbox"><div class="bhead"><span class="btl">Buy Station</span><span class="bcash">$${me.cash}</span></div><div class="bmain"><div class="blist">${list}</div>${detail}</div><div class="berr">${err}</div></div><div class="bbar"><span>${this.k('interact')} Back</span><span><i class="key">LMB</i> Select</span><span><i class="key">Esc</i> Dismiss Menu</span></div>`;
+      p.querySelectorAll<HTMLElement>('.brow').forEach((n) => {
+        const i = +n.dataset.i!;
+        n.onmouseenter = () => { if (sel !== i) { sel = i; render(err); } };
+        n.onclick = () => { const r = rows[i]; if (!r.ok && r.k === 'buyback' && r.a === undefined) return; const e = onBuy(r.k, r.a); render(e ?? ''); };
+      });
     };
     render();
     this.panel = p; this.root.appendChild(p);
