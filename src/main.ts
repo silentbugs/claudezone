@@ -63,7 +63,7 @@ async function boot() {
   let last = performance.now();
   const loop = (now: number) => {
     const dt = Math.min(0.1, (now - last) / 1000); last = now;
-    if (match) match.frame(dt, now / 1000);
+    if (match) { try { match.frame(dt, now / 1000); } catch (err) { console.error(err); (window as any).__lastErr = String((err as Error).stack); } }
     else {
       // menu flyover around Verdansk
       menuT += dt * 0.02;

@@ -36,6 +36,8 @@ export class Match {
   onEnd: (won: boolean, placement: number, me: Player) => void = () => {};
   private pauseEl: HTMLElement | null = null;
   private tpDist = 0;
+  /** Dev/test: pin the camera (position + look target) regardless of phase. */
+  debugCam: { pos: [number, number, number]; target: [number, number, number] } | null = null;
 
   constructor(public sm: SceneMgr, private world: WorldData, private input: Input, tac: HTMLCanvasElement, private ui: HTMLElement, public settings: Settings, seed: number) {
     this.sim = new Sim(world, seed, { humans: 1, warmup: 45 });
@@ -236,6 +238,7 @@ export class Match {
       if (me.tacSprint > 0) fov += 6;
       audio.loop('wind', 0); audio.loop('engine', vehicleOf(sim, vp) ? 0.3 : 0, 0.8, 700); audio.loop('chute', 0);
     }
+    if (this.debugCam) { cam.position.set(...this.debugCam.pos); cam.lookAt(...this.debugCam.target); this.chars.hidden = -1; }
     audio.loop('gas', sim.inGas(vp) ? 0.45 : 0, 1, 900);
     if (this.sm.grade) { const u = this.sm.grade.uniforms; u.uGas.value += ((sim.inGas(vp) ? 1 : 0) - u.uGas.value) * Math.min(1, dt * 3); u.uLow.value += ((vp.phase === Phase.Downed ? 0.6 : vp.health < 35 && vp.alive ? 0.35 : 0) - u.uLow.value) * Math.min(1, dt * 4); }
     if (Math.abs(cam.fov - fov) > 0.01) { cam.fov += (fov - cam.fov) * Math.min(1, dt * 18); cam.updateProjectionMatrix(); }
@@ -250,7 +253,7 @@ export class Match {
     this.sm.render();
     // viewmodel
     const fp = (phase === Phase.Alive || phase === Phase.Gulag || phase === Phase.GulagWait) && !(vehicleOf(sim, vp) && (vp as any).seat === 0);
-    if (fp && this.spectate < 0) {
+    if (fp && this.spectate < 0 && !this.debugCam) {
       this.vm.update(me, dt, this.lastMouse.dx, this.lastMouse.dy, Math.hypot(me.vx, me.vz), me.sprinting);
       this.vm.render(this.sm.renderer);
     }

@@ -159,7 +159,7 @@ export function buildTerrain(masks: MapMasks): { hf: Heightfield; extra: Terrain
     // mountain rim outside the play area (not over the sea)
     const out = dPlay[k];
     if (out > 0 && !sea[k]) {
-      const rim = Math.pow(clamp(out / 450, 0, 1), 0.7) * 260 + (fbm(x / 180, z / 180, 5, 51) - 0.5) * 90 * clamp(out / 200, 0, 1);
+      const rim = smoothstep(0, 750, out) * 300 + (fbm(x / 180, z / 180, 5, 51) - 0.5) * 90 * smoothstep(60, 450, out);
       base += rim * smoothstep(0, 180, dSea[k]);
     }
     // coast: beaches/cliffs down to the sea

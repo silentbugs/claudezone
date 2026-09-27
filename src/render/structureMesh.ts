@@ -21,11 +21,12 @@ class GeoBuf {
   build(): THREE.BufferGeometry | null {
     if (!this.idx.length) return null;
     const g = new THREE.BufferGeometry();
+    // compact vertex format: float32 position, int8 normal, half-float uv, uint8 colour + layer
     g.setAttribute('position', new THREE.Float32BufferAttribute(this.pos, 3));
-    g.setAttribute('normal', new THREE.Float32BufferAttribute(this.nor, 3));
-    g.setAttribute('uv', new THREE.Float32BufferAttribute(this.uv, 2));
-    g.setAttribute('color', new THREE.Float32BufferAttribute(this.col, 3));
-    g.setAttribute('aLayer', new THREE.Float32BufferAttribute(this.lay, 1));
+    g.setAttribute('normal', new THREE.BufferAttribute(Int8Array.from(this.nor, (v) => Math.round(v * 127)), 3, true));
+    g.setAttribute('uv', new THREE.Float16BufferAttribute(this.uv, 2));
+    g.setAttribute('color', new THREE.BufferAttribute(Uint8Array.from(this.col, (v) => Math.min(255, Math.round(Math.sqrt(Math.max(0, v)) * 255))), 3, true));
+    g.setAttribute('aLayer', new THREE.BufferAttribute(Uint8Array.from(this.lay), 1, false));
     g.setIndex(this.count > 65535 ? new THREE.Uint32BufferAttribute(this.idx, 1) : new THREE.Uint16BufferAttribute(this.idx, 1));
     g.computeBoundingSphere(); g.computeBoundingBox();
     releaseAfterUpload(g);
@@ -139,6 +140,7 @@ export function structureMaterial(tex: THREE.DataArrayTexture, transparent = fal
       .replace('#include <uv_vertex>', '#include <uv_vertex>\nvLayer = aLayer;\nvUv2 = uv;');
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', '#include <common>\nuniform highp sampler2DArray tLayers;\nuniform float uAvg[16];\nvarying float vLayer;\nvarying vec2 vUv2;')
+      .replace('#include <color_fragment>', '#include <color_fragment>\n  diffuseColor.rgb *= diffuseColor.rgb; // vertex colours are sqrt-encoded in uint8')
       .replace('#include <map_fragment>', 'int li = int(floor(vLayer + 0.5));\nvec4 texel = texture(tLayers, vec3(vUv2, float(li)));\ndiffuseColor.rgb *= clamp(texel.rgb / max(uAvg[li], 0.02), 0.0, 2.2);')
       .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
         float L = floor(vLayer + 0.5);

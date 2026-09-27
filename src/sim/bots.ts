@@ -384,6 +384,10 @@ function decide(sim: Sim, b: BotBrain, p: Player, inGulag: boolean) {
     const a = Math.atan2(p.z - c.nz, p.x - c.nx);
     const rr = c.nr * (0.3 + (b.id % 5) * 0.1);
     b.tx = c.nx + Math.cos(a) * rr; b.tz = c.nz + Math.sin(a) * rr;
+    if (Math.hypot(b.tx - p.x, b.tz - p.z) > 450) {
+      const bi = sim.world.balloons.findIndex((q) => Math.hypot(q.x - p.x, q.z - p.z) < 60);
+      if (bi >= 0) { const q = sim.world.balloons[bi]; if (Math.hypot(q.x - p.x, q.z - p.z) < 3) { sim.launch(p); b.dropX = b.tx; b.dropZ = b.tz; } else { b.tx = q.x; b.tz = q.z; } return; }
+    }
     if (Math.hypot(b.tx - p.x, b.tz - p.z) > 350) {
       // grab a free ground vehicle close by
       const v = sim.vehicles.find((q) => q.alive && q.type !== 'heli' && q.seats[0] < 0 && Math.hypot(q.x - p.x, q.z - p.z) < 45);

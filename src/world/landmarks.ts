@@ -31,6 +31,23 @@ export function buildLandmarks(ctx: GenContext) {
   services(ctx);
   buildGulag(ctx);
   bridges(ctx);
+  balloons(ctx);
+}
+
+/** Redeploy balloons (Season 5, 2020): tethered balloons that launch you back into the sky. */
+function balloons(ctx: GenContext) {
+  const ids = ['superstore', 'train_station', 'downtown', 'tv_station', 'hills', 'farmland', 'quarry', 'boneyard', 'promenade_east', 'lumber', 'port', 'military_base', 'storage_town', 'airport'];
+  for (const id of ids) {
+    const p = poi(id);
+    for (let k = 0; k < 20; k++) {
+      const a = ctx.rng.range(0, 6.28), d = ctx.rng.range(20, 70);
+      const x = p.x + Math.cos(a) * d, z = p.z + Math.sin(a) * d;
+      if (ctx.occ.at(x, z) !== 0 || ctx.hf.at(x, z) < 1) continue;
+      ctx.balloons.push({ x, y: ctx.hf.at(x, z), z });
+      ctx.occ.markCircle(x, z, 3, 4);
+      break;
+    }
+  }
 }
 
 /** Road bridges over the Gora and Karst canals, with ramps down to the banks. */

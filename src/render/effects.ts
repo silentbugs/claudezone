@@ -149,6 +149,9 @@ export class Effects {
     this.group.add(this.stations);
     const tab = mergeGeometries([colored(new THREE.BoxGeometry(0.6, 0.12, 0.45).translate(0, 0.06, 0), 0x2a2a2a), colored(new THREE.BoxGeometry(0.5, 0.02, 0.35).translate(0, 0.13, 0), 0xe0b040)])!;
     const tm = new THREE.MeshStandardMaterial({ vertexColors: true, emissive: 0x3a2a00 });
+    const bm = new THREE.MeshStandardMaterial({ color: 0xd8d4c8, roughness: 0.8 });
+    const bgeo = mergeGeometries([new THREE.SphereGeometry(5, 16, 12).scale(1, 1.25, 1).translate(0, 42, 0), new THREE.CylinderGeometry(0.03, 0.03, 36, 4).translate(0, 18, 0), new THREE.CylinderGeometry(1.2, 1.4, 1.2, 10).translate(0, 0.6, 0), new THREE.CylinderGeometry(0.8, 0.2, 1.6, 10).translate(0, 36.8, 0)])!;
+    for (const b of this.sim.world.balloons) { const m = new THREE.Mesh(bgeo, bm); m.position.set(b.x, b.y, b.z); m.castShadow = true; this.stations.add(m); }
     for (const c of this.sim.contracts) { const m = new THREE.Mesh(tab, tm); m.position.set(c.x, c.y + 0.02, c.z); this.tablets.set(c.id, m); this.group.add(m); }
   }
 

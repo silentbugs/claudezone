@@ -309,7 +309,7 @@ export class Sim {
   }
 
   /** What the player is looking at to interact with (for prompts and for the action). */
-  interactTarget(p: Player): { kind: 'revive' | 'chest' | 'item' | 'buy' | 'contract' | 'crate' | 'vehicle' | 'exit'; id: number; label: string } | null {
+  interactTarget(p: Player): { kind: 'revive' | 'chest' | 'item' | 'buy' | 'contract' | 'crate' | 'vehicle' | 'exit' | 'balloon'; id: number; label: string } | null {
     if ((p as any).vehicle !== undefined) return { kind: 'exit', id: (p as any).vehicle, label: 'Exit vehicle' };
     for (const q of this.playersNear(p.x, p.z, 2.5)) if (q.squad === p.squad && q.id !== p.id && q.phase === Phase.Downed) return { kind: 'revive', id: q.id, label: `Revive ${q.name}` };
     const d = aimDir(p, [0, 0, 0]);
@@ -327,6 +327,7 @@ export class Sim {
     for (const b of this.buyStations) if (Math.abs(b.x - p.x) < 4 && Math.abs(b.z - p.z) < 4) consider('buy', b.id, 'Use Buy Station', b.x, b.y + 1.2, b.z, 3.5);
     for (const c of this.contracts) if (!c.taken && Math.abs(c.x - p.x) < 3 && Math.abs(c.z - p.z) < 3) consider('contract', c.id, `Accept ${c.kind[0].toUpperCase() + c.kind.slice(1)} Contract`, c.x, c.y + 0.7, c.z, 2.8);
     if ((p as any).vehicle === undefined) for (const v of this.vehicles) if (v.alive && Math.abs(v.x - p.x) < 6 && Math.abs(v.z - p.z) < 6 && v.seats.some((q) => q < 0)) consider('vehicle', v.id, `Enter ${VEHICLES[v.type].name}`, v.x, v.y + 1, v.z, VEHICLES[v.type].len / 2 + 2.5, -0.2);
+    this.world.balloons.forEach((b, i) => { if (Math.abs(b.x - p.x) < 4 && Math.abs(b.z - p.z) < 4) consider('balloon', i, 'Use Redeploy Balloon', b.x, b.y + 1.2, b.z, 3.5, -0.5); });
     for (const cr of this.crates) if (cr.squad === p.squad && this.time >= cr.land && !cr.taken.has(p.id) && Math.abs(cr.x - p.x) < 3 && Math.abs(cr.z - p.z) < 3) consider('crate', cr.id, 'Open Loadout Drop', cr.x, cr.y + 0.6, cr.z, 3);
     return best ? { kind: (best as any).kind, id: (best as any).id, label: (best as any).label } : null;
   }
@@ -342,12 +343,19 @@ export class Sim {
     else if (t.kind === 'contract') this.acceptContract(p, t.id);
     else if (t.kind === 'vehicle') { const v = this.vehicles.find((q) => q.id === t.id); if (v) enterVehicle(this, p, v); }
     else if (t.kind === 'exit') exitVehicle(this, p);
+    else if (t.kind === 'balloon') this.launch(p);
     else if (t.kind === 'crate') { const cr = this.crates.find((c) => c.id === t.id)!; cr.taken.add(p.id); if (!p.bot) this.emit({ t: 'announce', text: '__loadout__', squad: p.squad }); else this.applyLoadout(p, this.rng.int(0, LOADOUTS.length - 1)); }
     void dt;
   }
 
+  /** Redeploy balloon: shoot up into the sky, then freefall and parachute as usual. */
+  launch(p: Player) {
+    p.phase = Phase.Freefall; p.y += 2; p.vy = 58; p.vx *= 0.3; p.vz *= 0.3; (p as any).launchT = 2.4; p.stance = Stance.Stand;
+    this.emit({ t: 'jump', p: p.id }); this.emit({ t: 'chute', p: p.id });
+  }
+
   // ------------------------------------------------------------ damage
-  inGas(p: Player) { const c = this.circle; return Math.hypot(p.x - c.cx, p.z - c.cz) > c.r && p.phase !== Phase.Gulag && p.phase !== Phase.GulagWait; }
+  inGas(p: Player) { const c = this.circle; return Math.hypot(p.x - c.cx, p.z - c.cz) > c.r && p.phase !== Phase.Gulag && p.phase !== Phase.GulagWait && p.phase !== Phase.Plane && !this.inWarmup; }
 
   damage(v: Player, amount: number, attacker: number, weapon: string, head: boolean, bypassArmor: boolean, hx?: number, hy?: number, hz?: number) {
     if (!v.alive || amount <= 0) return;

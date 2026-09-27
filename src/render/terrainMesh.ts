@@ -48,7 +48,8 @@ export class TerrainMesh {
           vec3 grass = texture(tLayers, vec3(uv, 0.0)).rgb;
           vec3 dry = texture(tLayers, vec3(uv * 1.1, 1.0)).rgb;
           vec3 dirt = texture(tLayers, vec3(uv, 2.0)).rgb;
-          vec3 rock = texture(tLayers, vec3(uv * 0.5, 3.0)).rgb;
+          vec3 bw = pow(abs(normalize(vWNormal)), vec3(4.0)); bw /= (bw.x + bw.y + bw.z);
+          vec3 rock = texture(tLayers, vec3(vWPos.xz / 14.0, 3.0)).rgb * bw.y + texture(tLayers, vec3(vWPos.xy / 14.0, 3.0)).rgb * bw.z + texture(tLayers, vec3(vWPos.zy / 14.0, 3.0)).rgb * bw.x;
           vec3 snow = texture(tLayers, vec3(uv * 0.7, 4.0)).rgb;
           vec3 asph = texture(tLayers, vec3(uv * 0.8, 5.0)).rgb;
           vec3 sand = texture(tLayers, vec3(uv, 6.0)).rgb;

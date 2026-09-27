@@ -48,8 +48,9 @@ function air(sim: Sim, p: Player, dt: number, chute: boolean) {
     const tx = (fx * Math.max(0, it.mz) + rx * it.mx) * hs, tz = (fz * Math.max(0, it.mz) + rz * it.mx) * hs;
     p.vx += (tx - p.vx) * Math.min(1, dt * 1.6); p.vz += (tz - p.vz) * Math.min(1, dt * 1.6);
     const tv = -(DEPLOY.freefallFall + dive * (DEPLOY.diveFall - DEPLOY.freefallFall));
-    p.vy += (tv - p.vy) * Math.min(1, dt * 1.2);
-    if ((it.jump && agl > DEPLOY.minChuteAGL) || agl < DEPLOY.autoChuteAGL) { p.phase = Phase.Chute; p.vy = Math.max(p.vy, -18); sim.emit({ t: 'chute', p: p.id }); p.intent.jump = false; }
+    if ((p as any).launchT > 0) { (p as any).launchT -= dt; p.vy -= 20 * dt; } // balloon launch: ballistic climb first
+    else p.vy += (tv - p.vy) * Math.min(1, dt * 1.2);
+    if (((it.jump && agl > DEPLOY.minChuteAGL) || agl < DEPLOY.autoChuteAGL) && !((p as any).launchT > 0)) { p.phase = Phase.Chute; p.vy = Math.max(p.vy, -18); sim.emit({ t: 'chute', p: p.id }); p.intent.jump = false; }
   } else {
     const fwd = clamp(it.mz, -0.5, 1);
     const hs = DEPLOY.chuteH * (0.55 + 0.45 * Math.max(0, fwd));

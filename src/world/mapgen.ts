@@ -62,6 +62,7 @@ export interface WorldData {
   groundLoot: { x: number; y: number; z: number; poi: string | null }[];
   vehicleSpawns: { x: number; y: number; z: number; a: number }[];
   wires: Float32Array;
+  balloons: { x: number; y: number; z: number }[];
 }
 
 /** Occupancy raster at 1.5 m so buildings, landmarks and props don't overlap. */
@@ -93,6 +94,7 @@ export interface GenContext {
   footprintHeights(x: number, z: number, angle: number, w: number, d: number): { min: number; max: number; avg: number };
   buyStations: WorldData['buyStations']; chests: WorldData['chests']; contracts: WorldData['contracts']; vehicleSpawns: WorldData['vehicleSpawns'];
   wires: number[];
+  balloons: { x: number; y: number; z: number }[];
 }
 
 export function generateWorld(masks: MapMasks, seed = 1): WorldData {
@@ -119,7 +121,7 @@ export function generateWorld(masks: MapMasks, seed = 1): WorldData {
   }
   const ctx: GenContext = {
     rng, hf, extra, masks, col, occ,
-    buyStations: [], chests: [], contracts: [], vehicleSpawns: [], wires: [],
+    buyStations: [], chests: [], contracts: [], vehicleSpawns: [], wires: [], balloons: [],
     footprintHeights(x, z, a, w, d) {
       const c = Math.cos(a), s = Math.sin(a);
       let mn = Infinity, mx = -Infinity, sum = 0, n = 0;
@@ -232,7 +234,7 @@ export function generateWorld(masks: MapMasks, seed = 1): WorldData {
   for (const g of groundLoot) if (rng.chance(0.16)) ctx.chests.push({ x: g.x, y: g.y, z: g.z });
   col.finalize();
   void placed; void props;
-  return { hf, extra, col, trees, masks, buyStations: ctx.buyStations, chests: ctx.chests, contracts: ctx.contracts, groundLoot: groundLoot.filter((g) => !ctx.chests.includes(g as any)), vehicleSpawns: ctx.vehicleSpawns, wires: Float32Array.from(ctx.wires) };
+  return { hf, extra, col, trees, masks, buyStations: ctx.buyStations, chests: ctx.chests, contracts: ctx.contracts, groundLoot: groundLoot.filter((g) => !ctx.chests.includes(g as any)), vehicleSpawns: ctx.vehicleSpawns, wires: Float32Array.from(ctx.wires), balloons: ctx.balloons };
 }
 
 import { VERDANSK } from '../data/verdansk';
