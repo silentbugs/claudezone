@@ -62,7 +62,8 @@ export class Sim {
   private falling: Item[] = [];
   private pGrid = new Map<number, Player[]>();
 
-  constructor(public world: WorldData, seed = 1, opts: { humans?: number; players?: number } = {}) {
+  warmup = 0;
+  constructor(public world: WorldData, seed = 1, opts: { humans?: number; players?: number; warmup?: number } = {}) {
     this.rng = new Rng(seed);
     const n = opts.players ?? PLAYERS;
     for (let i = 0; i < n; i++) this.players.push(this.makePlayer(i, Math.floor(i / SQUAD_SIZE), i >= (opts.humans ?? 1)));
@@ -83,6 +84,35 @@ export class Sim {
     // circle 0 = whole map; the first "next" circle is revealed immediately
     this.circle = { phase: 0, closing: false, t: CIRCLES[0].wait, cx: 1640, cz: 1780, r: INITIAL_RADIUS, nx: 0, nz: 0, nr: 0, sx: 0, sz: 0, sr: 0, done: false };
     this.pickNextCircle();
+    this.warmup = opts.warmup ?? 0;
+    if (this.warmup > 0) { this.plane.active = false; for (const p of this.players) this.warmupSpawn(p); }
+  }
+
+  get inWarmup() { return this.time < this.warmup; }
+  /** Warm-up: drop straight onto Verdansk with a random gun; respawn on death. */
+  private warmupSpawn(p: Player) {
+    let x = 0, z = 0;
+    for (let i = 0; i < 50; i++) { const q = POIS[this.rng.int(0, POIS.length - 1)]; x = q.x + this.rng.range(-q.r, q.r); z = q.z + this.rng.range(-q.r, q.r); if (this.world.hf.at(x, z) > 1 && inPlayable(x, z)) break; }
+    const s = this.snapToFree(x, z) ?? { x, y: this.world.hf.at(x, z), z };
+    p.x = p.px = s.x; p.z = p.pz = s.z; p.y = p.py = s.y + 0.1; p.vx = p.vy = p.vz = 0; p.fallStartY = p.y;
+    p.phase = Phase.Alive; p.alive = true; p.health = 100; p.armor = 150; p.onGround = true; p.stance = Stance.Stand;
+    const gun = this.rng.pick(['m4', 'kilo', 'grau', 'mp5', 'mp7', 'm13', 'aug', 'ram7']);
+    p.weapons = [{ id: gun, rarity: 1, mag: magSize(gun, 1) }, { id: 'm1911', rarity: 0, mag: 8 }]; p.cur = 0;
+    p.ammo = { ar: 240, smg: 240, sniper: 20, shotgun: 20, pistol: 60, rocket: 0 };
+    (p as any).respawnAt = undefined;
+  }
+  private endWarmup() {
+    this.bullets.length = 0; this.throwables.length = 0; this.fires.length = 0; this.smokes.length = 0; this.pending.length = 0;
+    for (const p of this.players) {
+      if ((p as any).vehicle !== undefined) exitVehicle(this, p);
+      Object.assign(p, { phase: Phase.Plane, alive: true, health: 100, armor: 0, plates: 0, kills: 0, damage: 0, cash: 0, lethal: null, tactical: null, killstreak: null, selfRevive: false, hasMask: false, gasMask: 0, gulagUsed: false, stance: Stance.Stand, reloadT: 0, plateT: 0, swapT: 0, ads: 0, downT: 0, reviveBy: -1, killedBy: -1 });
+      p.weapons = [{ id: 'x16', rarity: 0, mag: 15 }, null]; p.cur = 0; p.ammo = { ar: 0, smg: 0, sniper: 0, shotgun: 0, pistol: 30, rocket: 0 };
+      this.brains[p.id].target = -1; this.brains[p.id].goal = 'drop'; this.brains[p.id].dropX = 0;
+    }
+    for (const v of this.vehicles) v.seats = v.seats.map(() => -1);
+    this.plane.active = true; this.plane.t = 0;
+    this.aliveCount = this.players.length;
+    this.emit({ t: 'announce', text: '__infil__' });
   }
 
   private spawnVehicles() {
@@ -187,7 +217,10 @@ export class Sim {
   // ------------------------------------------------------------ main tick
   tick(dt: number) {
     if (this.over) { this.time += dt; return; }
+    const wasWarm = this.inWarmup;
     this.time += dt;
+    if (wasWarm && !this.inWarmup) this.endWarmup();
+    if (this.inWarmup) for (const p of this.players) if ((p as any).respawnAt !== undefined && this.time >= (p as any).respawnAt) this.warmupSpawn(p);
     this.rebuildPlayerGrid();
     this.updatePlane(dt);
     // bots think in staggered slices (10 Hz each)
@@ -209,12 +242,10 @@ export class Sim {
     updateBullets(this, dt);
     updateThrowables(this, dt);
     this.updateExplosions(dt);
-    this.updateCircle(dt);
-    this.updateGulag(dt);
-    this.updateContracts(dt);
+    if (!this.inWarmup) { this.updateCircle(dt); this.updateGulag(dt); this.updateContracts(dt); }
     this.updateCrates(dt);
     this.settleItems(dt);
-    this.checkWin();
+    if (!this.inWarmup) this.checkWin();
   }
 
   private updatePlane(dt: number) {
@@ -267,11 +298,11 @@ export class Sim {
     if (it.killstreak) { it.killstreak = false; if (p.killstreak && p.phase === Phase.Alive) this.useKillstreak(p); }
     if (p.phase === Phase.GulagWait) return;
     // auto pickups
-    if (p.phase === Phase.Alive) for (const itm of this.itemsNear(p.x, p.z, 1.6)) if (Math.abs(itm.y - p.y) < 1.6 && (itm.kind === ItemKind.Ammo || itm.kind === ItemKind.Plate || itm.kind === ItemKind.Cash)) tryPickup(this, p, itm, false);
+    if (p.phase === Phase.Alive && !this.inWarmup) for (const itm of this.itemsNear(p.x, p.z, 1.6)) if (Math.abs(itm.y - p.y) < 1.6 && (itm.kind === ItemKind.Ammo || itm.kind === ItemKind.Plate || itm.kind === ItemKind.Cash)) tryPickup(this, p, itm, false);
     // interact (edge + hold)
     const press = it.interact && !(p as any).prevInteract;
     (p as any).prevInteract = it.interact;
-    if (it.interact && p.phase === Phase.Alive) this.interact(p, press, dt); else p.interactT = 0;
+    if (it.interact && p.phase === Phase.Alive && !this.inWarmup) this.interact(p, press, dt); else p.interactT = 0;
   }
 
   /** What the player is looking at to interact with (for prompts and for the action). */
@@ -342,7 +373,7 @@ export class Sim {
     let down = false;
     if (lethal) {
       if (v.phase === Phase.Gulag) { this.kill(v, attacker, weapon, head, false); }
-      else if (this.squadHasStanding(v.squad, v.id)) { down = true; this.downPlayer(v, attacker, weapon); }
+      else if (this.squadHasStanding(v.squad, v.id) && !this.inWarmup) { down = true; this.downPlayer(v, attacker, weapon); }
       else this.kill(v, attacker, weapon, head, false);
     }
     if (att || attacker === -1) this.emit({ t: 'hit', attacker, victim: v.id, dmg: amount, head, armorBroke, armorHit, kill: lethal && !down, down, x: hx ?? v.x, y: hy ?? v.y + 1, z: hz ?? v.z });
@@ -366,6 +397,7 @@ export class Sim {
 
   kill(v: Player, attacker: number, weapon: string, head: boolean, finish: boolean) {
     if ((v as any).vehicle !== undefined) exitVehicle(this, v);
+    if (this.inWarmup) { this.emit({ t: 'kill', victim: v.id, attacker, w: weapon, head, finish }); if (attacker >= 0) this.players[attacker].kills++; v.phase = Phase.Dead; (v as any).respawnAt = this.time + 3; return; }
     const inGulag = v.phase === Phase.Gulag;
     v.health = 0; v.armor = 0;
     const att = attacker >= 0 ? this.players[attacker] : null;

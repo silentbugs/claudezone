@@ -115,6 +115,7 @@ export class Hud {
     // gas bar
     const inGas = sim.inGas(view);
     const total = c.closing ? CIRCLES[Math.min(c.phase, CIRCLES.length - 1)].close : CIRCLES[Math.min(c.phase, CIRCLES.length - 1)].wait;
+    if (sim.inWarmup) this.set('gas', this.gas, `<div class="t"><span style="color:#f6c343">Warm-up</span><span>${fmtT(sim.warmup - sim.time)}</span></div><div class="bar"><i style="width:${(100 * (sim.warmup - sim.time)) / sim.warmup}%;background:#f6c343"></i></div>`); else
     this.set('gas', this.gas, c.done ? '<div class="t"><span>Final circle</span></div>' : `<div class="t"><span style="color:${c.closing ? '#f6a243' : '#fff'}">${c.closing ? 'Gas closing' : 'Next circle'}</span><span>${fmtT(c.t)}</span></div><div class="bar"><i style="width:${(100 * c.t) / total}%;background:${c.closing ? '#f6a243' : '#fff'}"></i></div>${inGas ? '<div style="color:#f6c343;margin-top:4px">In the gas!' + (me.hasMask ? ` Mask ${Math.ceil(me.gasMask)}s` : '') + '</div>' : ''}`);
     // compass
     const deg = ((-camYaw * 180) / Math.PI % 360 + 360) % 360;
@@ -176,6 +177,7 @@ export class Hud {
     }
     const veh = vehicleOf(sim, me);
     if (veh) { promptTxt = `${VEHICLES[veh.type].name} ${Math.round(veh.speed * 3.6)} km/h — <kbd>F</kbd>Exit${veh.type === 'heli' ? ' • SPACE up • CTRL down' : ' • SPACE brake'}`; progV = veh.health / VEHICLES[veh.type].health; }
+    if (sim.inWarmup && me.phase === Phase.Dead) promptTxt = 'Respawning...';
     if (me.phase === Phase.Plane) promptTxt = sim.plane.canJump ? '<kbd>SPACE</kbd>Jump' : 'Waiting for the jump light...';
     if (me.phase === Phase.Freefall) promptTxt = `<kbd>SPACE</kbd>Deploy parachute &nbsp; ${Math.round(me.y - sim.world.hf.at(me.x, me.z))}m`;
     if (me.phase === Phase.Chute) promptTxt = `<kbd>SPACE</kbd>Cut parachute &nbsp; ${Math.round(me.y - sim.world.hf.at(me.x, me.z))}m`;

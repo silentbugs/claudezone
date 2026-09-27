@@ -38,7 +38,7 @@ export class Match {
   private tpDist = 0;
 
   constructor(public sm: SceneMgr, private world: WorldData, private input: Input, tac: HTMLCanvasElement, private ui: HTMLElement, public settings: Settings, seed: number) {
-    this.sim = new Sim(world, seed, { humans: 1 });
+    this.sim = new Sim(world, seed, { humans: 1, warmup: 45 });
     this.hud = new Hud(this.sim, tac, 0);
     ui.appendChild(this.hud.root);
     this.fx = new Effects(this.sim, sm.scene);
@@ -49,7 +49,8 @@ export class Match {
     this.vm.setAspect(innerWidth / innerHeight);
     this.vm.scene.environment = sm.scene.environment; this.vm.scene.environmentIntensity = 0.6;
     addEventListener('resize', () => this.vm.setAspect(innerWidth / innerHeight));
-    this.hud.showBanner('Verdansk', 'Battle Royale — Trios • 150 players');
+    this.hud.showBanner('Warm-up', 'Waiting for players • respawns are on');
+    this.camYaw = this.me.yaw;
   }
 
   dispose() {
@@ -173,6 +174,7 @@ export class Match {
       case 'gas': if (e.p === 0) audio.play('gasTick', { vol: 0.35 }); break;
       case 'throw': if (e.p === 0) audio.play('jump', { vol: 0.25 }); break;
       case 'announce':
+        if (e.text === '__infil__') { this.hud.showBanner('Verdansk', 'Battle Royale — Trios • 150 players'); this.camYaw = Math.atan2(-sim.plane.dx, -sim.plane.dz); this.camPitch = -0.2; audio.play('uiBuy', { vol: 0.4 }); }
         if (e.text === '__buy__' && e.squad === me.squad && me.phase === Phase.Alive && sim.interactTarget(me)?.kind === 'buy') { document.exitPointerLock?.(); this.hud.openBuy((k, a) => { const r = sim.buy(me, k, a); if (!r) audio.play('uiBuy'); return r; }, () => (document.getElementById('game') as HTMLElement).requestPointerLock?.()); }
         if (e.text === '__loadout__' && e.squad === me.squad && me.phase === Phase.Alive) { document.exitPointerLock?.(); this.hud.openLoadout((i) => { sim.applyLoadout(me, i); (document.getElementById('game') as HTMLElement).requestPointerLock?.(); }); }
         break;

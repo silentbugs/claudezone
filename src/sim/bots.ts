@@ -326,6 +326,7 @@ function decide(sim: Sim, b: BotBrain, p: Player, inGulag: boolean) {
     else if (other) { b.tx = other.x; b.tz = other.z; }
     return;
   }
+  if (sim.inWarmup) { if (b.goal !== 'idle' || Math.hypot(b.tx - p.x, b.tz - p.z) < 4) { b.goal = 'idle'; b.wanderA += sim.rng.range(-1, 1); b.tx = clamp(p.x + Math.cos(b.wanderA) * 80, 100, 3140); b.tz = clamp(p.z + Math.sin(b.wanderA) * 80, 100, 3000); } return; }
   // ---------------- goals
   // revive a downed squadmate
   const downed = sim.players.find((q) => q.squad === p.squad && q.phase === Phase.Downed && Math.hypot(q.x - p.x, q.z - p.z) < 120);
