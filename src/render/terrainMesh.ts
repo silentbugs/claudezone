@@ -6,6 +6,7 @@ import * as THREE from 'three';
 import type { Heightfield } from '../world/collision';
 import type { TerrainExtras } from '../world/terrain';
 import { releaseAfterUpload } from './release';
+import { normalArrayFrom, PERTURB_GLSL } from './textures';
 
 const CH = 64;
 const LODS = [1, 2, 4, 8];
@@ -33,13 +34,15 @@ export class TerrainMesh {
       normals[(j * n + i) * 3] = nx / l; normals[(j * n + i) * 3 + 1] = ny / l; normals[(j * n + i) * 3 + 2] = nz / l;
     }
     const mat = new THREE.MeshStandardMaterial({ roughness: 0.95, metalness: 0 });
+    const tnorm = normalArrayFrom(tex, [2.5, 2.5, 3.5, 5, 1.5, 2.5, 2, 1.5, 3]);
     mat.onBeforeCompile = (sh) => {
       sh.uniforms.tLayers = { value: tex };
+      sh.uniforms.tTN = { value: tnorm };
       sh.vertexShader = sh.vertexShader
         .replace('#include <common>', '#include <common>\nattribute vec4 aSplat;\nvarying vec4 vSplat;\nvarying vec3 vWPos;\nvarying vec3 vWNormal;')
         .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvSplat = aSplat;\nvWPos = (modelMatrix * vec4(transformed,1.0)).xyz;\nvWNormal = normal;');
       sh.fragmentShader = sh.fragmentShader
-        .replace('#include <common>', '#include <common>\nuniform highp sampler2DArray tLayers;\nvarying vec4 vSplat;\nvarying vec3 vWPos;\nvarying vec3 vWNormal;\n' + SHADER_NOISE)
+        .replace('#include <common>', '#include <common>\nuniform highp sampler2DArray tLayers;\nuniform highp sampler2DArray tTN;\nvarying vec4 vSplat;\nvarying vec3 vWPos;\nvarying vec3 vWNormal;\n' + SHADER_NOISE + PERTURB_GLSL)
         .replace('#include <map_fragment>', /* glsl */ `
           vec2 uv = vWPos.xz / 7.0;
           float macro = fbm3(vWPos.xz / 90.0);
@@ -55,19 +58,32 @@ export class TerrainMesh {
           vec3 sand = texture(tLayers, vec3(uv, 6.0)).rgb;
           vec3 ice = texture(tLayers, vec3(uv * 0.3, 7.0)).rgb;
           vec3 pave = texture(tLayers, vec3(vWPos.xz / 6.0, 8.0)).rgb;
-          vec3 col = mix(grass, dry, smoothstep(0.45, 0.8, macro) * 0.8);
-          col = mix(col, dirt, smoothstep(0.62, 0.8, macro2) * 0.8);
-          col = mix(col, rock, smoothstep(0.28, 0.5, slope + (macro2 - 0.5) * 0.25));
-          col = mix(col, sand, smoothstep(3.0, 0.8, vWPos.y) * (1.0 - vSplat.x));
-          col = mix(col, snow, clamp(vSplat.y * (1.0 - smoothstep(0.45, 0.7, slope) * 0.6), 0.0, 1.0));
-          col = mix(col, pave, smoothstep(0.2, 0.6, vSplat.w + (vn(vWPos.xz * 0.2) - 0.5) * 0.3));
+          float fDry = smoothstep(0.45, 0.8, macro) * 0.8, fDirt = smoothstep(0.62, 0.8, macro2) * 0.8;
+          float fRock = smoothstep(0.28, 0.5, slope + (macro2 - 0.5) * 0.25), fSand = smoothstep(3.0, 0.8, vWPos.y) * (1.0 - vSplat.x);
+          float fSnow = clamp(vSplat.y * (1.0 - smoothstep(0.45, 0.7, slope) * 0.6), 0.0, 1.0);
+          float fPave = smoothstep(0.2, 0.6, vSplat.w + (vn(vWPos.xz * 0.2) - 0.5) * 0.3);
+          vec3 col = mix(grass, dry, fDry);
+          col = mix(col, dirt, fDirt);
+          col = mix(col, rock, fRock);
+          col = mix(col, sand, fSand);
+          col = mix(col, snow, fSnow);
+          col = mix(col, pave, fPave);
           // tyre-worn road edges
           float road = smoothstep(0.25, 0.75, vSplat.x + (vn(vWPos.xz * 0.35) - 0.5) * 0.25);
           col = mix(col, asph, road);
+          // small-scale ambient occlusion-ish darkening in grass clumps
+          col *= 0.9 + 0.1 * vn(vWPos.xz * 1.7);
           col = mix(col, ice, step(0.5, vSplat.z) * (1.0 - step(1.5, vSplat.z)));
           col = mix(col, dirt * 0.55, step(1.5, vSplat.z));
           diffuseColor.rgb *= col;
         `)
+        .replace('#include <normal_fragment_maps>', /* glsl */ `#include <normal_fragment_maps>
+          {
+            vec3 nG = texture(tTN, vec3(uv, 0.0)).xyz, nD = texture(tTN, vec3(uv, 2.0)).xyz, nR = texture(tTN, vec3(vWPos.xz / 14.0, 3.0)).xyz;
+            vec3 nA = texture(tTN, vec3(uv * 0.8, 5.0)).xyz, nP = texture(tTN, vec3(vWPos.xz / 6.0, 8.0)).xyz, nS = texture(tTN, vec3(uv * 0.7, 4.0)).xyz;
+            vec3 tn = mix(nG, nD, fDirt); tn = mix(tn, nR, fRock); tn = mix(tn, nS, fSnow); tn = mix(tn, nP, fPave); tn = mix(tn, nA, road);
+            normal = perturbN(normal, -vViewPosition, vWPos.xz, tn * 2.0 - 1.0);
+          }`)
         .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(0.95, 0.75, step(0.5, vSplat.x)) * mix(1.0, 0.25, step(0.5, vSplat.z) * (1.0 - step(1.5, vSplat.z)));');
     };
     this.material = mat;

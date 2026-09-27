@@ -7,6 +7,7 @@
 import * as THREE from 'three';
 import { Mat, Structure, Part, RampPart } from '../world/collision';
 import { releaseAfterUpload } from './release';
+import { normalArrayFrom, PERTURB_GLSL } from './textures';
 
 const CHUNK = 192;
 const DETAIL_DIST = 460;
@@ -130,19 +131,25 @@ class Emitter {
   }
 }
 
+let NORMALS: THREE.DataArrayTexture | null = null;
 export function structureMaterial(tex: THREE.DataArrayTexture, transparent = false): THREE.MeshStandardMaterial {
+  // per-layer bump strength: 0 concrete,1 brick,2 plaster,3 metal,4 wood,5 glass,6 rock,7 asphalt,8 roof,9 container,10 trim,11 dark,12 foliage,13 tile,14 snow,15 facade
+  NORMALS ??= normalArrayFrom(tex, [1.1, 3.5, 0.45, 2, 2.5, 0.2, 3, 1.5, 1.1, 2.5, 0.5, 0.8, 2, 2, 1, 1.2]);
   const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85, metalness: 0.0, transparent, opacity: transparent ? 0.38 : 1, depthWrite: !transparent, side: transparent ? THREE.DoubleSide : THREE.FrontSide });
   m.onBeforeCompile = (sh) => {
     sh.uniforms.tLayers = { value: tex };
     sh.uniforms.uAvg = { value: tex.userData.avg };
+    sh.uniforms.tNormals = { value: NORMALS };
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', '#include <common>\nattribute float aLayer;\nvarying float vLayer;\nvarying vec2 vUv2;')
       .replace('#include <uv_vertex>', '#include <uv_vertex>\nvLayer = aLayer;\nvUv2 = uv;');
     sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', '#include <common>\nuniform highp sampler2DArray tLayers;\nuniform float uAvg[16];\nvarying float vLayer;\nvarying vec2 vUv2;')
+      .replace('#include <common>', '#include <common>\nuniform highp sampler2DArray tLayers;\nuniform highp sampler2DArray tNormals;\nuniform float uAvg[16];\nvarying float vLayer;\nvarying vec2 vUv2;\n' + PERTURB_GLSL)
       .replace('#include <color_fragment>', '#include <color_fragment>\n  diffuseColor.rgb *= diffuseColor.rgb; // vertex colours are sqrt-encoded in uint8')
       .replace('#include <map_fragment>', 'int li = int(floor(vLayer + 0.5));\nvec4 texel = texture(tLayers, vec3(vUv2, float(li)));\ndiffuseColor.rgb *= clamp(texel.rgb / max(uAvg[li], 0.02), 0.0, 2.2);')
+      .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n  { vec3 mn = texture(tNormals, vec3(vUv2, floor(vLayer + 0.5))).xyz * 2.0 - 1.0; normal = perturbN(normal, -vViewPosition, vUv2, mn); }')
       .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
+        roughnessFactor *= 0.85 + texel.g * 0.3;
         float L = floor(vLayer + 0.5);
         if (L == 5.0) roughnessFactor = 0.08;
         else if (L == 3.0 || L == 9.0) roughnessFactor = 0.55;

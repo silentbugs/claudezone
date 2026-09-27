@@ -20,7 +20,7 @@ async function boot() {
   await new Promise((r) => setTimeout(r, 30));
   const world = generateWorld(masks, 1);
   sm.buildWorld(world);
-  sm.setQuality(settings.quality); sm.setRenderScale(settings.renderScale);
+  sm.setQuality(settings.quality); sm.setRenderScale(settings.renderScale); sm.setFoliage(settings.foliage);
   const tac = renderTacMap(world);
   loading.remove();
   const input = new Input(canvas);

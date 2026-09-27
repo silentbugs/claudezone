@@ -28,7 +28,8 @@ import type { WorldData } from '../world/mapgen';
 import { materialArray, terrainArray } from './textures';
 import { TerrainMesh } from './terrainMesh';
 import { StructureMesh } from './structureMesh';
-import { makeTrees } from './trees';
+import { Trees } from './trees';
+import { Foliage } from './foliage';
 import { makeSky, makeLights, followSun, makeWater, waterMaterial, FOG_COLOR } from './environment';
 
 export class SceneMgr {
@@ -71,7 +72,8 @@ export class SceneMgr {
     this.scene.add(this.terrain.group);
     this.structures = new StructureMesh(w.col.structures, mats, w.hf.size);
     this.scene.add(this.structures.group);
-    this.scene.add(makeTrees(w.trees));
+    this.trees = new Trees(w.trees); this.scene.add(this.trees.group);
+    this.grass = new Foliage(w); this.grass.density = this.foliage; this.scene.add(this.grass.mesh);
     const wg = new THREE.BufferGeometry(); wg.setAttribute('position', new THREE.BufferAttribute(w.wires, 3));
     this.scene.add(new THREE.LineSegments(wg, new THREE.LineBasicMaterial({ color: 0x1e1e1e })));
     this.scene.add(makeSky());
@@ -87,7 +89,9 @@ export class SceneMgr {
   renderScale = 1;
   setRenderScale(s: number) { this.renderScale = s; this.setQuality(this.quality); }
   foliage = 1;
-  setFoliage(f: number) { this.foliage = f; }
+  grass!: Foliage;
+  trees!: Trees;
+  setFoliage(f: number) { this.foliage = f; if (this.grass) { this.grass.density = f; (this.grass as any).lastCx = 1e9; } }
   setQuality(q: Quality) {
     this.quality = q;
     const r = this.renderer;
@@ -114,6 +118,8 @@ export class SceneMgr {
     this.terrain.update(cam);
     this.structures.update(cam);
     followSun(this.sun, cam);
+    this.grass?.update(cam, (performance.now() - this.t0) / 1000);
+    this.trees?.update(cam, (performance.now() - this.t0) / 1000);
     const sh = (this.water as any).userData.shader; if (sh) sh.uniforms.uTime.value = (performance.now() - this.t0) / 1000;
     if (this.composer) this.composer.render(); else this.renderer.render(this.scene, this.camera);
   }

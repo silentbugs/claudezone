@@ -102,3 +102,38 @@ export function terrainArray(size = 256): THREE.DataArrayTexture {
   tex.needsUpdate = true;
   return tex;
 }
+
+/** Tangent-space normal maps derived from each layer's luminance (Sobel), same layout as the source array. */
+export function normalArrayFrom(src: THREE.DataArrayTexture, strength: number[] | number): THREE.DataArrayTexture {
+  const { width: W, height: H, depth: L } = src.image as { width: number; height: number; depth: number };
+  const data = src.image.data as Uint8Array, out = new Uint8Array(W * H * 4 * L);
+  const lum = new Float32Array(W * H);
+  for (let l = 0; l < L; l++) {
+    const o = l * W * H * 4, k = Array.isArray(strength) ? strength[l] ?? 1 : strength;
+    for (let i = 0; i < W * H; i++) lum[i] = (data[o + i * 4] * 0.3 + data[o + i * 4 + 1] * 0.59 + data[o + i * 4 + 2] * 0.11) / 255;
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const at = (xx: number, yy: number) => lum[((yy + H) % H) * W + ((xx + W) % W)];
+      const dx = (at(x + 1, y - 1) + 2 * at(x + 1, y) + at(x + 1, y + 1)) - (at(x - 1, y - 1) + 2 * at(x - 1, y) + at(x - 1, y + 1));
+      const dy = (at(x - 1, y + 1) + 2 * at(x, y + 1) + at(x + 1, y + 1)) - (at(x - 1, y - 1) + 2 * at(x, y - 1) + at(x + 1, y - 1));
+      let nx = -dx * k, ny = -dy * k, nz = 1; const len = Math.hypot(nx, ny, nz); nx /= len; ny /= len; nz /= len;
+      const i = o + (y * W + x) * 4;
+      out[i] = (nx * 0.5 + 0.5) * 255; out[i + 1] = (ny * 0.5 + 0.5) * 255; out[i + 2] = (nz * 0.5 + 0.5) * 255; out[i + 3] = 255;
+    }
+  }
+  const t = new THREE.DataArrayTexture(out, W, H, L);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.magFilter = THREE.LinearFilter; t.minFilter = THREE.LinearMipmapLinearFilter; t.generateMipmaps = true; t.anisotropy = 8;
+  t.needsUpdate = true;
+  return t;
+}
+
+/** GLSL: perturb a view-space normal with a tangent-space sample using screen derivatives (no tangents needed). */
+export const PERTURB_GLSL = /* glsl */ `
+vec3 perturbN(vec3 N, vec3 viewPos, vec2 uv, vec3 mapN) {
+  vec3 q0 = dFdx(viewPos), q1 = dFdy(viewPos);
+  vec2 st0 = dFdx(uv), st1 = dFdy(uv);
+  vec3 q1perp = cross(q1, N), q0perp = cross(N, q0);
+  vec3 T = q1perp * st0.x + q0perp * st1.x, B = q1perp * st0.y + q0perp * st1.y;
+  float det = max(dot(T, T), dot(B, B));
+  float sc = det == 0.0 ? 0.0 : inversesqrt(det);
+  return normalize(T * (mapN.x * sc) + B * (mapN.y * sc) + N * mapN.z);
+}`;
