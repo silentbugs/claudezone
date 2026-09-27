@@ -313,6 +313,8 @@ export class Match {
     this.sm.render();
     // viewmodel
     const fp = (phase === Phase.Alive || phase === Phase.Gulag || phase === Phase.GulagWait) && !(vehicleOf(sim, vp) && (vp as any).seat === 0);
+    this.vm.updateAir(this.spectate < 0 ? me : null, dt, this.tpBlend < 0.35 && !this.debugCam);
+    if ((phase === Phase.Freefall || phase === Phase.Chute) && this.tpBlend < 0.35 && !this.debugCam) this.vm.render(this.sm.renderer);
     if (fp && this.spectate < 0 && !this.debugCam) {
       this.vm.update(me, dt, this.lastMouse.dx, this.lastMouse.dy, Math.hypot(me.vx, me.vz), me.sprinting);
       this.vm.render(this.sm.renderer);

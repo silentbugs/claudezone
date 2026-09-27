@@ -66,6 +66,36 @@ export class ViewModel {
   setAspect(a: number) { this.camera.aspect = a; this.camera.updateProjectionMatrix(); }
   fire() { this.kick = 1; this.kickRot = 1; this.flashT = 0.05; this.flash.rotation.z = Math.random() * 3; }
 
+  /** Hands on the parachute toggles / spread in freefall (first-person infil view). */
+  private air = new THREE.Group();
+  private airL = new THREE.Mesh(); private airR = new THREE.Mesh();
+  private airBuilt = false;
+  private buildAir() {
+    this.airBuilt = true;
+    const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85 });
+    const arm = (side: number) => mergeGeometries([limb(0, 0, 0, 0, 0.32, -0.08, 0.032, 0x4d5140), part(new THREE.SphereGeometry(0.05, 10, 8).scale(0.9, 1.1, 0.8), 0x2e2d2a, 0, 0.37, -0.1), part(new THREE.BoxGeometry(0.035, 0.05, 0.05), 0x2e2d2a, side * -0.035, 0.39, -0.12), part(new THREE.CylinderGeometry(0.006, 0.006, 0.5, 5), 0xb8b0a0, side * 0.02, 0.62, -0.1)])!;
+    this.airL = new THREE.Mesh(arm(-1), mat); this.airR = new THREE.Mesh(arm(1), mat);
+    this.air.add(this.airL, this.airR); this.air.scale.setScalar(0.7); this.scene.add(this.air);
+  }
+  updateAir(p: Player | null, dt: number, show: boolean) {
+    if (!this.airBuilt) this.buildAir();
+    this.air.visible = !!p && show && (p.phase === Phase.Chute || p.phase === Phase.Freefall);
+    if (p && (p.phase === Phase.Plane || p.phase === Phase.Freefall || p.phase === Phase.Chute)) this.root.visible = false;
+    if (!this.air.visible || !p) return;
+    this.bobT += dt;
+    const chute = p.phase === Phase.Chute, steer = p.intent.mx, pull = Math.max(0, -p.intent.mz);
+    if (chute) {
+      // hands up on the toggles; pulling one side steers
+      this.airL.position.set(-0.34, -0.3 + (steer < 0 ? -0.07 : 0) - pull * 0.05, -0.42); this.airL.rotation.set(0.2, 0, 0.35);
+      this.airR.position.set(0.34, -0.3 + (steer > 0 ? -0.07 : 0) - pull * 0.05, -0.42); this.airR.rotation.set(0.2, 0, -0.35);
+    } else {
+      // freefall: arms spread, fluttering in the wind
+      const f = Math.sin(this.bobT * 17) * 0.02;
+      this.airL.position.set(-0.46, -0.36 + f, -0.3); this.airL.rotation.set(-0.6, 0, 1.1 + steer * 0.2);
+      this.airR.position.set(0.46, -0.36 - f, -0.3); this.airR.rotation.set(-0.6, 0, -1.1 + steer * 0.2);
+    }
+  }
+
   update(p: Player, dt: number, mouseDX: number, mouseDY: number, speed: number, sprinting: boolean) {
     const w = p.weapons[p.cur];
     const hidden = !w || p.phase === Phase.Downed || p.phase === Phase.Freefall || p.phase === Phase.Chute || p.phase === Phase.Plane || p.phase === Phase.Dead || p.phase === Phase.GulagWait || p.swimming;
@@ -93,6 +123,12 @@ export class ViewModel {
     this.plate.visible = p.plateT > 0;
     if (p.plateT > 0) { pos.y -= 0.18; rx -= 0.4; const t = 1 - p.plateT / 1.25; this.plate.position.set(-0.08, 0.06 - t * 0.08, -0.1 + t * 0.12); this.plate.rotation.set(0.6, 0.3, 0); }
     if (this.swap > 0) { pos.y -= this.swap * 0.25; rx -= this.swap * 0.6; }
+    // stance changes dip the weapon; prone crawling lowers and rocks it
+    if (p.stanceT > 0) { const k = Math.min(1, p.stanceT / 0.45); pos.y -= 0.08 * k; rx -= 0.3 * k; rz += 0.15 * k; }
+    if (p.stance === 2 && speed > 0.3) { pos.y -= 0.06; rz += Math.sin(this.bobT * 0.9) * 0.12; rx -= 0.25; }
+    if (p.slideT > 0) { rz += 0.18; pos.x -= 0.02; }
+    // melee swing
+    if (p.meleeCd > 0.35) { const t = (0.7 - p.meleeCd) / 0.35; pos.x -= Math.sin(t * Math.PI) * 0.12; pos.z -= Math.sin(t * Math.PI) * 0.12; ry += Math.sin(t * Math.PI) * 0.9; }
     pos.z += this.kick * (0.02 + (1 - ads) * 0.02);
     this.root.position.set(pos.x + bx + this.swayX, pos.y + by + this.swayY, pos.z);
     this.root.rotation.set(rx + this.kickRot * 0.05 + this.swayY * 2, ry + this.swayX * 3, rz + this.swayX * 1.5, 'YXZ');
@@ -105,7 +141,7 @@ export class ViewModel {
     this.flashLight.intensity = this.flashT > 0 ? 8 : 0;
   }
   render(r: THREE.WebGLRenderer) {
-    if (!this.root.visible) return;
+    if (!this.root.visible && !this.air.visible) return;
     r.autoClear = false; r.clearDepth(); r.render(this.scene, this.camera); r.autoClear = true;
   }
 }

@@ -245,6 +245,12 @@ export function updateBullets(sim: Sim, dt: number) {
       continue;
     }
     // near-miss whiz for the listener
+    if (tp < tw && victim && riotBlocks(victim, dx, dz)) {
+      const hx = b.x + dx * tp, hy = b.y + dy * tp, hz = b.z + dz * tp;
+      sim.emit({ t: 'impact', x: hx, y: hy, z: hz, nx: -dx, ny: 0, nz: -dz, mat: Mat.Metal, water: false });
+      if (b.rocket) sim.explode(hx, hy, hz, WEAPON[b.weapon].splash!.radius, WEAPON[b.weapon].splash!.damage * 0.5, b.owner, 'rocket');
+      continue;
+    }
     if (tp < tw && victim) {
       const def = WEAPON[b.weapon];
       if (b.rocket) { sim.explode(b.x + dx * tp, b.y + dy * tp, b.z + dz * tp, def.splash!.radius, def.splash!.damage, b.owner, 'rocket'); alive = false; }
@@ -363,4 +369,13 @@ export function updateThrowables(sim: Sim, dt: number) {
 
 export function refillAmmo(p: Player) {
   for (const k of Object.keys(AMMO_MAX) as (keyof typeof AMMO_MAX)[]) p.ammo[k] = AMMO_MAX[k];
+}
+
+/** Riot Shield: blocks bullets from the front while held, and from behind while slung on the back. */
+function riotBlocks(v: Player, dx: number, dz: number): boolean {
+  const held = v.weapons[v.cur]?.id === 'riotshield', slung = !held && v.weapons.some((w) => w?.id === 'riotshield');
+  if (!held && !slung) return false;
+  const fx = -Math.sin(v.yaw), fz = -Math.cos(v.yaw);
+  const facing = -(dx * fx + dz * fz); // > 0 when the bullet comes at the victim's front
+  return held ? facing > 0.55 : facing < -0.55;
 }

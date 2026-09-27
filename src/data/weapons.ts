@@ -13,7 +13,7 @@ export interface Look {
   recv: number; barrel: number; guard: number; guardW?: number;
   mag: 'curve' | 'straight' | 'long' | 'box' | 'drum' | 'grip' | 'none' | 'tube' | 'top' | 'helical' | 'pan';
   magLen?: number; stock: 'full' | 'tube' | 'fold' | 'none' | 'wood' | 'thumbhole';
-  bull?: boolean; wood?: boolean; jacket?: boolean; bipod?: boolean; scope?: 'tube' | 'aug' | 'none'; slide?: number; revolver?: boolean; tubeDia?: number; knife?: boolean;
+  bull?: boolean; wood?: boolean; jacket?: boolean; bipod?: boolean; scope?: 'tube' | 'aug' | 'none'; slide?: number; revolver?: boolean; tubeDia?: number; knife?: boolean; melee?: 'knife' | 'shield' | 'sticks' | 'kodachi';
 }
 
 export interface WeaponDef {
@@ -125,7 +125,10 @@ const ROWS: Row[] = [
   ['jokr', 'JOKR', 'launcher', 'Launch', [R(INF, 150)], 1, 30, 1, 1, 2.07, 550, 120, lk({ recv: 0.2, barrel: 1.0, guard: 0, mag: 'none', stock: 'none', tubeDia: 0.07 }), { auto: false, splash: { radius: 5.5, damage: 160 } }],
   ['mgl', 'MGL-32', 'launcher', 'Loot', [R(INF, 60)], 1, 200, 6, 6, 6, 350, 60, lk({ recv: 0.3, barrel: 0.3, guard: 0.1, mag: 'drum', stock: 'fold', tubeDia: 0.03 }), { auto: false, splash: { radius: 5, damage: 150 }, weight: 0.08 }],
   // ------------------------------------------------ Melee
-  ['knife', 'Combat Knife', 'melee', 'Launch', [R(INF, 0)], 1, 70, 0, 0, 0, 100, 0, { recv: 0.25, barrel: 0, guard: 0, mag: 'none', stock: 'none', knife: true }, { melee: { range: 2.3, damage: 135 } }],
+  ['knife', 'Combat Knife', 'melee', 'Launch', [R(INF, 0)], 1, 70, 0, 0, 0, 100, 0, { recv: 0.25, barrel: 0, guard: 0, mag: 'none', stock: 'none', knife: true, melee: 'knife' }, { melee: { range: 2.3, damage: 135 } }],
+  ['riotshield', 'Riot Shield', 'melee', 'Launch', [R(INF, 0)], 1, 60, 0, 0, 0, 100, 0, { recv: 0.25, barrel: 0, guard: 0, mag: 'none', stock: 'none', knife: true, melee: 'shield' }, { melee: { range: 2.4, damage: 75 }, mobility: 0.9 }],
+  ['kali', 'Kali Sticks', 'melee', 'Season 4', [R(INF, 0)], 1, 90, 0, 0, 0, 100, 0, { recv: 0.25, barrel: 0, guard: 0, mag: 'none', stock: 'none', knife: true, melee: 'sticks' }, { melee: { range: 2.2, damage: 90 }, mobility: 1.07 }],
+  ['kodachi', 'Dual Kodachis', 'melee', 'Season 5', [R(INF, 0)], 1, 80, 0, 0, 0, 100, 0, { recv: 0.25, barrel: 0, guard: 0, mag: 'none', stock: 'none', knife: true, melee: 'kodachi' }, { melee: { range: 2.4, damage: 125 }, mobility: 1.06 }],
   // ------------------------------------------------ Black Ops Cold War (Dec 16 2020 integration)
   ['xm4', 'XM4', 'ar', 'Cold War', [R(40, 30), R(INF, 25)], 1.4, 722, 30, 60, 1.6, 270, 860, lk(L.m4, { stock: 'full' }), { family: 'CW' }],
   ['ak47cw', 'AK-47 (Cold War)', 'ar', 'Cold War', [R(35, 38), R(INF, 30)], 1.4, 600, 30, 60, 1.7, 300, 740, lk(L.ak), { family: 'CW' }],

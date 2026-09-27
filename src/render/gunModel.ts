@@ -17,6 +17,12 @@ export function describeGun(def: WeaponDef, rarity: number): GunDesc {
   const cyl = (r: number, len: number, x: number, y: number, z: number, color: number) => P.push({ kind: 'cyl', x, y, z, w: r * 2, h: r * 2, d: len, color });
   const lk = def.look;
   const tint = rarity === 5 ? 0x4a3040 : rarity >= 4 ? 0x5a4a2a : rarity >= 3 ? 0x3a3448 : rarity >= 2 ? 0x34404a : METAL;
+  if (lk.melee === 'shield') {
+    box(0.55, 0.9, 0.04, -0.2, -0.05, -0.35, 0x34383c); box(0.3, 0.12, 0.042, -0.2, 0.23, -0.35, 0x4a5a66); box(0.5, 0.03, 0.05, -0.2, -0.48, -0.35, 0x1e1e1e);
+    return { parts: P, muzzle: 0.4, sight: 0.1, scope: false, optic: false };
+  }
+  if (lk.melee === 'sticks') { cyl(0.014, 0.6, 0, -0.01, -0.22, 0x6a4a2e); cyl(0.018, 0.1, 0, -0.01, 0.06, 0x2a2a2a); return { parts: P, muzzle: 0.5, sight: 0.05, scope: false, optic: false }; }
+  if (lk.melee === 'kodachi') { box(0.03, 0.035, 0.16, 0, -0.02, 0.06, 0x1e1e1e); box(0.006, 0.032, 0.42, 0, -0.01, -0.22, 0xc8ccd0); box(0.06, 0.012, 0.03, 0, -0.01, -0.02, 0x9a8a5a); return { parts: P, muzzle: 0.45, sight: 0.05, scope: false, optic: false }; }
   if (lk.knife) {
     box(0.03, 0.035, 0.12, 0, -0.02, 0.06, 0x1e1e1e); box(0.006, 0.03, 0.2, 0, -0.01, -0.1, 0xb8bcc0); box(0.05, 0.012, 0.012, 0, -0.01, 0.0, 0x333333);
     return { parts: P, muzzle: 0.2, sight: 0.05, scope: false, optic: false };

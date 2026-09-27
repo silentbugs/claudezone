@@ -1,0 +1,31 @@
+<!doctype html><html><body style="margin:0;background:#8a9aa8"><canvas id=c width=900 height=600></canvas>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
+const q=new URLSearchParams(location.search);
+const file=q.get('f'), mode=q.get('mode')||'info', clipName=q.get('clip'), t=parseFloat(q.get('t')||'0.3'), view=q.get('view')||'front';
+const r=new THREE.WebGLRenderer({canvas:document.getElementById('c'),antialias:true,preserveDrawingBuffer:true});
+r.outputColorSpace=THREE.SRGBColorSpace;
+const scene=new THREE.Scene(); scene.background=new THREE.Color(0x8a9aa8);
+scene.add(new THREE.HemisphereLight(0xffffff,0x445566,2.2)); const d=new THREE.DirectionalLight(0xffffff,2.5); d.position.set(3,5,4); scene.add(d);
+const g=await new GLTFLoader().loadAsync('/public/models/'+file).catch(e=>{window.__res={error:String(e)};throw e});
+const root=g.scene; scene.add(root);
+const info={file,clips:{},bones:[],tris:0,materials:[],meshes:0,skinned:0};
+for(const a of g.animations) info.clips[a.name]=+a.duration.toFixed(3);
+const mats=new Set();
+root.traverse(o=>{ if(o.isBone) info.bones.push(o.name);
+  if(o.isMesh){info.meshes++; if(o.isSkinnedMesh) info.skinned++; const gg=o.geometry; info.tris+=(gg.index?gg.index.count:gg.attributes.position.count)/3;
+   for(const m of [].concat(o.material)){ if(!mats.has(m)){mats.add(m); info.materials.push({name:m.name,type:m.type,color:m.color?.getHexString(),map:!!m.map,normal:!!m.normalMap,tex:m.map?.image?.width});}}}});
+let mixer;
+if(mode==='anim' && clipName){ const c=THREE.AnimationClip.findByName(g.animations,clipName); mixer=new THREE.AnimationMixer(root); mixer.clipAction(c).play(); mixer.update(t); }
+root.updateMatrixWorld(true);
+const box=new THREE.Box3().setFromObject(root,true); const s=box.getSize(new THREE.Vector3()), ctr=box.getCenter(new THREE.Vector3());
+info.bbox=[s.x,s.y,s.z].map(v=>+v.toFixed(3)); info.bmin=box.min.toArray().map(v=>+v.toFixed(3)); info.bmax=box.max.toArray().map(v=>+v.toFixed(3));
+scene.add(new THREE.AxesHelper(Math.max(s.x,s.y,s.z)*0.6));
+const grid=new THREE.GridHelper(10,20,0x333333,0x666666); grid.position.y=box.min.y; scene.add(grid);
+const cam=new THREE.PerspectiveCamera(30,1.5,0.01,1000); const R=Math.max(s.x,s.y,s.z)*2.2;
+const dirs={front:[0,0.15,1],side:[1,0.1,0],top:[0,1,0.001],iso:[1,0.6,1],back:[0,0.15,-1],sidez:[0,0.1,1]};
+const dv=new THREE.Vector3(...dirs[view]).normalize(); cam.position.copy(ctr).addScaledVector(dv,R); cam.lookAt(ctr);
+r.render(scene,cam); window.__res=info;
+</script></body></html>
