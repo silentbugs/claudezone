@@ -70,7 +70,9 @@ export class Foliage {
         .replace('#include <beginnormal_vertex>', '#include <beginnormal_vertex>\n objectNormal = vec3(0.0, 1.0, 0.0);');
       sh.fragmentShader = sh.fragmentShader
         .replace('#include <common>', '#include <common>\nvarying float vShade;')
-        .replace('#include <map_fragment>', '#include <map_fragment>\n diffuseColor.rgb *= vShade;');
+        .replace('#include <map_fragment>', '#include <map_fragment>\n diffuseColor.rgb *= vShade;')
+        // both sides of a blade card are lit like the ground (DoubleSide would flip the back face's normal and turn it black)
+        .replace('#include <normal_fragment_begin>', '#include <normal_fragment_begin>\n normal = normalize( vNormal );');
     };
     this.mesh = new THREE.InstancedMesh(clumpGeometry(), mat, this.max);
     this.mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);

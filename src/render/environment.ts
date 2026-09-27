@@ -36,9 +36,9 @@ export function makeSky(): THREE.Mesh {
 }
 
 export function makeLights(scene: THREE.Scene) {
-  const hemi = new THREE.HemisphereLight(0xc4d2e0, 0x7d7460, 1.35);
+  const hemi = new THREE.HemisphereLight(0xbdd0e6, 0x6b5f4c, 0.8);
   scene.add(hemi);
-  const sun = new THREE.DirectionalLight(0xfff0dc, 2.5);
+  const sun = new THREE.DirectionalLight(0xffe2bf, 3.5);
   sun.position.copy(SUN_DIR).multiplyScalar(200);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);

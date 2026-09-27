@@ -20,6 +20,8 @@ const GradeShader = {
     void main(){ vec4 t = texture2D(tDiffuse, vUv); vec3 c = t.rgb;
       float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
       c = mix(vec3(l), c, uSat);
+      // gentle filmic contrast around mid-grey
+      c = 0.18 * pow(max(c, vec3(0.0)) / 0.18, vec3(1.07));
       c *= mix(vec3(0.96, 0.99, 1.05), vec3(1.04, 1.0, 0.95), smoothstep(0.05, 0.6, l));
       c = mix(c, c * vec3(1.25, 0.95, 0.55) + vec3(0.06, 0.04, 0.0), uGas * 0.6);
       c = mix(c, vec3(l) * vec3(1.0, 0.85, 0.85), uLow);
@@ -104,7 +106,7 @@ export class SceneMgr {
     this.scene.add(makeSky());
     const pm = new THREE.PMREMGenerator(this.renderer);
     this.scene.environment = this.hdrEnv ?? pm.fromScene(new RoomEnvironment(), 0.04).texture;
-    this.scene.environmentIntensity = this.hdrEnv ? 0.55 : 0.35;
+    this.scene.environmentIntensity = this.hdrEnv ? 0.42 : 0.3;
     const { sun } = makeLights(this.scene);
     this.sun = sun;
     this.water = waterMaterial();
