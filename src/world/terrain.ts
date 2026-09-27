@@ -206,7 +206,7 @@ export function buildTerrain(masks: MapMasks): { hf: Heightfield; extra: Terrain
   }
   const road = new Float32Array(n * n); for (let k = 0; k < n * n; k++) road[k] = clamp(roadSoft[k] * 1.6, 0, 1) * (riverR[k] ? 0 : 1);
   const snow = new Float32Array(n * n);
-  for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) { const k = j * n + i; snow[k] = clamp(snowB[k] * 1.6 * smoothstep(1500, 900, j * sp) + smoothstep(90, 180, h[k]) , 0, 1); }
+  for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) { const k = j * n + i; snow[k] = clamp((snowB[k] * 2.0 - 0.25) * smoothstep(1250, 900, j * sp) + smoothstep(150, 230, h[k]), 0, 1); }
   const pb = blur(blur(builtR, n, 2), n, 2);
   const paved = new Float32Array(n * n);
   for (let k = 0; k < n * n; k++) paved[k] = riverR[k] || h[k] < 0.5 ? 0 : clamp((pb[k] - 0.18) * 2.2, 0, 1) * (1 - snow[k]);

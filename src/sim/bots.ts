@@ -117,11 +117,16 @@ export function botThink(sim: Sim, b: BotBrain, p: Player, dt: number, think: bo
   it.fire = false; it.jump = it.jump && false; it.interact = false; it.plate = false; it.reload = false;
   switch (p.phase) {
     case Phase.Plane: {
+      const human = humanLeader(sim, p);
+      if (human) { if (human.phase !== Phase.Plane) it.jump = true; return; } // jump with the squad leader
       if (!b.dropX) chooseDrop(sim, b, p);
       if (sim.plane.canJump && sim.plane.t >= b.jumpAt) it.jump = true;
       return;
     }
     case Phase.Freefall: case Phase.Chute: {
+      const human = humanLeader(sim, p);
+      if (human && (human.phase === Phase.Freefall || human.phase === Phase.Chute)) { const a0 = (p.id % 3) * 2.1; b.dropX = human.x + Math.cos(a0) * 25 + human.vx * 4; b.dropZ = human.z + Math.sin(a0) * 25 + human.vz * 4; }
+      else if (human && human.phase === Phase.Alive && Math.hypot(human.x - b.dropX, human.z - b.dropZ) > 60) { const a0 = (p.id % 3) * 2.1; b.dropX = human.x + Math.cos(a0) * 20; b.dropZ = human.z + Math.sin(a0) * 20; }
       if (!b.dropX) { b.dropX = p.x + sim.rng.range(-200, 200); b.dropZ = p.z + sim.rng.range(-200, 200); }
       const dx = b.dropX - p.x, dz = b.dropZ - p.z, d = Math.hypot(dx, dz);
       it.yaw = lerpYaw(it.yaw, Math.atan2(-dx, -dz), Math.min(1, dt * 3));
@@ -364,6 +369,8 @@ function decide(sim: Sim, b: BotBrain, p: Player, inGulag: boolean) {
   }
   if (b.goal === 'loot' && b.itemId >= 0) return;
   // follow the squad leader loosely, else wander toward the next circle through POIs
+  const hl = humanLeader(sim, p), ping = hl ? (hl as any).ping as { x: number; z: number } | undefined : undefined;
+  if (ping && Math.hypot(ping.x - p.x, ping.z - p.z) > 12) { b.goal = 'follow'; const a0 = (p.id % 3) * 2.1; b.tx = ping.x + Math.cos(a0) * 5; b.tz = ping.z + Math.sin(a0) * 5; return; }
   const leader = sim.players.filter((q) => q.squad === p.squad && q.alive && q.phase === Phase.Alive && q.id !== p.id).sort((a2, b2) => a2.id - b2.id)[0];
   if (leader && leader.id < p.id && Math.hypot(leader.x - p.x, leader.z - p.z) > 35) { b.goal = 'follow'; b.tx = leader.x + Math.cos(b.wanderA) * 6; b.tz = leader.z + Math.sin(b.wanderA) * 6; return; }
   if (b.goal !== 'idle' && Math.hypot(b.tx - p.x, b.tz - p.z) > 4) return;
@@ -395,3 +402,9 @@ function useful(p: Player, kind: ItemKind, itm: any): boolean {
 import { chestContents } from './loot';
 const chestContentsLazy = (sim: Sim, ch: { x: number; y: number; z: number; legendary: boolean }) => chestContents(sim, ch.x, ch.y, ch.z, ch.legendary);
 void hitBuf;
+
+/** The human in this bot's squad, if any (bots follow their jump and pings). */
+function humanLeader(sim: Sim, p: Player): Player | null {
+  for (const q of sim.players) if (q.squad === p.squad && !q.bot && q.id !== p.id && q.alive) return q;
+  return null;
+}

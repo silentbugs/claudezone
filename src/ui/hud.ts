@@ -51,7 +51,7 @@ export class Hud {
     for (let i = 0; i < 4; i++) { const t = el('i'); t.style.transform = `rotate(${45 + i * 90}deg) translate(0, -14px)`; t.style.left = '-1px'; t.style.top = '-5px'; this.hm.appendChild(t); }
     this.fmCanvas = document.createElement('canvas'); this.fmCanvas.width = this.fmCanvas.height = 1200;
     this.fullmap.append(this.fmCanvas, el('div', 'legend', '<b>TAC MAP</b><br>White ring: next safe zone<br>Orange: gas<br>Blue: your squad<br>Dashed line: C-130 flight path<br>Red dots: enemies (UAV)<br><br>Click to place a marker'));
-    this.fmCanvas.addEventListener('mousedown', (e) => { const r = this.fmCanvas.getBoundingClientRect(); const x = ((e.clientX - r.left) / r.width) * MAP_SIZE, z = ((e.clientY - r.top) / r.height) * MAP_SIZE; this.pings = [{ x, z, t: 999 }]; });
+    this.fmCanvas.addEventListener('mousedown', (e) => { const r = this.fmCanvas.getBoundingClientRect(); const x = ((e.clientX - r.left) / r.width) * MAP_SIZE, z = ((e.clientY - r.top) / r.height) * MAP_SIZE; this.pings = [{ x, z, t: 999 }]; (this.sim.players[this.localId] as any).ping = { x, z }; });
     this.root.append(this.vig, this.scope, mmw, this.gas, this.compass, this.alive, this.squad, this.self, this.weap, this.xh, this.hm, this.markers, this.prompt, this.prog, this.feed, this.banner, this.note, this.dmg, this.flash, this.dot, this.fullmap);
     this.buildCompass();
   }

@@ -166,8 +166,10 @@ export function generateWorld(masks: MapMasks, seed = 1): WorldData {
     const { d: dist, poi } = districtAt(x, z);
     const sizes = sizeOptions(dist, rng);
     if (pass >= sizes.length) continue;
-    const snowy = z < 1400 && masks.density(x, z, 12, M_SNOW) > 0.25;
-    const minBuilt = snowy ? 0.75 : dist === 'downtown' ? 0.36 : 0.42;
+    const snowy = z < 1400 && masks.density(x, z, 12, M_SNOW) > 0.12;
+    // the tac map's north is noisy (rock highlights read as buildings): only trust it near roads or POIs
+    if (z < 1350 && (dist === 'rural' || !poi) && (roadField(x, z) === null || masks.density(x, z, 6, M_BUILT) < 0.55)) continue;
+    const minBuilt = snowy ? 0.8 : z < 1350 && dist === 'rural' ? 0.7 : dist === 'downtown' ? 0.36 : 0.42;
     const ang = roadField(x, z) ?? (poi ? hash2(poi.x | 0, poi.z | 0) * Math.PI : rng.range(0, Math.PI));
     const [w, d] = sizes[pass];
     if (!occ.free(x, z, ang, w, d, 1.2)) continue;
@@ -185,10 +187,11 @@ export function generateWorld(masks: MapMasks, seed = 1): WorldData {
 
   // 3) scattered rural houses/sheds where the map is empty but near roads (Verdansk countryside)
   for (let i = 0; i < 700; i++) {
-    const x = rng.range(150, MAP_SIZE - 150), z = rng.range(150, MAP_SIZE - 300);
+    const x = rng.range(150, MAP_SIZE - 150), z = rng.range(1250, MAP_SIZE - 300);
     if (occ.at(x, z) !== 0) continue;
     const { d: dist } = districtAt(x, z);
     if (dist !== 'rural' && dist !== 'suburb') continue;
+    if (masks.density(x, z, 15, M_SNOW) > 0.1) continue;
     const ang = roadField(x, z); if (ang === null) continue;
     if (hf.at(x, z) < 2 || hf.at(x, z) > 150) continue;
     const w = rng.range(7, 11), d = rng.range(6, 9);

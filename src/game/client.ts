@@ -85,7 +85,7 @@ export class Match {
     if (inp.press('KeyQ')) it.tactical = true;
     if (inp.press('Digit5')) it.killstreak = true;
     if (inp.press('KeyM')) this.mapOpen = !this.mapOpen;
-    if (inp.mousePress(1)) { const [x, , z] = this.sim.aimPoint(p, 800); this.hud.pings = [{ x, z, t: 999 }]; audio.play('beep', { vol: 0.3 }); }
+    if (inp.mousePress(1)) { const [x, , z] = this.sim.aimPoint(p, 800); this.hud.pings = [{ x, z, t: 999 }]; (p as any).ping = { x, z }; audio.play('beep', { vol: 0.3 }); }
     (it as any).up = inp.down('Space'); (it as any).down = inp.down('ControlLeft') || inp.down('KeyC');
     it.yaw = this.camYaw; it.pitch = this.camPitch;
   }
