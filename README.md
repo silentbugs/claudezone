@@ -41,15 +41,12 @@ and the mountain rim are also there.
 7. **Buybacks.** A teammate can buy you back for $4,500 at a Buy Station.
 
 **Loot and economy.**
-- **Weapons.** 20 guns: M4A1, Grau 5.56, Kilo 141, M13, RAM-7, FAL, Oden, AUG, MP5, MP7, Bruen,
-  MG34, HDR, AX-50, Kar98k, Model 680, .50 GS, 1911, X16 and the RPG-7.
-  - Damage-over-range tables, RPM, magazine sizes, reload and ADS times, and bullet velocity with drop.
-  - Five rarity tiers from common to legendary.
+- **Weapons.** The whole 2020 Warzone arsenal: every Modern Warfare gun in Verdansk before December 2020 (13 ARs, 9 SMGs, 7 LMGs, 6 marksman rifles, 4 snipers, 6 shotguns, 6 pistols, 5 launchers, the knife) plus the Black Ops Cold War guns added on 16 Dec 2020.
+  - Damage-over-range tables, RPM, magazine sizes, reload and ADS times, burst fire, bullet velocity with drop.
+  - The five Warzone ammo pools (Heavy, Light, Sniper, Shotgun, Rockets) and five rarity tiers with attachments and blueprint names.
 - **Armor.** 3 armor plates of 50 each; you carry 5, or 8 with an Armor Satchel.
-- **Ground loot and supply boxes.** Cash, lethals, tacticals, killstreaks (UAV, Cluster Strike,
-  Precision Airstrike), gas masks and Self-Revive Kits.
-- **Buy stations.** Plates, Self-Revive, Gas Mask, UAV, Cluster Strike, Precision Airstrike,
-  Munitions Box, Loadout Drop ($10,000) and Buyback, at the 2020 launch prices.
+- **Ground loot** lies on the floor as real models (guns on their side) with a rarity glow; looking at an item shows the Warzone item card (name, rarity, attachments, stat bars compared with your gun).
+- **Buy stations** at 2020 prices: Armor Plate Bundle, Gas Mask, Self-Revive Kit, UAV, Cluster Strike, Precision Airstrike, Shield Turret, Munitions Box, Armor Box, Loadout Drop and Squad Buyback.
 - **Contracts.** Bounty, Scavenger and Recon.
 
 **Vehicles.** ATV, Tactical Rover, SUV, Cargo Truck and a light helicopter.
@@ -66,22 +63,27 @@ and the mountain rim are also there.
 
 ## Controls
 
-| Key | Action |
+Every key is rebindable in **Settings → Key bindings** (from the main menu or **Esc** in a match). Crouch, prone, aim, sprint, tactical sprint and plating each have hold/toggle options; there are also sensitivity, ADS multiplier, FOV, graphics preset, render scale, foliage density, volume buses and an announcer toggle.
+
+| Default key | Action |
 |---|---|
 | WASD / mouse | Move / look |
-| LMB / RMB | Fire / aim down sights |
-| Shift | Sprint. Press again while sprinting to tactical sprint |
-| Space | Jump / mantle, jump from the plane, deploy or cut the chute, brake. In the helicopter: climb |
-| C | Crouch. While sprinting: slide |
-| Z / Ctrl | Prone. In the helicopter: descend |
+| LMB / RMB | Fire / aim down sights (aiming while sprinting drops you out of the sprint) |
+| Left Shift | Sprint. Double-tap: tactical sprint |
+| Space | Jump / mantle, jump from the plane, deploy or cut the chute. In vehicles: brake / helicopter climb |
+| C | Crouch. While sprinting: slide (press again mid-slide to slide-cancel) |
+| Left Ctrl / Z | Prone |
 | R | Reload |
-| F | Interact. Hold to revive or use a Self-Revive Kit, and to enter or exit vehicles |
-| 4 | Armor plate. Hold to chain plates |
-| 1 / 2 / X / wheel | Switch weapons |
-| G / Q / 5 | Lethal / tactical / killstreak |
-| Middle mouse | Ping. Your squad moves to it |
-| M | Tac map. Click to place a marker |
-| Esc | Pause and settings (sensitivity, FOV, volume, graphics) |
+| F | Use: loot, open boxes, buy station, revive, vehicles, turrets |
+| 4 | Armor plate (hold to chain) |
+| 1 / 2 / wheel | Switch weapons |
+| V / E | Melee |
+| G / Q | Lethal / tactical |
+| 5 / X | Killstreak / field upgrade |
+| Q (while parachuting) | Hold for third person |
+| MMB / Left Alt | Ping (your squad moves to it) |
+| M | Tac map |
+| Esc | Pause menu and settings |
 
 ## Layout
 
