@@ -42,8 +42,8 @@ export function itemLabel(it: Item): string {
 export function randomItem(sim: Sim, x: number, y: number, z: number, bonus = 0): Item {
   const rng = sim.rng, r = rng.next();
   const base = { id: sim.nextId++, x, y, z, alive: true } as Item;
-  if (r < 0.24) { const w = rollWeapon(rng, bonus); return { ...base, kind: ItemKind.Weapon, weapon: w.id, rarity: w.rarity, mag: magSize(w.id, w.rarity) }; }
-  if (r < 0.50) { const a = rng.pick(['ar', 'ar', 'smg', 'smg', 'sniper', 'shotgun', 'pistol'] as AmmoType[]); return { ...base, kind: ItemKind.Ammo, ammo: a, n: AMMO_PICKUP[a] }; }
+  if (r < 0.28) { const w = rollWeapon(rng, bonus); return { ...base, kind: ItemKind.Weapon, weapon: w.id, rarity: w.rarity, mag: magSize(w.id, w.rarity) }; }
+  if (r < 0.52) { const a = rng.pick(['ar', 'ar', 'smg', 'smg', 'sniper', 'shotgun', 'pistol'] as AmmoType[]); return { ...base, kind: ItemKind.Ammo, ammo: a, n: AMMO_PICKUP[a] }; }
   if (r < 0.67) return { ...base, kind: ItemKind.Plate, n: 1 };
   if (r < 0.82) return { ...base, kind: ItemKind.Cash, n: rng.pick(CASH.stack) };
   if (r < 0.89) return { ...base, kind: ItemKind.Lethal, lethal: rng.pick(LETHALS), n: 1 };

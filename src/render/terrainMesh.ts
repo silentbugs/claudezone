@@ -5,6 +5,7 @@
 import * as THREE from 'three';
 import type { Heightfield } from '../world/collision';
 import type { TerrainExtras } from '../world/terrain';
+import { releaseAfterUpload } from './release';
 
 const CH = 64;
 const LODS = [1, 2, 4, 8];
@@ -113,6 +114,7 @@ export class TerrainMesh {
         geo.setAttribute('aSplat', new THREE.BufferAttribute(spl.subarray(0, v * 4), 4));
         geo.setIndex(idx);
         geo.computeBoundingSphere(); geo.computeBoundingBox();
+        releaseAfterUpload(geo);
         const m = new THREE.Mesh(geo, mat);
         m.receiveShadow = true; m.castShadow = li === 0 ? false : false;
         m.visible = false; m.matrixAutoUpdate = false;

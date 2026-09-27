@@ -86,6 +86,7 @@ export class Hud {
         const txt = e.attacker >= 0 ? `${name(e.attacker)} <span style="opacity:.7">[${w}]</span> ${e.t === 'down' ? 'downed' : 'killed'} ${name(e.victim)}` : `${name(e.victim)} ${e.t === 'down' ? 'was downed by' : 'died to'} ${w}`;
         this.feedLine(txt);
         if (e.attacker === this.localId && e.victim !== this.localId) this.showNote(e.t === 'down' ? 'Enemy downed' : 'Enemy killed' + ((e as any).head ? ' — headshot' : ''));
+        if (e.victim === this.localId) { const by = e.attacker >= 0 && e.attacker !== this.localId ? this.sim.players[e.attacker].name : w; this.showBanner(e.t === 'down' ? "You're down" : 'Eliminated', e.t === 'down' ? `Downed by ${by} — hold on for a revive${me.selfRevive ? ' or use your Self-Revive' : ''}` : `Killed by ${by}`); this.flash.style.opacity = '0'; }
         break;
       }
       case 'circle': this.showBanner(e.closing ? 'Gas closing' : 'Safe zone revealed', e.closing ? 'Get inside the circle' : `Circle ${e.phase + 1} of ${CIRCLES.length}`); break;

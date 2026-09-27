@@ -149,7 +149,11 @@ function ground(sim: Sim, p: Player, dt: number) {
     else if (p.onGround) {
       if (p.stance !== Stance.Stand) { p.stance = tryStand(sim, p); }
       else if (!tryMantle(sim, p)) { p.vy = MOVE.jumpV; p.onGround = false; sim.emit({ t: 'jump', p: p.id }); }
-    } else tryMantle(sim, p);
+    } else if (!tryMantle(sim, p)) {
+      // pop the parachute when falling from a height (rooftops, cliffs, helicopters)
+      const agl = p.y - col.groundAt(p.x, p.z, p.y, 0.3);
+      if (p.vy < -4 && agl > 14) { p.phase = Phase.Chute; p.vy = Math.max(p.vy, -12); sim.emit({ t: 'chute', p: p.id }); return; }
+    }
   }
   // --- vertical
   if (p.swimming) {

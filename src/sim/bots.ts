@@ -12,6 +12,7 @@ import { clamp, wrapAngle } from '../core/math';
 import { PRICES } from './config';
 import { Mat, RayHit } from '../world/collision';
 import { gulagArena } from '../world/landmarks';
+import { vehicleOf, enterVehicle, exitVehicle, VEHICLES } from './vehicles';
 
 type Goal = 'drop' | 'loot' | 'rotate' | 'fight' | 'revive' | 'buy' | 'idle' | 'follow';
 
@@ -29,6 +30,10 @@ export class BotBrain {
   fireHold = 0; burstT = 0;
   buyId = -1;
   roofT = 0;
+  tx2 = 0; tz2 = 0; driveStuck = 0;
+  failed = new Map<number, number>();
+  path: [number, number][] | null = null; pathI = 0; pathGX = 0; pathGZ = 0; replan = false; pathCd = 0;
+  chestId = -1; chestT = 0;
   constructor(public id: number, r: number) { this.skill = 0.35 + r * 0.55; this.wanderA = r * 6.28; }
 }
 
@@ -60,9 +65,24 @@ function chooseDrop(sim: Sim, b: BotBrain, p: Player) {
 }
 
 function moveToward(sim: Sim, b: BotBrain, p: Player, x: number, z: number, run: boolean, dt: number) {
-  const dx = x - p.x, dz = z - p.z, d = Math.hypot(dx, dz);
   const it = p.intent;
-  if (d < 1.2) { it.mz = 0; it.mx = 0; it.sprint = false; return true; }
+  const dTot = Math.hypot(x - p.x, z - p.z);
+  if (dTot < 1.2) { it.mz = 0; it.mx = 0; it.sprint = false; return true; }
+  // plan with the nav grid when the straight line is blocked (re-plan on a new goal or when stuck)
+  const nav = sim.nav;
+  if (dTot > 12 && (Math.hypot(b.pathGX - x, b.pathGZ - z) > 15 || b.replan)) {
+    b.replan = false; b.pathGX = x; b.pathGZ = z; b.path = null; b.pathI = 0;
+    if (!nav.los(p.x, p.z, x, z) && sim.time >= b.pathCd) { b.path = nav.find(p.x, p.z, x, z); b.pathCd = sim.time + 1.5; }
+  }
+  let wx = x, wz = z;
+  if (b.path && b.pathI < b.path.length) {
+    const w = b.path[b.pathI];
+    if (Math.hypot(w[0] - p.x, w[1] - p.z) < 3.5 && b.pathI < b.path.length - 1) b.pathI++;
+    // skip ahead when a later waypoint is directly reachable
+    if (b.pathI + 1 < b.path.length && nav.los(p.x, p.z, b.path[b.pathI + 1][0], b.path[b.pathI + 1][1])) b.pathI++;
+    wx = b.path[b.pathI][0]; wz = b.path[b.pathI][1];
+  }
+  const dx = wx - p.x, dz = wz - p.z, d = Math.hypot(dx, dz);
   let a = Math.atan2(-dx, -dz); // yaw facing target
   // stuck handling: detour sideways for a moment
   if (b.detourT > 0) { b.detourT -= dt; a += b.detourA; }
@@ -70,7 +90,7 @@ function moveToward(sim: Sim, b: BotBrain, p: Player, x: number, z: number, run:
     const moved = Math.hypot(p.x - b.lastX, p.z - b.lastZ);
     b.lastX = p.x; b.lastZ = p.z;
     if (moved < 0.02 && p.onGround) b.stuckT += dt; else b.stuckT = Math.max(0, b.stuckT - dt);
-    if (b.stuckT > 0.8) { b.stuckT = 0; b.detourT = 0.9 + sim.rng.next(); b.detourA = (sim.rng.chance(0.5) ? 1 : -1) * (0.9 + sim.rng.next() * 0.8); it.jump = true; }
+    if (b.stuckT > 0.8) { b.stuckT = 0; b.detourT = 0.9 + sim.rng.next(); b.detourA = (sim.rng.chance(0.5) ? 1 : -1) * (0.9 + sim.rng.next() * 0.8); it.jump = true; b.replan = true; b.pathCd = 0; }
   }
   // don't walk off drops that would hurt: probe the ground two metres ahead
   if (p.onGround && b.detourT <= 0) {
@@ -80,7 +100,8 @@ function moveToward(sim: Sim, b: BotBrain, p: Player, x: number, z: number, run:
   }
   it.yaw = lerpYaw(it.yaw, a, Math.min(1, dt * 8));
   it.mz = 1; it.mx = 0;
-  it.sprint = run && d > 6;
+  it.sprint = run && dTot > 6;
+  void d;
   if (it.sprint && sim.rng.chance(0.004)) (it as any).tac = true;
   return false;
 }
@@ -163,6 +184,8 @@ export function botThink(sim: Sim, b: BotBrain, p: Player, dt: number, think: bo
   }
   // ------------------------------------------------ Alive / Gulag
   const inGulag = p.phase === Phase.Gulag;
+  const veh = vehicleOf(sim, p);
+  if (veh) { botDrive(sim, b, p, veh, dt, think); return; }
   if (think) decide(sim, b, p, inGulag);
   const w = p.weapons[p.cur];
   const def = w ? WEAPON[w.id] : null;
@@ -196,6 +219,13 @@ export function botThink(sim: Sim, b: BotBrain, p: Player, dt: number, think: bo
     }
     // fight movement: strafe, some crouching, close to preferred range
     b.strafeT -= dt; if (b.strafeT <= 0) { b.strafeT = 0.5 + sim.rng.next() * 1.2; b.strafe = sim.rng.chance(0.5) ? 1 : -1; if (sim.rng.chance(0.2 * b.skill)) it.crouch = true; }
+    const c1 = sim.circle;
+    if (!inGulag && Math.hypot(p.x - c1.cx, p.z - c1.cz) > c1.r - 10) {
+      // fighting in the gas: keep running for the circle, strafe relative to that
+      const toC = Math.atan2(-(c1.cx - p.x), -(c1.cz - p.z)), rel = wrapAngle(toC - p.yaw);
+      it.mz = Math.cos(rel); it.mx = -Math.sin(rel); it.sprint = false; if (w && w.mag === 0) it.reload = true;
+      return;
+    }
     it.mx = visible ? b.strafe * 0.9 : 0;
     const pref = def ? (def.cls === 'shotgun' || def.cls === 'smg' ? 10 : def.cls === 'sniper' ? 120 : 35) : 20;
     it.mz = !visible ? 1 : dist > pref * 1.8 ? 0.8 : dist < pref * 0.4 ? -0.6 : 0;
@@ -223,12 +253,12 @@ export function botThink(sim: Sim, b: BotBrain, p: Player, dt: number, think: bo
         const itm = sim.itemById.get(b.itemId);
         if (!itm || !itm.alive) { b.itemId = -1; break; }
         const d = Math.hypot(itm.x - p.x, itm.z - p.z);
-        if (d < 2.4 || (b.itemT > 7 && d < 14)) {
+        if (d < 2.4 || (b.itemT > 5 && d < 22)) {
           // looting abstraction: bots can't path through every doorway, so after trying for a while they "find the way"
           if (itm.kind === ItemKind.Weapon || itm.kind === ItemKind.Lethal || itm.kind === ItemKind.Tactical || itm.kind === ItemKind.Killstreak || itm.kind === ItemKind.SelfRevive || itm.kind === ItemKind.GasMask || itm.kind === ItemKind.Satchel) wantPickup(sim, p, itm.id);
           else simTake(sim, p, itm.id);
           b.itemId = -1;
-        } else if (b.itemT > 14) b.itemId = -1;
+        } else if (b.itemT > 12) { b.failed.set(b.itemId, sim.time + 90); b.itemId = -1; }
       } else if (b.goal === 'buy' && arrived) {
         const st = sim.buyStations.find((s) => s.id === b.buyId);
         if (st && Math.hypot(st.x - p.x, st.z - p.z) < 5) botShop(sim, p);
@@ -292,8 +322,14 @@ function decide(sim: Sim, b: BotBrain, p: Player, inGulag: boolean) {
     // stalemate breaker
     if (b.target >= 0 && sim.time - b.engageStart > 18 && p.health + p.armor > 150 && q.health + q.armor > 150) { b.blacklist.set(q.id, sim.time + 20); b.target = -1; }
   }
+  const c0 = sim.circle;
+  const gasNow = !inGulag && Math.hypot(p.x - c0.cx, p.z - c0.cz) > c0.r - 15;
+  const gasSoon = !inGulag && Math.hypot(p.x - c0.nx, p.z - c0.nz) > c0.nr && c0.closing;
+  if (b.target >= 0 && (gasNow || gasSoon)) { const q = sim.players[b.target]; if (Math.hypot(q.x - p.x, q.z - p.z) > (gasNow ? 20 : 45)) b.target = -1; }
+  // (b) with only a sidearm, loot first: fight only when close or when shot at
+  const armed = p.weapons.some((w) => w && WEAPON[w.id].cls !== 'pistol');
   if (b.target < 0) {
-    const range = inGulag ? 60 : 160 + b.skill * 120;
+    const range = inGulag ? 60 : gasNow ? 30 : !armed && sim.time - p.lastDamaged > 2 ? 22 : 120 + b.skill * 100;
     let best: Player | null = null, bd = Infinity;
     let checks = 0;
     const recentlyHit = sim.time - p.lastDamaged < 1;
@@ -307,7 +343,7 @@ function decide(sim: Sim, b: BotBrain, p: Player, inGulag: boolean) {
       const ang = Math.abs(wrapAngle(Math.atan2(-dx, -dz) - p.yaw));
       if (!recentlyHit && ang > 1.2 && d > 12) continue;
       // far targets are noticed less often (and never in dense vegetation)
-      if (d > 90 && !sim.rng.chance(0.35 + b.skill * 0.3)) continue;
+      if (d > 80 && !sim.rng.chance(0.2 + b.skill * 0.25)) continue;
       const score = d * (q.phase === Phase.Downed ? 1.6 : 1) * (q.lastShot > sim.time - 2 ? 0.7 : 1);
       if (score < bd && checks++ < 4 && canSee(sim, p, q)) { bd = score; best = q; }
     }
@@ -333,6 +369,7 @@ function decide(sim: Sim, b: BotBrain, p: Player, inGulag: boolean) {
   }
   if (sim.inWarmup) { if (b.goal !== 'idle' || Math.hypot(b.tx - p.x, b.tz - p.z) < 4) { b.goal = 'idle'; b.wanderA += sim.rng.range(-1, 1); b.tx = clamp(p.x + Math.cos(b.wanderA) * 80, 100, 3140); b.tz = clamp(p.z + Math.sin(b.wanderA) * 80, 100, 3000); } return; }
   // ---------------- goals
+  if (b.goal !== 'loot') b.itemId = -1; // a stale loot target would block looting forever
   // revive a downed squadmate
   const downed = sim.players.find((q) => q.squad === p.squad && q.phase === Phase.Downed && Math.hypot(q.x - p.x, q.z - p.z) < 120);
   if (downed) { b.goal = 'revive'; (b as any).reviveId = downed.id; return; }
@@ -346,6 +383,11 @@ function decide(sim: Sim, b: BotBrain, p: Player, inGulag: boolean) {
     const a = Math.atan2(p.z - c.nz, p.x - c.nx);
     const rr = c.nr * (0.3 + (b.id % 5) * 0.1);
     b.tx = c.nx + Math.cos(a) * rr; b.tz = c.nz + Math.sin(a) * rr;
+    if (Math.hypot(b.tx - p.x, b.tz - p.z) > 350) {
+      // grab a free ground vehicle close by
+      const v = sim.vehicles.find((q) => q.alive && q.type !== 'heli' && q.seats[0] < 0 && Math.hypot(q.x - p.x, q.z - p.z) < 45);
+      if (v) { if (Math.hypot(v.x - p.x, v.z - p.z) < VEHICLES[v.type].len / 2 + 2.2) enterVehicle(sim, p, v); else { b.tx2 = b.tx; b.tz2 = b.tz; b.tx = v.x; b.tz = v.z; } }
+    }
     return;
   }
   // shop for buybacks / loadouts
@@ -356,11 +398,26 @@ function decide(sim: Sim, b: BotBrain, p: Player, inGulag: boolean) {
     if (st) { b.goal = 'buy'; b.buyId = st.id; b.tx = st.x; b.tz = st.z; return; }
   }
   // loot: nearest useful item nearby
-  if (b.itemId < 0 && sim.rng.chance(0.5)) {
-    let best = null, bd = 45;
-    for (const itm of sim.itemsNear(p.x, p.z, 45)) {
+  // unarmed: go a long way for a gun or a supply box before anything else
+  if (!armed && b.itemId < 0) {
+    let best: any = null, bd = 130;
+    for (const itm of sim.itemsNear(p.x, p.z, 130)) { if (itm.kind !== ItemKind.Weapon || WEAPON[itm.weapon!].cls === 'pistol' || (b.failed.get(itm.id) ?? 0) > sim.time) continue; const d = Math.hypot(itm.x - p.x, itm.z - p.z); if (d < bd) { bd = d; best = itm; } }
+    if (best) { b.itemId = best.id; b.itemT = 0; b.tx = best.x; b.tz = best.z; b.goal = 'loot'; return; }
+    let ch: any = null; bd = 160;
+    for (const c2 of sim.chests) { if (c2.opened || Math.abs(c2.x - p.x) > bd || Math.abs(c2.z - p.z) > bd || (b.failed.get(-c2.id) ?? 0) > sim.time) continue; const d = Math.hypot(c2.x - p.x, c2.z - p.z); if (d < bd) { bd = d; ch = c2; } }
+    if (ch) {
+      if (bd < 2.6 || (b.chestT > 6 && bd < 22)) { ch.opened = true; for (const i2 of chestContentsLazy(sim, ch)) sim.addItem(i2); b.chestT = 0; }
+      else { if (b.chestId !== ch.id) { b.chestId = ch.id; b.chestT = 0; } b.chestT += 0.1; if (b.chestT > 14) b.failed.set(-ch.id, sim.time + 120); b.tx = ch.x; b.tz = ch.z; b.goal = 'loot'; return; }
+    }
+  }
+  const needy = !armed || p.plates < 2 || p.armor < 100;
+  if (b.itemId < 0 && (needy || sim.rng.chance(0.5))) {
+    const R = needy ? 70 : 45;
+    let best = null, bd = R;
+    for (const itm of sim.itemsNear(p.x, p.z, R)) {
       if (!useful(p, itm.kind, itm)) continue;
-      const d = Math.hypot(itm.x - p.x, itm.z - p.z) + Math.abs(itm.y - p.y) * 2;
+      if ((b.failed.get(itm.id) ?? 0) > sim.time) continue;
+      const d = Math.hypot(itm.x - p.x, itm.z - p.z) + Math.abs(itm.y - p.y) * 2 - (!armed && itm.kind === ItemKind.Weapon ? 30 : 0) - (itm.kind === ItemKind.Plate && p.plates < 2 ? 10 : 0);
       if (d < bd) { bd = d; best = itm; }
     }
     // open supply boxes too
@@ -407,4 +464,23 @@ void hitBuf;
 function humanLeader(sim: Sim, p: Player): Player | null {
   for (const q of sim.players) if (q.squad === p.squad && !q.bot && q.id !== p.id && q.alive) return q;
   return null;
+}
+
+function botDrive(sim: Sim, b: BotBrain, p: Player, v: import('./vehicles').Vehicle, dt: number, think: boolean) {
+  const it = p.intent;
+  it.fire = false; it.ads = false; (it as any).up = false;
+  if (p.id !== v.seats[0]) { it.mz = 0; it.mx = 0; return; } // passengers just ride (and shoot via combat if targets)
+  const c = sim.circle;
+  if (think && (b.tx2 || b.tz2)) { b.tx = b.tx2; b.tz = b.tz2; b.tx2 = b.tz2 = 0; }
+  const dx = b.tx - v.x, dz = b.tz - v.z, dist = Math.hypot(dx, dz);
+  const want = Math.atan2(-dx, -dz), err = wrapAngle(want - v.yaw);
+  it.mx = clamp(-err * 1.8, -1, 1);
+  it.mz = Math.abs(err) > 1.4 ? 0.4 : 1;
+  // stuck: reverse a moment
+  if (v.speed < 1.5) b.driveStuck += dt; else b.driveStuck = Math.max(0, b.driveStuck - dt);
+  if (b.driveStuck > 1.5) { it.mz = -1; it.mx = -it.mx; if (b.driveStuck > 3) b.driveStuck = 0; }
+  // bail out near the destination, when shot at, or when the car is burning
+  const hurt = sim.time - p.lastDamaged < 0.5 && dist < 250;
+  if (dist < 60 || hurt || v.health < VEHICLES[v.type].health * 0.25 || (think && sim.rng.chance(0.002))) { exitVehicle(sim, p); b.goal = 'idle'; }
+  void c;
 }

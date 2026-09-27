@@ -19,6 +19,7 @@ import { BotBrain, botThink } from './bots';
 import { Mat, RayHit } from '../world/collision';
 import { Vehicle, VehicleType, VEHICLES, makeVehicle, updateVehicles, enterVehicle, exitVehicle, vehicleOf } from './vehicles';
 import { M_ROAD } from '../world/mapdata';
+import { NavGrid } from './nav';
 
 export interface CircleState { phase: number; closing: boolean; t: number; cx: number; cz: number; r: number; nx: number; nz: number; nr: number; sx: number; sz: number; sr: number; done: boolean }
 export interface Contract { id: number; kind: 'bounty' | 'scavenger' | 'recon'; x: number; y: number; z: number; taken: boolean }
@@ -52,6 +53,7 @@ export class Sim {
   crates: LoadoutCrate[] = [];
   brains: BotBrain[] = [];
   vehicles: Vehicle[] = [];
+  nav: NavGrid;
   aliveCount = PLAYERS;
   over = false; winner = -1;
   squadUav = new Map<number, { until: number; x: number; z: number }>();
@@ -65,6 +67,7 @@ export class Sim {
   warmup = 0;
   constructor(public world: WorldData, seed = 1, opts: { humans?: number; players?: number; warmup?: number } = {}) {
     this.rng = new Rng(seed);
+    this.nav = (world as any).__nav ?? ((world as any).__nav = new NavGrid(world.col));
     const n = opts.players ?? PLAYERS;
     for (let i = 0; i < n; i++) this.players.push(this.makePlayer(i, Math.floor(i / SQUAD_SIZE), i >= (opts.humans ?? 1)));
     this.players[0].name = 'You';
@@ -76,7 +79,7 @@ export class Sim {
     this.plane.sx = ox - dx * L; this.plane.sz = oz - dz * L; this.plane.dx = dx; this.plane.dz = dz; this.plane.dur = (2 * L) / DEPLOY.planeSpeed;
     this.plane.x = this.plane.sx; this.plane.z = this.plane.sz; this.plane.y = DEPLOY.planeAlt;
     // loot
-    for (const g of world.groundLoot) if (this.rng.chance(0.62)) this.addItem(randomItem(this, g.x, g.y, g.z));
+    for (const g of world.groundLoot) if (this.rng.chance(0.7)) this.addItem(randomItem(this, g.x, g.y, g.z));
     for (const ch of world.chests) this.chests.push({ id: this.nextId++, x: ch.x, y: ch.y, z: ch.z, opened: false, legendary: this.rng.chance(0.06) });
     for (const b of world.buyStations) { const p = this.snapToFree(b.x, b.z); if (p) this.buyStations.push({ id: this.nextId++, ...p }); }
     for (const c2 of world.contracts) { const p = this.snapToFree(c2.x, c2.z); if (p) this.contracts.push({ id: this.nextId++, kind: this.rng.pick(['bounty', 'scavenger', 'recon'] as const), ...p, taken: false }); }

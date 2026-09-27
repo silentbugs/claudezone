@@ -6,6 +6,7 @@
  */
 import * as THREE from 'three';
 import { Mat, Structure, Part, RampPart } from '../world/collision';
+import { releaseAfterUpload } from './release';
 
 const CHUNK = 192;
 const DETAIL_DIST = 460;
@@ -27,6 +28,7 @@ class GeoBuf {
     g.setAttribute('aLayer', new THREE.Float32BufferAttribute(this.lay, 1));
     g.setIndex(this.count > 65535 ? new THREE.Uint32BufferAttribute(this.idx, 1) : new THREE.Uint16BufferAttribute(this.idx, 1));
     g.computeBoundingSphere(); g.computeBoundingBox();
+    releaseAfterUpload(g);
     return g;
   }
 }
