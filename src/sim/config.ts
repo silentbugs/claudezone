@@ -44,9 +44,8 @@ export const INITIAL_RADIUS = 2100;
 
 export const GULAG = { closesAfterCircle: 4, overtime: 30, flagTime: 3.5, rockDamage: 5, fightMax: 60 };
 
-export const PRICES = {
-  plates: 1500, turret: 2000, cluster: 3000, gasMask: 3000, airstrike: 3500, uav: 4000, selfRevive: 4500, buyback: 4500, munitions: 5000, loadout: 10000,
-};
+import { BUY_ITEMS, BuyId } from '../data/buy';
+export const PRICES = Object.fromEntries(BUY_ITEMS.map((b) => [b.id, b.price])) as Record<BuyId, number>;
 
 export const CASH = { stack: [100, 200, 300, 500], chestCash: [100, 800] };
 

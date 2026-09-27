@@ -7,7 +7,7 @@ import { Player, Phase } from '../sim/types';
 
 function part(geo: THREE.BufferGeometry, color: number, x: number, y: number, z: number, rx = 0, ry = 0, rz = 0) {
   const g = geo.clone(); g.rotateX(rx); g.rotateY(ry); g.rotateZ(rz); g.translate(x, y, z);
-  const c = new THREE.Color(color).convertSRGBToLinear(), n = g.attributes.position.count, col = new Float32Array(n * 3);
+  const c = new THREE.Color(color), n = g.attributes.position.count, col = new Float32Array(n * 3);
   for (let i = 0; i < n; i++) { col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b; }
   g.setAttribute('color', new THREE.BufferAttribute(col, 3));
   return g.index ? g.toNonIndexed() : g;

@@ -223,3 +223,6 @@ export function damageAt(def: WeaponDef, dist: number, rangeMul = 1): number {
   for (const [r, d] of def.dmg) if (dist <= r * rangeMul) return d;
   return def.dmg[def.dmg.length - 1][1];
 }
+
+/** The Shield Turret's mounted gun (not loot). */
+WEAPON.turretgun = { ...WEAPON.pkm, id: 'turretgun', name: 'Shield Turret', dmg: [[60, 34], [999, 30]], mag: 9999, magExt: 9999, reload: 0, spreadHip: 0.01, spreadAds: 0.003, recoilV: 0.0012, recoilH: 0.0008, mobility: 0, weight: 0 };

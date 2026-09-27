@@ -16,7 +16,8 @@ import { movePlayer, eyeHeight } from './movement';
 import { weaponTick, updateBullets, updateThrowables, throwItem, aimDir } from './combat';
 import { randomItem, chestContents, tryPickup, dropBag, magSize } from './loot';
 import { BotBrain, botThink } from './bots';
-import { Mat, RayHit } from '../world/collision';
+import { Mat, RayHit, makeStructure } from '../world/collision';
+import type { BuyId } from '../data/buy';
 import { Vehicle, VehicleType, VEHICLES, makeVehicle, updateVehicles, enterVehicle, exitVehicle, vehicleOf } from './vehicles';
 import { M_ROAD } from '../world/mapdata';
 import { NavGrid } from './nav';
@@ -53,6 +54,8 @@ export class Sim {
   crates: LoadoutCrate[] = [];
   brains: BotBrain[] = [];
   vehicles: Vehicle[] = [];
+  boxes: { id: number; kind: 'munitions' | 'armorBox'; x: number; y: number; z: number; squad: number; used: Set<number>; until: number }[] = [];
+  turrets: { id: number; x: number; y: number; z: number; yaw: number; squad: number; user: number; health: number; struct: number }[] = [];
   nav: NavGrid;
   aliveCount = PLAYERS;
   over = false; winner = -1;
@@ -108,7 +111,7 @@ export class Sim {
     this.bullets.length = 0; this.throwables.length = 0; this.fires.length = 0; this.smokes.length = 0; this.pending.length = 0;
     for (const p of this.players) {
       if ((p as any).vehicle !== undefined) exitVehicle(this, p);
-      Object.assign(p, { phase: Phase.Plane, alive: true, health: 100, armor: 0, plates: 0, kills: 0, damage: 0, cash: 0, lethal: null, tactical: null, killstreak: null, selfRevive: false, hasMask: false, gasMask: 0, gulagUsed: false, stance: Stance.Stand, reloadT: 0, plateT: 0, swapT: 0, ads: 0, downT: 0, reviveBy: -1, killedBy: -1 });
+      Object.assign(p, { phase: Phase.Plane, alive: true, health: 100, armor: 0, plates: 0, kills: 0, damage: 0, cash: 0, lethal: null, tactical: null, killstreak: null, fieldUpgrade: null, selfRevive: false, hasMask: false, gasMask: 0, gulagUsed: false, stance: Stance.Stand, reloadT: 0, plateT: 0, swapT: 0, ads: 0, downT: 0, reviveBy: -1, killedBy: -1 });
       p.weapons = [{ id: 'x16', rarity: 0, mag: 13 }, null]; p.cur = 0; p.ammo = { heavy: 0, light: 30, sniper: 0, shotgun: 0, rocket: 0 };
       this.brains[p.id].target = -1; this.brains[p.id].goal = 'drop'; this.brains[p.id].dropX = 0;
     }
@@ -155,7 +158,7 @@ export class Sim {
       health: 100, armor: 0, plates: 0, maxPlates: HEALTH.carry,
       weapons: [{ id: 'x16', rarity: 0, mag: 13 }, null], cur: 0,
       ammo: { heavy: 0, light: 30, sniper: 0, shotgun: 0, rocket: 0 },
-      lethal: null, tactical: null, killstreak: null, selfRevive: false, gasMask: 0, hasMask: false,
+      lethal: null, tactical: null, killstreak: null, fieldUpgrade: null, turret: -1, stash: null, selfRevive: false, gasMask: 0, hasMask: false,
       cash: 0, kills: 0, damage: 0,
       fireCd: 0, reloadT: 0, swapT: 0, plateT: 0, ads: 0, recoil: 0, recoilYaw: 0, bloom: 0, boltT: 0,
       lastHit: -99, lastDamaged: -99, stunT: 0, flashT: 0,
@@ -298,7 +301,9 @@ export class Sim {
         if (--p.tactical.n <= 0) p.tactical = null;
       }
     }
-    if (it.killstreak) { it.killstreak = false; if (p.killstreak && p.phase === Phase.Alive) this.useKillstreak(p); }
+    if (it.killstreak) { it.killstreak = false; if (p.killstreak && p.phase === Phase.Alive && p.turret < 0) this.useKillstreak(p); }
+    if ((it as any).fieldUpgrade) { (it as any).fieldUpgrade = false; this.deployFieldUpgrade(p); }
+    if (p.turret >= 0) { const t = this.turrets.find((q) => q.id === p.turret); if (!t) this.unmanTurret(p); else { p.x = t.x + Math.sin(t.yaw) * 0.9; p.z = t.z + Math.cos(t.yaw) * 0.9; p.vx = p.vz = 0; } }
     if (p.phase === Phase.GulagWait) return;
     // auto pickups
     if (p.phase === Phase.Alive && !this.inWarmup) for (const itm of this.itemsNear(p.x, p.z, 1.6)) if (Math.abs(itm.y - p.y) < 1.6 && (itm.kind === ItemKind.Ammo || itm.kind === ItemKind.Plate || itm.kind === ItemKind.Cash)) tryPickup(this, p, itm, false);
@@ -309,7 +314,8 @@ export class Sim {
   }
 
   /** What the player is looking at to interact with (for prompts and for the action). */
-  interactTarget(p: Player): { kind: 'revive' | 'chest' | 'item' | 'buy' | 'contract' | 'crate' | 'vehicle' | 'exit' | 'balloon'; id: number; label: string } | null {
+  interactTarget(p: Player): { kind: 'revive' | 'chest' | 'item' | 'buy' | 'contract' | 'crate' | 'vehicle' | 'exit' | 'balloon' | 'box' | 'turret' | 'unman'; id: number; label: string } | null {
+    if (p.turret >= 0) return { kind: 'unman', id: p.turret, label: 'Leave Shield Turret' };
     if ((p as any).vehicle !== undefined) return { kind: 'exit', id: (p as any).vehicle, label: 'Exit vehicle' };
     for (const q of this.playersNear(p.x, p.z, 2.5)) if (q.squad === p.squad && q.id !== p.id && q.phase === Phase.Downed) return { kind: 'revive', id: q.id, label: `Revive ${q.name}` };
     const d = aimDir(p, [0, 0, 0]);
@@ -327,6 +333,8 @@ export class Sim {
     for (const b of this.buyStations) if (Math.abs(b.x - p.x) < 4 && Math.abs(b.z - p.z) < 4) consider('buy', b.id, 'Use Buy Station', b.x, b.y + 1.2, b.z, 3.5);
     for (const c of this.contracts) if (!c.taken && Math.abs(c.x - p.x) < 3 && Math.abs(c.z - p.z) < 3) consider('contract', c.id, `Accept ${c.kind[0].toUpperCase() + c.kind.slice(1)} Contract`, c.x, c.y + 0.7, c.z, 2.8);
     if ((p as any).vehicle === undefined) for (const v of this.vehicles) if (v.alive && Math.abs(v.x - p.x) < 6 && Math.abs(v.z - p.z) < 6 && v.seats.some((q) => q < 0)) consider('vehicle', v.id, `Enter ${VEHICLES[v.type].name}`, v.x, v.y + 1, v.z, VEHICLES[v.type].len / 2 + 2.5, -0.2);
+    for (const b of this.boxes) if (b.squad === p.squad && !b.used.has(p.id) && Math.abs(b.x - p.x) < 3 && Math.abs(b.z - p.z) < 3) consider('box', b.id, b.kind === 'armorBox' ? 'Use Armor Box' : 'Use Munitions Box', b.x, b.y + 0.4, b.z, 2.8, -0.3);
+    for (const t of this.turrets) if (t.user < 0 && Math.abs(t.x - p.x) < 3 && Math.abs(t.z - p.z) < 3) consider('turret', t.id, 'Use Shield Turret', t.x, t.y + 1, t.z, 2.8, -0.3);
     this.world.balloons.forEach((b, i) => { if (Math.abs(b.x - p.x) < 4 && Math.abs(b.z - p.z) < 4) consider('balloon', i, 'Use Redeploy Balloon', b.x, b.y + 1.2, b.z, 3.5, -0.5); });
     for (const cr of this.crates) if (cr.squad === p.squad && this.time >= cr.land && !cr.taken.has(p.id) && Math.abs(cr.x - p.x) < 3 && Math.abs(cr.z - p.z) < 3) consider('crate', cr.id, 'Open Loadout Drop', cr.x, cr.y + 0.6, cr.z, 3);
     return best ? { kind: (best as any).kind, id: (best as any).id, label: (best as any).label } : null;
@@ -344,8 +352,43 @@ export class Sim {
     else if (t.kind === 'vehicle') { const v = this.vehicles.find((q) => q.id === t.id); if (v) enterVehicle(this, p, v); }
     else if (t.kind === 'exit') exitVehicle(this, p);
     else if (t.kind === 'balloon') this.launch(p);
+    else if (t.kind === 'box') this.useBox(p, t.id);
+    else if (t.kind === 'turret') this.manTurret(p, t.id);
+    else if (t.kind === 'unman') this.unmanTurret(p);
     else if (t.kind === 'crate') { const cr = this.crates.find((c) => c.id === t.id)!; cr.taken.add(p.id); if (!p.bot) this.emit({ t: 'announce', text: '__loadout__', squad: p.squad }); else this.applyLoadout(p, this.rng.int(0, LOADOUTS.length - 1)); }
     void dt;
+  }
+
+  /** Field upgrades: drop a squad box in front of you. */
+  deployFieldUpgrade(p: Player) {
+    if (!p.fieldUpgrade || p.phase !== Phase.Alive) return;
+    const fx = -Math.sin(p.yaw), fz = -Math.cos(p.yaw), x = p.x + fx * 1.4, z = p.z + fz * 1.4;
+    this.boxes.push({ id: this.nextId++, kind: p.fieldUpgrade, x, y: this.world.col.groundAt(x, z, p.y + 1), z, squad: p.squad, used: new Set(), until: this.time + 120 });
+    this.emit({ t: 'throw', p: p.id, type: p.fieldUpgrade });
+    p.fieldUpgrade = null;
+  }
+  private useBox(p: Player, id: number) {
+    const b = this.boxes.find((q) => q.id === id); if (!b) return;
+    b.used.add(p.id);
+    if (b.kind === 'armorBox') { p.armor = HEALTH.maxArmor; p.plates = p.maxPlates; this.emit({ t: 'plate', p: p.id, done: true }); }
+    else { refill(p); if (p.lethal) p.lethal.n = 2; else p.lethal = { type: 'frag', n: 1 }; if (p.tactical) p.tactical.n = 2; else p.tactical = { type: 'stun', n: 1 }; this.emit({ t: 'pickup', p: p.id, kind: ItemKind.Ammo, label: 'Ammo and equipment refilled' }); }
+  }
+  /** Shield Turret: a mounted gun behind a bullet-proof shield. */
+  deployTurret(p: Player) {
+    const fx = -Math.sin(p.yaw), fz = -Math.cos(p.yaw), x = p.x + fx * 1.2, z = p.z + fz * 1.2, y = this.world.col.groundAt(x, z, p.y + 1);
+    const shield = makeStructure(0, 'turret', x, y, z, p.yaw, [{ x0: -0.8, y0: 0.45, z0: -0.55, x1: 0.8, y1: 1.55, z1: -0.45, mat: Mat.Metal, color: 0x5a6048 }, { x0: -0.15, y0: 0, z0: -0.15, x1: 0.15, y1: 0.9, z1: 0.15, mat: Mat.Metal, color: 0x3a3e40 }]);
+    shield.id = 100000 + this.turrets.length; this.world.col.dyn.push(shield);
+    this.turrets.push({ id: this.nextId++, x, y, z, yaw: p.yaw, squad: p.squad, user: -1, health: 700, struct: shield.id });
+    this.manTurret(p, this.turrets[this.turrets.length - 1].id);
+  }
+  private manTurret(p: Player, id: number) {
+    const t = this.turrets.find((q) => q.id === id); if (!t || t.user >= 0) return;
+    t.user = p.id; p.turret = id; p.stash = p.weapons; p.weapons = [{ id: 'turretgun', rarity: 0, mag: 9999 }, null]; p.cur = 0; p.stance = Stance.Stand;
+    p.x = t.x + Math.sin(t.yaw) * 0.9; p.z = t.z + Math.cos(t.yaw) * 0.9; p.vx = p.vz = 0;
+  }
+  unmanTurret(p: Player) {
+    const t = this.turrets.find((q) => q.id === p.turret); if (t) t.user = -1;
+    p.turret = -1; if (p.stash) { p.weapons = p.stash; p.stash = null; p.cur = 0; }
   }
 
   /** Redeploy balloon: shoot up into the sky, then freefall and parachute as usual. */
@@ -395,6 +438,7 @@ export class Sim {
     return false;
   }
   private downPlayer(v: Player, attacker: number, weapon: string) {
+    if (v.turret >= 0) this.unmanTurret(v);
     if ((v as any).vehicle !== undefined) exitVehicle(this, v);
     v.phase = Phase.Downed; v.health = DOWNED.health; v.armor = 0; v.downT = DOWNED.bleed; v.reviveBy = -1; v.reviveT = 0;
     v.plateT = 0; v.reloadT = 0; v.ads = 0; v.stance = Stance.Prone; v.sprinting = false; v.slideT = 0;
@@ -407,6 +451,7 @@ export class Sim {
   }
 
   kill(v: Player, attacker: number, weapon: string, head: boolean, finish: boolean) {
+    if (v.turret >= 0) this.unmanTurret(v);
     if ((v as any).vehicle !== undefined) exitVehicle(this, v);
     if (this.inWarmup) { this.emit({ t: 'kill', victim: v.id, attacker, w: weapon, head, finish }); if (attacker >= 0) this.players[attacker].kills++; v.phase = Phase.Dead; (v as any).respawnAt = this.time + 3; return; }
     const inGulag = v.phase === Phase.Gulag;
@@ -461,6 +506,7 @@ export class Sim {
   useKillstreak(p: Player, tx?: number, tz?: number) {
     const k = p.killstreak!; p.killstreak = null;
     if (k === 'uav') { this.squadUav.set(p.squad, { until: this.time + 40, x: p.x, z: p.z }); this.emit({ t: 'uav', squad: p.squad }); return; }
+    if (k === 'turret') { this.deployTurret(p); return; }
     let [x, , z] = this.aimPoint(p);
     if (tx !== undefined && tz !== undefined) { x = tx; z = tz; }
     const g = this.world.hf.at(x, z);
@@ -470,12 +516,13 @@ export class Sim {
   }
 
   /** Buy-station purchase. Returns an error string or null. */
-  buy(p: Player, item: keyof typeof PRICES, arg?: number): string | null {
+  buy(p: Player, item: BuyId, arg?: number): string | null {
     const price = PRICES[item];
     if (p.cash < price) return 'Not enough cash';
     switch (item) {
       case 'plates': if (p.plates >= p.maxPlates) return 'Plates full'; p.plates = p.maxPlates; break;
-      case 'uav': case 'cluster': case 'airstrike': if (p.killstreak) return 'Already carrying a killstreak'; p.killstreak = item; break;
+      case 'uav': case 'cluster': case 'airstrike': case 'turret': if (p.killstreak) return 'Already carrying a killstreak'; p.killstreak = item; break;
+      case 'munitions': case 'armorBox': if (p.fieldUpgrade) return 'Already carrying a field upgrade'; p.fieldUpgrade = item; break;
       case 'gasMask': if (p.hasMask && p.gasMask >= GAS.maskTime) return 'Already have a gas mask'; p.hasMask = true; p.gasMask = GAS.maskTime; break;
       case 'selfRevive': if (p.selfRevive) return 'Already have a Self-Revive Kit'; p.selfRevive = true; break;
       case 'buyback': {
@@ -489,8 +536,6 @@ export class Sim {
         this.emit({ t: 'marker', x: p.x + 4, z: p.z, kind: 'loadout', squad: p.squad, dur: 12 });
         break;
       }
-      case 'munitions': refill(p); break;
-      case 'turret': return 'Unavailable';
     }
     p.cash -= price;
     this.emit({ t: 'buy', p: p.id, item });
@@ -670,7 +715,7 @@ export class Sim {
     this.emit({ t: 'announce', text: `Contract complete  +$${cash}`, squad: a.squad });
   }
 
-  private updateCrates(dt: number) { void dt; this.crates = this.crates.filter((c) => this.time < c.land + 120); }
+  private updateCrates(dt: number) { void dt; this.crates = this.crates.filter((c) => this.time < c.land + 120); if (this.boxes.length) this.boxes = this.boxes.filter((b) => b.until > this.time); }
 
   private settleItems(dt: number) {
     for (const it of this.falling) {

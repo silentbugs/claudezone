@@ -9,7 +9,8 @@ export const LETHALS: LethalType[] = ['frag', 'semtex', 'knife', 'molotov', 'c4'
 export const TACTICALS: TacticalType[] = ['stun', 'flash', 'smoke', 'heartbeat', 'stim'];
 export const LETHAL_NAMES: Record<string, string> = { frag: 'Frag Grenade', semtex: 'Semtex', knife: 'Throwing Knife', molotov: 'Molotov Cocktail', c4: 'C4', claymore: 'Claymore' };
 export const TACTICAL_NAMES: Record<string, string> = { stun: 'Stun Grenade', flash: 'Flash Grenade', smoke: 'Smoke Grenade', heartbeat: 'Heartbeat Sensor', stim: 'Stim' };
-export const KILLSTREAK_NAMES: Record<string, string> = { uav: 'Personal Radar (UAV)', cluster: 'Cluster Strike', airstrike: 'Precision Airstrike' };
+export const KILLSTREAK_NAMES: Record<string, string> = { uav: 'UAV', cluster: 'Cluster Strike', airstrike: 'Precision Airstrike', turret: 'Shield Turret' };
+export const FIELD_UPGRADE_NAMES: Record<string, string> = { munitions: 'Munitions Box', armorBox: 'Armor Box' };
 
 export function rollRarity(rng: Rng, bonus = 0): number {
   const w = LOOT_TIER_WEIGHTS.map((v, i) => v * (1 + bonus * i));

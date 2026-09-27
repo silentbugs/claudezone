@@ -95,7 +95,7 @@ export function describeGun(def: WeaponDef, rarity: number): GunDesc {
 }
 
 function colored(g: THREE.BufferGeometry, hex: number) {
-  const c = new THREE.Color(hex).convertSRGBToLinear(), n = g.attributes.position.count, col = new Float32Array(n * 3);
+  const c = new THREE.Color(hex), n = g.attributes.position.count, col = new Float32Array(n * 3);
   for (let i = 0; i < n; i++) { col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b; }
   g.setAttribute('color', new THREE.BufferAttribute(col, 3));
   return g.index ? g.toNonIndexed() : g;

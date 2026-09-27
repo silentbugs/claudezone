@@ -5,7 +5,7 @@ import type { Vehicle, VehicleType } from '../sim/vehicles';
 
 function col(geo: THREE.BufferGeometry, hex: number) {
   const g = geo.index ? geo.toNonIndexed() : geo;
-  const c = new THREE.Color(hex).convertSRGBToLinear(), n = g.attributes.position.count, a = new Float32Array(n * 3);
+  const c = new THREE.Color(hex), n = g.attributes.position.count, a = new Float32Array(n * 3);
   for (let i = 0; i < n; i++) { a[i * 3] = c.r; a[i * 3 + 1] = c.g; a[i * 3 + 2] = c.b; }
   g.setAttribute('color', new THREE.BufferAttribute(a, 3)); g.deleteAttribute('uv'); return g;
 }

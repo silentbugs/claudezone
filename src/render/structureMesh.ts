@@ -44,7 +44,7 @@ class Emitter {
   layer = 0; r = 1; g = 1; bl = 1; scale = 3; aoBase = false; aoY = 0;
   setPart(s: Structure, b: GeoBuf, mat: Mat, color: number | undefined) {
     this.s = s; this.b = b; this.layer = mat; this.scale = SCALE[mat] ?? 3;
-    tmpC.setHex(color ?? DEFAULT_TINT[mat] ?? 0xffffff).convertSRGBToLinear();
+    tmpC.setHex(color ?? DEFAULT_TINT[mat] ?? 0xffffff); // setHex already converts sRGB -> linear
     // subtle per-structure variation
     const v = 0.92 + ((s.id * 2654435761) >>> 24) / 255 * 0.14;
     this.r = tmpC.r * v; this.g = tmpC.g * v; this.bl = tmpC.b * v;

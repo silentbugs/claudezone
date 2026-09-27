@@ -85,6 +85,8 @@ export class CollisionWorld {
   readonly size: number;
   readonly terrain: Heightfield;
   structures: Structure[] = [];
+  /** Deployables (shield turrets, boxes) added at runtime; checked by brute force. */
+  dyn: Structure[] = [];
   private gw: number;
   private cells: Int32Array[] = [];
   private stamp: Uint32Array = new Uint32Array(0);
@@ -126,6 +128,7 @@ export class CollisionWorld {
         if (dx * dx + dz * dz <= rr * rr) out.push(st);
       }
     }
+    for (const st of this.dyn) { const dx = st.x - x, dz = st.z - z, rr = st.radius + r; if (dx * dx + dz * dz <= rr * rr) out.push(st); }
     return out;
   }
 
@@ -274,6 +277,12 @@ export class CollisionWorld {
       if (tmx < tmz) { tcell = tmx; tmx += tdx; cx += stepX; } else { tcell = tmz; tmz += tdz; cz += stepZ; }
       if (tcell > maxT) break;
       if (cx < -1 || cz < -1 || cx > this.gw || cz > this.gw) break;
+    }
+    for (const s of this.dyn) {
+      const rx = ox - s.x, rz = oz - s.z;
+      const lox = rx * s.cos - rz * s.sin, loz = rx * s.sin + rz * s.cos, loy = oy - s.y;
+      const ldx = dx * s.cos - dz * s.sin, ldz = dx * s.sin + dz * s.cos;
+      for (let pi = 0; pi < s.parts.length; pi++) { const p = s.parts[pi]; if (skip && skip(p.mat)) continue; const t = slabT(lox, loy, loz, ldx, dy, ldz, p.x0, p.y0, p.z0, p.x1, p.y1, p.z1, best); if (t < best) { best = t; out.structure = s.id; out.part = pi; out.mat = p.mat; out.nx = slabN[0] * s.cos + slabN[2] * s.sin; out.ny = slabN[1]; out.nz = -slabN[0] * s.sin + slabN[2] * s.cos; } }
     }
     // terrain + water by marching
     const T = this.terrain;

@@ -7,7 +7,8 @@ export interface WeaponSlot { id: string; rarity: number; mag: number }
 
 export type LethalType = 'frag' | 'semtex' | 'knife' | 'molotov' | 'c4' | 'claymore';
 export type TacticalType = 'stun' | 'flash' | 'smoke' | 'heartbeat' | 'stim';
-export type KillstreakType = 'uav' | 'cluster' | 'airstrike';
+export type KillstreakType = 'uav' | 'cluster' | 'airstrike' | 'turret';
+export type FieldUpgrade = 'munitions' | 'armorBox';
 
 export interface Intent {
   mx: number; mz: number; // move axes: mx strafe right, mz forward
@@ -34,6 +35,9 @@ export interface Player {
   lethal: { type: LethalType; n: number } | null;
   tactical: { type: TacticalType; n: number } | null;
   killstreak: KillstreakType | null;
+  fieldUpgrade: FieldUpgrade | null;
+  turret: number; // id of the manned shield turret, or -1
+  stash: (WeaponSlot | null)[] | null;
   selfRevive: boolean; gasMask: number; hasMask: boolean;
   cash: number; kills: number; damage: number;
   fireCd: number; reloadT: number; swapT: number; plateT: number; ads: number; recoil: number; recoilYaw: number; bloom: number; boltT: number;

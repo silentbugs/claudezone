@@ -51,7 +51,7 @@ export class Match {
     this.controls = new Controls(input, settings);
     input.onUnlock = () => { if (!this.paused && !this.hud.panel && !this.done) this.togglePause(); };
     this.fpsEl.className = 'fps'; ui.appendChild(this.fpsEl);
-    this.hud = new Hud(this.sim, tac, 0);
+    this.hud = new Hud(this.sim, tac, 0, settings);
     ui.appendChild(this.hud.root);
     this.fx = new Effects(this.sim, sm.scene);
     sm.scene.add(this.chars.group);

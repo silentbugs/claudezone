@@ -1,32 +1,54 @@
-/** DOM HUD in the Warzone (2020) layout + minimap/full map canvases + buy/loadout menus. */
+/**
+ * Warzone (2020) HUD, laid out from measured 2020 screenshots: circular rotating minimap and circle
+ * timer (top-left), compass + location (top-centre), squads/players/kills (top-right), killfeed above
+ * the squad cards (bottom-left), plates/gas mask next to your card, weapon + equipment (bottom-right),
+ * loot card above the crosshair, hitmarkers, prompts, parachute altimeter, tac map and buy menus.
+ */
 import type { Sim } from '../sim/sim';
 import { LOADOUTS } from '../sim/sim';
-import { Phase, Player, SimEvent } from '../sim/types';
-import { WEAPON, RARITY_COLORS, RARITY_NAMES } from '../data/weapons';
-import { LETHAL_NAMES, TACTICAL_NAMES, KILLSTREAK_NAMES } from '../sim/loot';
-import { CIRCLES, PRICES } from '../sim/config';
+import { ItemKind, Phase, Player, SimEvent, Item } from '../sim/types';
+import { WEAPON, RARITY_COLORS, RARITY_NAMES, CLASS_NAMES, AMMO_NAMES, attachmentsFor, blueprintName, WeaponDef, damageAt } from '../data/weapons';
+import { LETHAL_NAMES, TACTICAL_NAMES, KILLSTREAK_NAMES, FIELD_UPGRADE_NAMES } from '../sim/loot';
+import { CIRCLES } from '../sim/config';
 import { POIS, MAP_SIZE } from '../world/mapdata';
-import { eyeHeight } from '../sim/movement';
 import { vehicleOf, VEHICLES } from '../sim/vehicles';
+import { ICON, LETHAL_ICON, TACTICAL_ICON, STREAK_ICON } from './icons';
+import { describeGun, gunSilhouette } from '../render/gunModel';
+import { keyName, Settings, Action } from '../core/settings';
+import { BUY_ITEMS, BuyId } from '../data/buy';
+import './hud.css';
 
 const el = (tag: string, cls = '', html = '') => { const e = document.createElement(tag); if (cls) e.className = cls; if (html) e.innerHTML = html; return e; };
-const fmtT = (s: number) => { s = Math.max(0, Math.ceil(s)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
+const fmtT = (s: number) => { s = Math.max(0, s); if (s < 60) return `0:${(Math.floor(s * 10) / 10).toFixed(1).padStart(4, '0')}`; s = Math.ceil(s); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
+export const SQUAD_COLORS = ['#ffffff', '#5fd35f', '#ff9a2e', '#c46bff'];
+const LOC_NAMES: Record<string, string> = {
+  military_base: 'Arklov Peak Military Base', dam: 'Gora Dam', quarry: 'Karst River Quarry', airport: 'Verdansk International Airport', airport_maintenance: 'Airport Maintenance',
+  tv_station: 'Zordaya Broadcast', storage_town: 'Storage Town', superstore: 'Superstore', stadium: 'Verdansk Stadium', lumber: 'Lumber Mill', boneyard: 'Zhokov Boneyard',
+  hospital: 'Zordaya Hospital', train_station: 'Verdansk Train Station', downtown: 'Downtown Tavorsk District', promenade_west: 'Promenade West', promenade_east: 'Promenade East',
+  hills: 'Novi District Hills', park: 'Tavorsk Park', port: 'Port of Verdansk', farmland: 'Krovnik Farmland', prison: 'Zordaya Prison Complex', jarvdinsk_spomenik: 'Jarvdinsk Spomenik',
+  riverside: 'Riverside', bloc_16: 'Bloc 16', lozoff_pass: 'Lozoff Pass', bloc_18: 'Bloc 18', junkyard: 'Junkyard', graveyard: 'Graveyard', torsk_bloc: 'Torsk Bloc', bloc_6: 'Bloc 6',
+};
+
+const silCache = new Map<string, string>();
+function sil(id: string, rarity: number, fill = '#fff') { const k = `${id}:${rarity}:${fill}`; let s = silCache.get(k); if (!s) { s = gunSilhouette(describeGun(WEAPON[id], rarity), fill); silCache.set(k, s); } return s; }
 
 export class Hud {
   root = el('div', 'hud');
   private mm: HTMLCanvasElement; private mmCtx: CanvasRenderingContext2D;
-  private gas = el('div', 'gasbar');
-  private compass = el('div', 'compass');
-  private strip = el('div', 'strip');
-  private alive = el('div', 'alive');
+  private circ = el('div', 'circ');
+  private compass = el('div', 'compass'); private strip = el('div', 'strip'); private heading = el('div', 'heading'); private loc = el('div', 'loc');
+  private counters = el('div', 'counters');
+  private feed = el('div', 'feed');
   private squad = el('div', 'squad');
-  private self = el('div', 'self');
+  private inv = el('div', 'inv');
   private weap = el('div', 'weap');
+  private fu = el('div', 'fu');
   private xh = el('div', 'xh');
   private hm = el('div', 'hm');
-  private prompt = el('div', 'prompt');
-  private prog = el('div', 'prog', '<i></i>');
-  private feed = el('div', 'feed');
+  private lcard = el('div', 'lcard');
+  private hold = el('div', 'hold');
+  private prog = el('div', 'prog');
+  private ctx = el('div', 'ctx');
   private banner = el('div', 'banner');
   private note = el('div', 'note');
   private dmg = el('div', 'dmg');
@@ -34,35 +56,39 @@ export class Hud {
   private scope = el('div', 'scope');
   private flash = el('div', 'flash');
   private dot = el('div', 'reddot');
-  private markers = el('div');
+  private tags = el('div');
+  private alt = el('div', 'alt');
   fullmap = el('div', 'fullmap');
   private fmCanvas: HTMLCanvasElement;
   panel: HTMLElement | null = null;
-  private hmT = 0; private bannerT = 0; private noteT = 0;
+  private hmT = 0; private hmGlyphT = 0; private bannerT = 0; private noteT = 0; private nameT = 0;
   private dmgArcs: { a: number; t: number; e: HTMLElement }[] = [];
   private last: Record<string, string> = {};
   pings: { x: number; z: number; t: number }[] = [];
+  private lastWeaponKey = '';
 
-  constructor(private sim: Sim, private tac: HTMLCanvasElement, private localId: number) {
-    const mmw = el('div', 'mm'); this.mm = document.createElement('canvas'); this.mm.width = this.mm.height = 232; mmw.appendChild(this.mm);
+  constructor(private sim: Sim, private tac: HTMLCanvasElement, private localId: number, private settings: Settings) {
+    const mmw = el('div', 'mm'); this.mm = document.createElement('canvas'); this.mm.width = this.mm.height = 320; mmw.appendChild(this.mm);
     this.mmCtx = this.mm.getContext('2d')!;
-    this.compass.append(this.strip, el('div', 'ptr'));
-    for (let i = 0; i < 4; i++) { const t = el('i'); this.xh.appendChild(t); }
-    for (let i = 0; i < 4; i++) { const t = el('i'); t.style.transform = `rotate(${45 + i * 90}deg) translate(0, -14px)`; t.style.left = '-1px'; t.style.top = '-5px'; this.hm.appendChild(t); }
+    this.compass.append(this.strip);
+    this.xh.innerHTML = '<i></i><i></i><i></i><i></i><i class="dot"></i>';
+    this.hm.innerHTML = [45, 135, 225, 315].map((d) => `<i style="transform:rotate(${d}deg)"></i>`).join('') + `<div class="glyph a">${ICON.shield}</div><div class="glyph b">${ICON.shieldBroken}</div>`;
+    this.alt.innerHTML = '<div class="lab" style="top:-1.6em">SPEED</div><div class="rule"></div><div class="lab" style="bottom:-1.6em">GROUND</div><div class="mk"><b>0</b><i></i></div>';
     this.fmCanvas = document.createElement('canvas'); this.fmCanvas.width = this.fmCanvas.height = 1200;
-    this.fullmap.append(this.fmCanvas, el('div', 'legend', '<b>TAC MAP</b><br>White ring: next safe zone<br>Orange: gas<br>Blue: your squad<br>Dashed line: C-130 flight path<br>Red dots: enemies (UAV)<br><br>Click to place a marker'));
+    this.fullmap.append(this.fmCanvas, el('div', 'legend', '<b style="color:#fff;font-size:18px">TAC MAP</b><br>White ring: next safe zone<br>Red: gas<br>Coloured arrows: your squad<br>Dashed line: C-130 route<br>Red dots: enemies (UAV / gunfire)<br>Orange carts: buy stations<br><br>Click to place a marker — your squad will head there'));
     this.fmCanvas.addEventListener('mousedown', (e) => { const r = this.fmCanvas.getBoundingClientRect(); const x = ((e.clientX - r.left) / r.width) * MAP_SIZE, z = ((e.clientY - r.top) / r.height) * MAP_SIZE; this.pings = [{ x, z, t: 999 }]; (this.sim.players[this.localId] as any).ping = { x, z }; });
-    this.root.append(this.vig, this.scope, mmw, this.gas, this.compass, this.alive, this.squad, this.self, this.weap, this.xh, this.hm, this.markers, this.prompt, this.prog, this.feed, this.banner, this.note, this.dmg, this.flash, this.dot, this.fullmap);
+    this.root.append(this.vig, this.scope, mmw, this.circ, this.compass, this.heading, this.loc, this.counters, this.feed, this.squad, this.inv, this.fu, this.weap, this.xh, this.hm, this.tags, this.lcard, this.hold, this.prog, this.ctx, this.alt, this.banner, this.note, this.dmg, this.flash, this.dot, this.fullmap);
     this.buildCompass();
   }
+
+  private k(a: Action) { const [k1, k2] = this.settings.binds[a]; return `<span class="key">${keyName(k1 || k2).replace('Left Mouse', 'LMB').replace('Right Mouse', 'RMB').replace('Middle Mouse', 'MMB')}</span>`; }
 
   private buildCompass() {
     const labels: Record<number, string> = { 0: 'N', 45: 'NE', 90: 'E', 135: 'SE', 180: 'S', 225: 'SW', 270: 'W', 315: 'NW' };
     let h = '';
     for (let d = -360; d <= 720; d += 15) {
-      const x = d * 4;
-      const dd = ((d % 360) + 360) % 360;
-      h += labels[dd] !== undefined ? `<span style="left:${x}px;color:${dd === 0 ? '#f6c343' : '#fff'}">${labels[dd]}</span>` : `<i class="tick" style="left:${x}px"></i><span style="left:${x}px;font-size:10px;top:12px;opacity:.6">${dd}</span>`;
+      const x = d * 4, dd = ((d % 360) + 360) % 360;
+      h += `<i style="left:${x}px"></i><span class="${labels[dd] ? 'card' : ''}" style="left:${x}px">${labels[dd] ?? dd}</span>`;
     }
     this.strip.innerHTML = h;
   }
@@ -71,195 +97,294 @@ export class Hud {
 
   onEvent(e: SimEvent) {
     const me = this.sim.players[this.localId];
-    const name = (id: number) => { const p = this.sim.players[id]; if (!p) return '?'; const cls = p.squad === me.squad ? 'sq' : 'en'; return `<span class="${cls}">${p.name}</span>`; };
+    const color = (id: number) => { const p = this.sim.players[id]; if (!p) return '#fff'; if (p.squad !== me.squad) return '#ff5a4a'; return SQUAD_COLORS[p.id % 3 === me.id % 3 ? 0 : (p.id % 3) + 1]; };
+    const name = (id: number) => { const p = this.sim.players[id]; return p ? `<span style="color:${color(id)}">${p.name}</span>` : '?'; };
     switch (e.t) {
       case 'hit':
-        if (e.attacker === this.localId) { this.hmT = 0.18; this.hm.className = 'hm' + (e.kill || e.down ? ' kill' : e.armorBroke ? ' armor' : ''); }
+        if (e.attacker === this.localId) {
+          this.hmT = 0.26;
+          this.hm.className = 'hm' + (e.kill || e.down ? ' kill' : '') + (e.armorBroke ? ' break' : e.armorHit ? ' armor' : '');
+          if (e.armorBroke) this.hmGlyphT = 0.55;
+        }
         if (e.victim === this.localId && e.attacker >= 0) {
           const a = this.sim.players[e.attacker];
-          const ang = Math.atan2(a.x - me.x, a.z - me.z);
-          const i = el('i'); this.dmg.appendChild(i); this.dmgArcs.push({ a: ang, t: 1.4, e: i });
+          const i = el('i'); this.dmg.appendChild(i); this.dmgArcs.push({ a: Math.atan2(a.x - me.x, a.z - me.z), t: 1.4, e: i });
         }
         break;
       case 'kill': case 'down': {
-        const w = WEAPON[e.w]?.name ?? (e.w === 'gas' ? 'the Gas' : e.w === 'fall' ? 'Falling' : e.w === 'bleed' ? 'Bled out' : e.w);
-        const txt = e.attacker >= 0 ? `${name(e.attacker)} <span style="opacity:.7">[${w}]</span> ${e.t === 'down' ? 'downed' : 'killed'} ${name(e.victim)}` : `${name(e.victim)} ${e.t === 'down' ? 'was downed by' : 'died to'} ${w}`;
-        this.feedLine(txt);
-        if (e.attacker === this.localId && e.victim !== this.localId) this.showNote(e.t === 'down' ? 'Enemy downed' : 'Enemy killed' + ((e as any).head ? ' — headshot' : ''));
-        if (e.victim === this.localId) { const by = e.attacker >= 0 && e.attacker !== this.localId ? this.sim.players[e.attacker].name : w; this.showBanner(e.t === 'down' ? "You're down" : 'Eliminated', e.t === 'down' ? `Downed by ${by} — hold on for a revive${me.selfRevive ? ' or use your Self-Revive' : ''}` : `Killed by ${by}`); this.flash.style.opacity = '0'; }
+        const w = WEAPON[e.w];
+        const mid = w ? `<span class="gun">${sil(e.w, 0, '#fff')}</span>` : `<span style="opacity:.75">[${e.w === 'gas' ? 'Gas' : e.w === 'fall' ? 'Fall' : e.w === 'bleed' ? 'Bled out' : e.w === 'melee' ? 'Melee' : e.w}]</span>`;
+        this.feedLine(e.attacker >= 0 && e.attacker !== e.victim ? `${name(e.attacker)} ${mid} ${e.t === 'down' ? '<span style="opacity:.7">▼</span>' : ''}${name(e.victim)}` : `${mid} ${name(e.victim)}`);
+        if (e.attacker === this.localId && e.victim !== this.localId) this.showNote(e.t === 'down' ? 'Enemy downed' : 'Enemy eliminated');
+        if (e.victim === this.localId) { const by = e.attacker >= 0 && e.attacker !== this.localId ? this.sim.players[e.attacker].name : (e.w === 'gas' ? 'the gas' : e.w); this.showBanner(e.t === 'down' ? "You're down" : 'Eliminated', e.t === 'down' ? `Downed by ${by}` : `Killed by ${by}`); }
         break;
       }
-      case 'circle': this.showBanner(e.closing ? 'Gas closing' : 'Safe zone revealed', e.closing ? 'Get inside the circle' : `Circle ${e.phase + 1} of ${CIRCLES.length}`); break;
+      case 'circle': this.showBanner(e.closing ? 'Gas closing' : 'Safe zone updated', e.closing ? 'Move to the safe zone' : `Circle ${e.phase + 1}`); break;
       case 'gulag':
         if (e.p === this.localId) {
-          const m: Record<string, [string, string]> = { enter: ['Welcome to the Gulag', 'Win your 1v1 to redeploy'], fight: ['Fight!', 'Winner goes back to Verdansk'], overtime: ['Overtime', 'Capture the flag in the centre'], win: ['Gulag won', 'Redeploying...'], lose: ['Eliminated', 'Wait for a teammate to buy you back'], closed: ['', ''] };
+          const m: Record<string, [string, string]> = { enter: ['Welcome to the Gulag', 'Win your 1v1 to get back into Verdansk'], fight: ['Fight!', 'The winner redeploys'], overtime: ['Overtime', 'Capture the flag in the centre'], win: ['Gulag won', 'Redeploying...'], lose: ['Eliminated', 'Your squad can buy you back'], closed: ['', ''] };
           this.showBanner(...m[e.msg]);
-        } else if (e.msg === 'closed') this.showNote('The Gulag is now closed');
+        } else if (e.msg === 'closed') this.showNote('The Gulag is closed');
         break;
-      case 'redeploy': if (this.sim.players[e.p].squad === me.squad) this.feedLine(`${name(e.p)} redeployed`); break;
+      case 'redeploy': if (this.sim.players[e.p].squad === me.squad) this.feedLine(`${name(e.p)} <span style="opacity:.7">redeployed</span>`); break;
       case 'announce': if ((e.squad === undefined || e.squad === me.squad) && !e.text.startsWith('__')) this.showNote(e.text); break;
       case 'contract': if (this.sim.players[e.p].squad === me.squad) this.showBanner(`${e.kind} contract`, e.msg === 'start' ? 'Contract accepted' : e.msg === 'done' ? 'Contract complete' : e.msg === 'fail' ? 'Contract failed' : 'Next target marked'); break;
-      case 'uav': if (e.squad === me.squad) this.showNote('UAV online'); break;
-      case 'buy': if (e.p === this.localId) this.showNote(`Purchased: ${e.item}`); break;
+      case 'uav': this.showNote(e.squad === me.squad ? 'UAV online' : 'Enemy UAV overhead'); break;
       case 'pickup': if (e.p === this.localId) this.showNote(e.label); break;
-      case 'squadwipe': if (e.squad !== me.squad) this.feedLine(`Squad eliminated`); break;
+      case 'squadwipe': if (e.squad !== me.squad) this.feedLine(`<span style="color:#ff5a4a">Squad eliminated</span>`); break;
       case 'flash': if (e.p === this.localId) this.flash.style.opacity = String(Math.min(1, 0.6 + e.s)); break;
     }
   }
-  feedLine(html: string) { const d = el('div', '', html); this.feed.prepend(d); while (this.feed.children.length > 6) this.feed.lastChild!.remove(); setTimeout(() => d.remove(), 7000); }
+  feedLine(html: string) { const d = el('div', 'ln', html); this.feed.prepend(d); while (this.feed.children.length > 6) this.feed.lastChild!.remove(); setTimeout(() => { d.style.opacity = '0'; setTimeout(() => d.remove(), 700); }, 5500); }
   showBanner(a: string, b: string) { if (!a) return; this.banner.innerHTML = `<div class="b1">${a}</div><div class="b2">${b}</div>`; this.bannerT = 3.5; }
   showNote(t: string) { this.note.textContent = t; this.noteT = 2.2; }
 
-  update(dt: number, camYaw: number, camPitch: number, project: (x: number, y: number, z: number) => [number, number, boolean], opts: { ads: number; scope: boolean; optic?: boolean; spectating: Player | null; mapOpen: boolean }) {
+  // ---------------------------------------------------------------- per frame
+  update(dt: number, camYaw: number, _camPitch: number, project: (x: number, y: number, z: number) => [number, number, boolean], opts: { ads: number; scope: boolean; optic?: boolean; spectating: Player | null; mapOpen: boolean }) {
     const sim = this.sim, me = sim.players[this.localId], view = opts.spectating ?? me;
     const c = sim.circle;
-    // gas bar
     const inGas = sim.inGas(view);
-    const total = c.closing ? CIRCLES[Math.min(c.phase, CIRCLES.length - 1)].close : CIRCLES[Math.min(c.phase, CIRCLES.length - 1)].wait;
-    if (sim.inWarmup) this.set('gas', this.gas, `<div class="t"><span style="color:#f6c343">Warm-up</span><span>${fmtT(sim.warmup - sim.time)}</span></div><div class="bar"><i style="width:${(100 * (sim.warmup - sim.time)) / sim.warmup}%;background:#f6c343"></i></div>`); else
-    this.set('gas', this.gas, c.done ? '<div class="t"><span>Final circle</span></div>' : `<div class="t"><span style="color:${c.closing ? '#f6a243' : '#fff'}">${c.closing ? 'Gas closing' : 'Next circle'}</span><span>${fmtT(c.t)}</span></div><div class="bar"><i style="width:${(100 * c.t) / total}%;background:${c.closing ? '#f6a243' : '#fff'}"></i></div>${inGas ? '<div style="color:#f6c343;margin-top:4px">In the gas!' + (me.hasMask ? ` Mask ${Math.ceil(me.gasMask)}s` : '') + '</div>' : ''}`);
-    // compass
+    const air = view.phase === Phase.Freefall || view.phase === Phase.Chute || view.phase === Phase.Plane;
+    // --- circle timer
+    if (sim.inWarmup) this.set('circ', this.circ, `<span style="color:#f6c343">WARM-UP</span> ${fmtT(sim.warmup - sim.time)}`);
+    else if (c.done) this.set('circ', this.circ, `<span class="badge">${CIRCLES.length}</span> <span class="sub">FINAL CIRCLE</span>`);
+    else this.set('circ', this.circ, `<span class="badge">${c.phase + 1}</span>${fmtT(c.t)}${c.closing ? `<span class="closing">${ICON.gasHex}CLOSING</span>` : ''}${inGas && view.hasMask ? `<span class="sub">MASK ${Math.ceil(view.gasMask)}s</span>` : ''}`);
+    // --- compass + location
     const deg = ((-camYaw * 180) / Math.PI % 360 + 360) % 360;
-    this.strip.style.left = `${280 - deg * 4}px`;
-    // alive + kills
-    this.set('alive', this.alive, `<div>${sim.aliveCount}<small>ALIVE</small></div><div>${sim.squadsLeft()}<small>SQUADS</small></div><div>${me.kills}<small>KILLS</small></div>`);
-    // squad
+    const cw = this.compass.clientWidth || innerWidth * 0.36;
+    this.strip.style.left = `${cw / 2 - deg * 4}px`;
+    const labels: Record<number, string> = { 0: 'N', 45: 'NE', 90: 'E', 135: 'SE', 180: 'S', 225: 'SW', 270: 'W', 315: 'NW' };
+    const near8 = Math.round(deg / 45) * 45 % 360;
+    this.set('head', this.heading, `<b></b>${Math.abs(deg - Math.round(deg / 45) * 45) < 8 ? labels[near8] : Math.round(deg)}<b></b>`);
+    let best = '', bd = Infinity;
+    for (const p of POIS) { const d = Math.hypot(p.x - view.x, p.z - view.z) / Math.max(80, p.r); if (d < bd && d < 1.25) { bd = d; best = LOC_NAMES[p.id] ?? p.name; } }
+    this.set('loc', this.loc, air ? '' : best);
+    // --- counters
+    this.set('cnt', this.counters, `<div>${ICON.squads}${sim.squadsLeft()}</div><div>${ICON.player}${sim.aliveCount}</div><div>${ICON.skull}${me.kills}</div>`);
+    // --- squad cards (teammates above, you at the bottom)
     let sq = '';
-    for (const p of sim.players) if (p.squad === me.squad && p.id !== me.id) {
+    const mates = sim.players.filter((p) => p.squad === me.squad && p.id !== me.id);
+    const card = (p: Player, mine: boolean, col: string) => {
       const st = p.phase === Phase.Downed ? 'down' : !p.alive ? 'dead' : '';
-      const ph = p.phase === Phase.GulagWait || p.phase === Phase.Gulag ? ' (Gulag)' : p.phase === Phase.Dead ? ' (Dead)' : p.phase === Phase.Downed ? ' (Down)' : '';
-      sq += `<div class="m ${st}"><div class="nm">${p.name}${ph}</div><div class="bars"><div class="ar">${[0, 1, 2].map((i) => `<i class="${p.armor > i * 50 ? 'on' : ''}"></i>`).join('')}</div><div class="hp"><i style="width:${Math.max(0, p.health)}%"></i></div></div></div>`;
-    }
+      const ar = [0, 1, 2].map((i) => `<i><b style="transform:scaleX(${Math.max(0, Math.min(1, (p.armor - i * 50) / 50))})"></b></i>`).join('');
+      const hp = p.phase === Phase.Downed ? (p.downT / 30) * 100 : Math.max(0, p.health);
+      const badge = !p.alive && p.phase !== Phase.Downed ? `<div class="badge">${ICON.skull}</div>` : '';
+      return `<div class="card ${st} ${mine ? 'mine' : ''}"><div class="nm">${mine ? '<span class="star">★</span>' : ''}<span style="color:${mine ? '#fff' : col}">${p.name}</span>${p.phase === Phase.GulagWait || p.phase === Phase.Gulag ? ' <span style="opacity:.7">(Gulag)</span>' : ''}</div><div class="ar">${ar}</div><div class="hp"><i style="width:${hp}%"></i></div><div class="cash"><span>$${p.cash.toLocaleString()}</span>${p.selfRevive ? ICON.selfRevive : ''}</div>${badge}</div>`;
+    };
+    mates.forEach((p, i) => { sq += card(p, false, SQUAD_COLORS[i + 1]); });
+    sq += card(view, true, '#fff');
     this.set('squad', this.squad, sq);
-    // self
-    const ar = [0, 1, 2].map((i) => `<i><b style="transform:scaleX(${Math.max(0, Math.min(1, (view.armor - i * 50) / 50))})"></b></i>`).join('');
-    this.set('self', this.self, `<div class="nm">${view.name}${view.id !== me.id ? ' (spectating)' : ''}</div><div class="ar">${ar}</div><div class="hp"><i style="width:${Math.max(0, view.health)}%;background:${view.health < 40 ? '#e84a3a' : '#fff'}"></i></div>`);
-    // weapon
+    // --- plates / gas mask next to your card
+    const full = view.plates >= view.maxPlates;
+    let inv = `<div class="it"><div class="row">${view.maxPlates > 5 ? ICON.satchel : ICON.plate}<span class="${full ? 'full' : ''}">${view.plates}</span></div>${this.k('plate')}</div>`;
+    if (view.hasMask) { const seg = Math.ceil((view.gasMask / 12) * 8); inv += `<div class="it"><div class="row">${ICON.gasMask}<div class="dura">${Array.from({ length: 8 }, (_, i) => `<i class="${i < seg ? 'on' : ''}"></i>`).join('')}</div></div></div>`; }
+    this.set('inv', this.inv, air ? '' : inv);
+    // --- weapon block
     const w = view.weapons[view.cur];
-    if (w && view.phase !== Phase.Freefall && view.phase !== Phase.Chute && view.phase !== Phase.Plane) {
-      const d = WEAPON[w.id];
-      const other = view.weapons[view.cur === 0 ? 1 : 0];
-      this.set('weap', this.weap, `<div class="name" style="color:${RARITY_COLORS[w.rarity]}">${d.name}</div><div class="ammo ${w.mag <= d.mag * 0.25 ? 'low' : ''}">${w.mag}<small> / ${view.ammo[d.ammo]}</small></div>` +
-        `<div class="eq"><span>${other ? WEAPON[other.id].name : '—'}</span><span>[G] ${view.lethal ? LETHAL_NAMES[view.lethal.type] + ' x' + view.lethal.n : '—'}</span><span>[Q] ${view.tactical ? TACTICAL_NAMES[view.tactical.type] + ' x' + view.tactical.n : '—'}</span></div>` +
-        `<div class="eq"><span>[4] Plates ${view.plates}/${view.maxPlates}</span>${view.killstreak ? `<span>[5] ${KILLSTREAK_NAMES[view.killstreak]}</span>` : ''}${view.selfRevive ? '<span>Self-Revive</span>' : ''}${view.hasMask ? '<span>Gas Mask</span>' : ''}</div><div class="cash">$${view.cash.toLocaleString()}</div>`);
-    } else this.set('weap', this.weap, `<div class="cash">$${view.cash.toLocaleString()}</div><div class="eq"><span>Plates ${view.plates}/${view.maxPlates}</span></div>`);
-    // crosshair (hidden while aiming)
-    const spread = w ? (WEAPON[w.id].spreadHip * (1 - opts.ads) * 900 + 8 + Math.hypot(view.vx, view.vz) * 2 + view.bloom * 6) : 10;
-    const showXh = opts.ads < 0.5 && (view.phase === Phase.Alive || view.phase === Phase.Gulag) && !(vehicleOf(sim, view) && (view as any).seat === 0);
+    if (w && !air && view.phase !== Phase.Downed) {
+      const d = WEAPON[w.id], rc = RARITY_COLORS[w.rarity] ?? '#fff';
+      const low = w.mag <= Math.ceil(d.mag * 0.25) && d.cls !== 'melee';
+      const wkey = `${w.id}:${w.rarity}`; if (wkey !== this.lastWeaponKey) { this.lastWeaponKey = wkey; this.nameT = 2.5; }
+      this.nameT -= dt;
+      const lt = view.lethal, tt = view.tactical;
+      this.set('weap', this.weap, `<div class="gunbox"><div class="gname" style="opacity:${this.nameT > 0 ? 1 : 0};color:${rc}">${blueprintName(w.id, w.rarity) ? `"${blueprintName(w.id, w.rarity)}" ` : ''}${d.name}</div><div class="smear" style="background:${rc}"></div>${sil(w.id, w.rarity)}</div>` +
+        (d.cls === 'melee' ? '' : `<div class="ammo ${low ? 'low' : ''}"><div class="mag">${w.id === 'turretgun' ? '∞' : w.mag}</div><div class="res">${w.id === 'turretgun' ? '' : view.ammo[d.ammo]}</div></div>`) +
+        `<div class="eq"><div class="slot ${tt ? '' : 'empty'}"><div class="row">${ICON[TACTICAL_ICON[tt?.type ?? 'stun']]}${tt ? tt.n : ''}</div>${this.k('tactical')}</div><div class="slot ${lt ? '' : 'empty'}"><div class="row">${ICON[LETHAL_ICON[lt?.type ?? 'frag']]}${lt ? lt.n : ''}</div>${this.k('lethal')}</div></div>`);
+      this.set('fu', this.fu, `${view.killstreak ? `<div class="ring" title="${KILLSTREAK_NAMES[view.killstreak]}">${ICON[STREAK_ICON[view.killstreak]]}${this.k('killstreak')}</div>` : ''}<div class="ring" style="opacity:${view.fieldUpgrade ? 1 : 0.5}">${view.fieldUpgrade ? ICON[view.fieldUpgrade] : ''}${this.k('fieldUpgrade')}</div>`);
+    } else { this.set('weap', this.weap, ''); this.set('fu', this.fu, ''); }
+    // --- crosshair
+    const showXh = opts.ads < 0.5 && (view.phase === Phase.Alive || view.phase === Phase.Gulag) && !(vehicleOf(sim, view) && (view as any).seat === 0) && !air;
     this.xh.style.display = showXh ? '' : 'none';
-    if (showXh) {
+    if (showXh && w) {
+      const d = WEAPON[w.id];
+      const s = Math.min(90, (d.spreadHip * (1 - opts.ads) * 700 + 7 + Math.hypot(view.vx, view.vz) * 2 + view.bloom * 5));
       const xs = this.xh.children as HTMLCollectionOf<HTMLElement>;
-      const s = Math.min(90, spread);
-      const set2 = (e: HTMLElement, l: number, t: number, wd: number, h: number) => { e.style.left = `${l}px`; e.style.top = `${t}px`; e.style.width = `${wd}px`; e.style.height = `${h}px`; };
-      set2(xs[0], -s - 9, -1, 9, 2); set2(xs[1], s, -1, 9, 2); set2(xs[2], -1, -s - 9, 2, 9); set2(xs[3], -1, s, 2, 9);
+      const pos = (e: HTMLElement, l: number, t: number, wd: number, h: number) => { e.style.left = `${l}px`; e.style.top = `${t}px`; e.style.width = `${wd}px`; e.style.height = `${h}px`; };
+      pos(xs[0], -s - 8, -1, 8, 2); pos(xs[1], s, -1, 8, 2); pos(xs[2], -1, -s - 8, 2, 8); pos(xs[3], -1, s, 2, 8);
     }
-    this.hmT -= dt; this.hm.style.opacity = this.hmT > 0 ? '1' : '0';
-    // scope overlay
+    // --- hitmarker
+    this.hmT -= dt; this.hmGlyphT -= dt;
+    const hk = this.hmT > 0 ? Math.min(1, this.hmT / 0.1) : 0;
+    this.hm.style.opacity = String(hk);
+    this.hm.style.transform = `scale(${1 + Math.max(0, this.hmT - 0.18) * 1.8})`;
+    if (this.hmGlyphT > 0) { this.hm.classList.add('break'); this.hm.style.opacity = '1'; }
+    // --- scope / red dot
     this.scope.style.display = opts.scope && opts.ads > 0.92 ? 'block' : 'none';
     this.dot.style.display = (opts.optic || opts.scope) && opts.ads > 0.85 ? 'block' : 'none';
-    // vignettes: downed / low health / gas
+    // --- vignettes
     let vig = '';
-    if (view.phase === Phase.Downed) vig = 'radial-gradient(circle, transparent 30%, rgba(120,0,0,0.65))';
-    else if (inGas) vig = `radial-gradient(circle, rgba(200,140,20,0.18) 20%, rgba(210,120,10,0.55))`;
-    else if (view.health < 60 && view.alive) vig = `radial-gradient(circle, transparent 45%, rgba(140,0,0,${0.5 * (1 - view.health / 60)}))`;
+    if (view.phase === Phase.Downed) vig = 'radial-gradient(circle, transparent 30%, rgba(120,0,0,0.6))';
+    else if (inGas) vig = 'radial-gradient(circle, rgba(170,150,30,0.22) 20%, rgba(150,140,20,0.55))';
+    else if (view.health < 60 && view.alive) vig = `radial-gradient(circle, transparent 45%, rgba(140,0,0,${0.55 * (1 - view.health / 60)}))`;
     if (this.last.vig !== vig) { this.last.vig = vig; this.vig.style.background = vig; }
     const fo = parseFloat(this.flash.style.opacity || '0'); if (fo > 0) this.flash.style.opacity = String(Math.max(0, fo - dt * (view.flashT > 0 ? 0.25 : 1.5)));
-    // damage arcs
-    for (const d of this.dmgArcs) { d.t -= dt; d.e.style.opacity = String(Math.min(1, d.t)); d.e.style.transform = `rotate(${((Math.PI - d.a + camYaw) * 180) / Math.PI}deg)`; if (d.t <= 0) d.e.remove(); }
-    this.dmgArcs = this.dmgArcs.filter((d) => d.t > 0);
-    // prompt / progress
-    let promptTxt = '', progV = -1;
-    if (view === me && me.phase === Phase.Alive) {
-      const t = sim.interactTarget(me);
-      if (t) promptTxt = `<kbd>F</kbd>${t.kind === 'revive' ? 'Hold to ' : ''}${t.label}`;
-      const rv = sim.players.find((q) => q.reviveBy === me.id);
-      if (rv) progV = rv.reviveT / 5;
-      if (me.plateT > 0) progV = 1 - me.plateT / 1.25;
+    for (const a of this.dmgArcs) { a.t -= dt; a.e.style.opacity = String(Math.min(1, a.t)); a.e.style.transform = `rotate(${((Math.PI - a.a + camYaw) * 180) / Math.PI}deg)`; if (a.t <= 0) a.e.remove(); }
+    this.dmgArcs = this.dmgArcs.filter((a) => a.t > 0);
+    // --- interaction card / prompts
+    this.updateCard(me);
+    let hold = '', progTxt = '', progV = -1, ctx = '';
+    if (me.phase === Phase.Downed) {
+      hold = me.selfRevive ? `Hold ${this.k('interact')} to Self-Revive` : `Bleeding out — ${Math.ceil(me.downT)}s`;
+      if (me.reviveBy >= 0) { progV = me.reviveT / 5; progTxt = me.reviveBy === me.id ? 'Using Self-Revive' : `Being revived`; }
     }
-    const veh = vehicleOf(sim, me);
-    if (veh) { promptTxt = `${VEHICLES[veh.type].name} ${Math.round(veh.speed * 3.6)} km/h — <kbd>F</kbd>Exit${veh.type === 'heli' ? ' • SPACE up • CTRL down' : ' • SPACE brake'}`; progV = veh.health / VEHICLES[veh.type].health; }
-    if (sim.inWarmup && me.phase === Phase.Dead) promptTxt = 'Respawning...';
-    if (me.phase === Phase.Plane) promptTxt = sim.plane.canJump ? '<kbd>SPACE</kbd>Jump' : 'Waiting for the jump light...';
-    if (me.phase === Phase.Freefall) promptTxt = `<kbd>SPACE</kbd>Deploy parachute &nbsp; ${Math.round(me.y - sim.world.hf.at(me.x, me.z))}m`;
-    if (me.phase === Phase.Chute) promptTxt = `<kbd>SPACE</kbd>Cut parachute &nbsp; ${Math.round(me.y - sim.world.hf.at(me.x, me.z))}m`;
-    if (me.phase === Phase.Downed) { promptTxt = me.selfRevive ? '<kbd>F</kbd>Use Self-Revive' : `Bleeding out ${Math.ceil(me.downT)}s — wait for a teammate`; if (me.reviveBy >= 0) progV = me.reviveT / 5; }
-    if (me.phase === Phase.GulagWait) promptTxt = '<kbd>Q</kbd>Throw rock — waiting for your Gulag match';
-    this.set('prompt', this.prompt, promptTxt);
-    this.prompt.style.display = promptTxt ? 'block' : 'none';
+    if (me.phase === Phase.Alive) {
+      const rv = sim.players.find((q) => q.reviveBy === me.id && q.id !== me.id);
+      if (rv) { progV = rv.reviveT / 5; progTxt = `Reviving ${rv.name}`; }
+      if (me.plateT > 0) { progV = 1 - me.plateT / 1.25; progTxt = ''; }
+      const veh = vehicleOf(sim, me);
+      if (veh) ctx = `<span>${VEHICLES[veh.type].name} ${Math.round(veh.speed * 3.6)} km/h</span><span>${this.k('interact')} Exit</span>${veh.type === 'heli' ? `<span>${this.k('jump')} Up</span><span>${this.k('crouch')} Down</span>` : `<span>${this.k('jump')} Brake</span>`}`;
+      if (me.turret >= 0) ctx = `<span>${this.k('interact')} Leave turret</span>`;
+    }
+    if (me.phase === Phase.Plane) ctx = sim.plane.canJump ? `<span>${this.k('jump')} Jump</span>` : '<span>Waiting for the jump light...</span>';
+    if (me.phase === Phase.Freefall) ctx = `<span>${this.k('jump')} Deploy parachute</span><span>${this.k('thirdPerson')} Hold to look around</span>`;
+    if (me.phase === Phase.Chute) ctx = `<span>${this.k('jump')} Cut parachute</span><span>${this.k('thirdPerson')} Hold to look around</span>`;
+    if (me.phase === Phase.GulagWait) ctx = `<span>${this.k('tactical')} Throw rock</span><span>Waiting for your Gulag match</span>`;
+    if (sim.inWarmup && me.phase === Phase.Dead) ctx = '<span>Respawning...</span>';
+    this.set('hold', this.hold, hold); this.hold.style.display = hold ? 'flex' : 'none';
+    this.set('ctx', this.ctx, ctx);
     this.prog.style.display = progV >= 0 ? 'block' : 'none';
-    if (progV >= 0) (this.prog.firstChild as HTMLElement).style.width = `${Math.min(100, progV * 100)}%`;
-    // banners
+    if (progV >= 0) this.set('prog', this.prog, `${progTxt}<div class="bar"><i style="width:${Math.min(100, progV * 100)}%"></i></div>`);
+    // --- parachute altimeter
+    const agl = air && view.phase !== Phase.Plane ? view.y - sim.world.hf.at(view.x, view.z) : -1;
+    this.alt.style.display = agl >= 0 ? 'block' : 'none';
+    if (agl >= 0) { const mk = this.alt.querySelector('.mk') as HTMLElement; mk.style.top = `${Math.max(0, Math.min(100, 100 - (agl / 700) * 100))}%`; (mk.firstChild as HTMLElement).textContent = (Math.hypot(view.vx, view.vy, view.vz) / 10).toFixed(1); }
+    // --- banners
     this.bannerT -= dt; this.banner.style.opacity = String(Math.max(0, Math.min(1, this.bannerT)));
     this.noteT -= dt; this.note.style.opacity = String(Math.max(0, Math.min(1, this.noteT * 2)));
-    // world markers: squadmates, pings, contract targets
-    let mk = '';
-    const addMk = (x: number, y: number, z: number, cls: string, txt: string) => { const [sx, sy, vis] = project(x, y, z); if (vis) mk += `<div class="dist ${cls}" style="left:${sx}px;top:${sy}px">${txt}</div>`; };
-    for (const p of sim.players) if (p.squad === me.squad && p.id !== view.id && p.alive && p.phase !== Phase.GulagWait && p.phase !== Phase.Gulag && p.phase !== Phase.Plane && view.phase !== Phase.Plane) addMk(p.x, p.y + 2.1, p.z, 'sq', `▼ ${p.name}${p.phase === Phase.Downed ? ' (DOWN)' : ''} ${Math.round(Math.hypot(p.x - view.x, p.z - view.z))}m`);
-    for (const pg of this.pings) addMk(pg.x, sim.world.hf.at(pg.x, pg.z) + 2, pg.z, 'mk', `◆ ${Math.round(Math.hypot(pg.x - view.x, pg.z - view.z))}m`);
+    // --- world tags: squadmates (name, dot, distance), pings, objectives
+    let tg = '';
+    const tag = (x: number, y: number, z: number, cls: string, inner: string) => { const [sx, sy, vis] = project(x, y, z); if (vis) tg += `<div class="tag ${cls}" style="left:${sx}px;top:${sy}px">${inner}</div>`; };
+    mates.forEach((p, i) => { if (p.alive && p.phase !== Phase.GulagWait && p.phase !== Phase.Gulag && p.phase !== Phase.Plane && view.phase !== Phase.Plane) tag(p.x, p.y + 2.1, p.z, '', `<span style="color:${SQUAD_COLORS[i + 1]}">${p.name}${p.phase === Phase.Downed ? ' (DOWN)' : ''}</span><span class="dotc" style="background:${SQUAD_COLORS[i + 1]}"></span><div class="d">${Math.round(Math.hypot(p.x - view.x, p.z - view.z))}m</div>`); });
+    for (const pg of this.pings) tag(pg.x, sim.world.hf.at(pg.x, pg.z) + 2, pg.z, 'ping', `<i></i><div class="d">${Math.round(Math.hypot(pg.x - view.x, pg.z - view.z))}m</div>`);
     const ac = sim.active.find((a) => a.squad === me.squad);
-    if (ac?.kind === 'recon') addMk(ac.zx!, ac.zy! + 3, ac.zz!, 'mk', `RECON ${Math.round(Math.hypot(ac.zx! - view.x, ac.zz! - view.z))}m`);
-    if (ac?.kind === 'scavenger') { const ch = sim.chests.find((q) => q.id === ac.chest); if (ch) addMk(ch.x, ch.y + 2, ch.z, 'mk', `SUPPLY ${Math.round(Math.hypot(ch.x - view.x, ch.z - view.z))}m`); }
-    for (const cr of sim.crates) if (cr.squad === me.squad) addMk(cr.x, cr.y + 2, cr.z, 'mk', `LOADOUT ${Math.round(Math.hypot(cr.x - view.x, cr.z - view.z))}m`);
-    this.set('mk', this.markers, mk);
-    // minimap
-    (this.mm.parentElement as HTMLElement).style.display = view.phase === Phase.Gulag || view.phase === Phase.GulagWait ? 'none' : '';
+    if (ac?.kind === 'recon') tag(ac.zx!, ac.zy! + 3, ac.zz!, 'mk', `RECON<div class="d">${Math.round(Math.hypot(ac.zx! - view.x, ac.zz! - view.z))}m</div>`);
+    if (ac?.kind === 'scavenger') { const ch = sim.chests.find((q) => q.id === ac.chest); if (ch) tag(ch.x, ch.y + 2, ch.z, 'mk', `SUPPLY<div class="d">${Math.round(Math.hypot(ch.x - view.x, ch.z - view.z))}m</div>`); }
+    for (const cr of sim.crates) if (cr.squad === me.squad) tag(cr.x, cr.y + 2, cr.z, 'mk', `LOADOUT<div class="d">${Math.round(Math.hypot(cr.x - view.x, cr.z - view.z))}m</div>`);
+    this.set('tags', this.tags, tg);
     this.drawMinimap(view, camYaw);
     if (opts.mapOpen) this.drawFullMap(view);
     this.fullmap.style.display = opts.mapOpen ? 'flex' : 'none';
-    void camPitch; void eyeHeight;
+    (this.root.querySelector('.mm') as HTMLElement).style.display = view.phase === Phase.Gulag || view.phase === Phase.GulagWait ? 'none' : '';
   }
 
+  /** The look-at card (Take / Swap / Open / Revive ...) with details and weapon stats. */
+  private updateCard(me: Player) {
+    const t = me.phase === Phase.Alive ? this.sim.interactTarget(me) : null;
+    if (!t) { this.lcard.style.display = 'none'; this.last.card = ''; return; }
+    let verb = 'Use', icon = '', t1 = t.label, t2 = '', extra = '', rc = '#9aa0a6';
+    const it: Item | undefined = t.kind === 'item' ? this.sim.itemById.get(t.id) : undefined;
+    if (it) {
+      verb = 'Take';
+      switch (it.kind) {
+        case ItemKind.Weapon: {
+          const d = WEAPON[it.weapon!], r = it.rarity ?? 0; rc = RARITY_COLORS[r];
+          verb = me.weapons.every((x) => x) ? 'Swap' : 'Take';
+          const bp = blueprintName(d.id, r);
+          icon = sil(d.id, r); t1 = bp ? `"${bp}"` : d.name; t2 = `${bp ? d.name + ' · ' : ''}${CLASS_NAMES[d.cls]} · <span style="color:${rc}">${RARITY_NAMES[r]}</span>`;
+          const att = attachmentsFor(d.id, r, it.id);
+          if (att.length) extra += `<div class="att">${att.join(' · ')}</div>`;
+          extra += this.statBars(d, r, me.weapons[me.cur] ? WEAPON[me.weapons[me.cur]!.id] : null);
+          break;
+        }
+        case ItemKind.Ammo: icon = ICON.ammo; t1 = `${AMMO_NAMES[it.ammo!]} x${it.n}`; t2 = 'Ammunition'; break;
+        case ItemKind.Plate: icon = ICON.plate; t1 = 'Armor Plate'; t2 = 'Combat Defense'; rc = '#4aa3ff'; break;
+        case ItemKind.Cash: icon = ICON.cash; t1 = `$${it.n}`; t2 = 'Cash'; rc = '#c07a2a'; break;
+        case ItemKind.Lethal: icon = ICON[LETHAL_ICON[it.lethal!]]; t1 = LETHAL_NAMES[it.lethal!]; t2 = 'Lethal'; break;
+        case ItemKind.Tactical: icon = ICON[TACTICAL_ICON[it.tactical!]]; t1 = TACTICAL_NAMES[it.tactical!]; t2 = 'Tactical'; break;
+        case ItemKind.Killstreak: icon = ICON[STREAK_ICON[it.killstreak!]]; t1 = KILLSTREAK_NAMES[it.killstreak!]; t2 = 'Killstreak'; rc = '#b45cff'; break;
+        case ItemKind.SelfRevive: icon = ICON.selfRevive; t1 = 'Self-Revive Kit'; t2 = 'Combat Defense'; rc = '#b45cff'; break;
+        case ItemKind.GasMask: icon = ICON.gasMask; t1 = 'Gas Mask'; t2 = 'Combat Defense'; rc = '#4aa3ff'; break;
+        case ItemKind.Satchel: icon = ICON.satchel; t1 = 'Armor Satchel'; t2 = 'Combat Defense'; rc = '#ffb52e'; break;
+      }
+    } else if (t.kind === 'chest') { const ch = this.sim.chests.find((q) => q.id === t.id); verb = 'Open'; icon = ICON.supply; t1 = ch?.legendary ? 'Legendary Supply Box' : 'Supply Box'; t2 = 'Loot'; rc = ch?.legendary ? '#ffb52e' : '#9aa0a6'; }
+    else if (t.kind === 'buy') { verb = 'Use'; icon = ICON.cart; t1 = 'Buy Station'; t2 = 'Loadouts, killstreaks, buybacks'; rc = '#f39a2a'; }
+    else if (t.kind === 'contract') { const k = this.sim.contracts.find((q) => q.id === t.id)?.kind; verb = 'Accept'; icon = k === 'bounty' ? ICON.contractBounty : k === 'recon' ? ICON.contractRecon : ICON.contractScav; t1 = `${k ? k[0].toUpperCase() + k.slice(1) : ''} Contract`; t2 = k === 'bounty' ? 'Hunt a marked enemy' : k === 'recon' ? 'Secure a location, see the next circle' : 'Find three supply boxes'; rc = '#f6c343'; }
+    else if (t.kind === 'revive') { verb = 'Hold to revive'; icon = ICON.selfRevive; t1 = t.label.replace('Revive ', ''); t2 = 'Downed teammate'; rc = '#5fd35f'; }
+    else if (t.kind === 'vehicle' || t.kind === 'exit') { verb = t.kind === 'exit' ? 'Exit' : 'Enter'; const v = this.sim.vehicles.find((q) => q.id === t.id); icon = v?.type === 'heli' ? ICON.heli : ICON.vehicle; t1 = v ? VEHICLES[v.type].name : 'Vehicle'; t2 = v ? `${Math.round((v.health / VEHICLES[v.type].health) * 100)}% health · ${v.seats.filter((q) => q < 0).length} seats free` : ''; }
+    else if (t.kind === 'crate') { verb = 'Open'; icon = ICON.loadout; t1 = 'Loadout Drop'; t2 = 'Choose a custom class'; rc = '#ff6fb5'; }
+    else if (t.kind === 'balloon') { verb = 'Use'; icon = ICON.balloon; t1 = 'Redeploy Balloon'; t2 = 'Launch into the sky'; }
+    else if (t.kind === 'box') { verb = 'Use'; icon = t.label.includes('Armor') ? ICON.armorBox : ICON.munitions; t1 = t.label.replace('Use ', ''); t2 = 'Squad field upgrade'; }
+    else if (t.kind === 'turret' || t.kind === 'unman') { verb = t.kind === 'unman' ? 'Leave' : 'Use'; icon = ICON.turret; t1 = 'Shield Turret'; t2 = 'Mounted machine gun'; }
+    const html = `<div class="hd"><span>${this.k('interact')} ${verb}</span><span>${this.k('ping')} Ping</span></div><div class="sep"></div><div class="bd"><div class="ic">${icon}</div><div><div class="t1">${t1}</div><div class="t2">${t2}</div></div></div>${extra}`;
+    this.lcard.style.setProperty('--rl', rc); this.lcard.style.setProperty('--rc', rc + '55');
+    this.set('card', this.lcard, html);
+    this.lcard.style.display = 'block';
+  }
+
+  private statBars(d: WeaponDef, r: number, cur: WeaponDef | null) {
+    const st = (x: WeaponDef) => ({
+      Damage: Math.min(1, (damageAt(x, 10) * (x.pellets ?? 1)) / 140),
+      'Fire rate': Math.min(1, x.rpm / 1100),
+      Range: Math.min(1, (x.dmg[0][0] > 900 ? 90 : x.dmg[0][0]) / 60),
+      Accuracy: Math.max(0.05, 1 - x.recoilV * 60),
+      Mobility: Math.min(1, (x.mobility - 0.8) / 0.25),
+      Handling: Math.max(0.05, 1 - x.adsTime / 0.5),
+    });
+    const a = st(d), b = cur ? st(cur) : null;
+    void r;
+    return `<div class="stats">${Object.entries(a).map(([k, v]) => `<span>${k}</span><div class="bar"><i style="width:${Math.round(v * 100)}%"></i>${b ? `<u style="left:${Math.round((b as any)[k] * 100)}%"></u>` : ''}</div>`).join('')}</div>`;
+  }
+
+  // ---------------------------------------------------------------- minimap
   private drawMinimap(me: Player, yaw: number) {
-    const g = this.mmCtx, W = 232, sim = this.sim;
-    const scale = me.phase === Phase.Plane || me.phase === Phase.Freefall || me.phase === Phase.Chute ? 0.22 : 0.9; // px per metre
+    const g = this.mmCtx, W = this.mm.width;
+    const air = me.phase === Phase.Plane || me.phase === Phase.Freefall || me.phase === Phase.Chute;
+    const scale = (air ? 0.2 : 0.75) * (W / 240); // px per metre (≈160 m radius on foot)
     const T = this.tac, k = T.width / MAP_SIZE;
     g.save();
-    g.fillStyle = '#1a1c1d'; g.fillRect(0, 0, W, W);
+    g.fillStyle = '#23272a'; g.fillRect(0, 0, W, W);
     g.translate(W / 2, W / 2); g.rotate(yaw); g.scale(scale, scale); g.translate(-me.x, -me.z);
+    g.filter = 'saturate(0.6) brightness(0.95)';
     g.drawImage(T, 0, 0, T.width, T.height, 0, 0, T.width / k, T.height / k);
-    this.drawOverlays(g, me, 1 / scale);
+    g.filter = 'none';
+    this.drawOverlays(g, me, 1 / scale, true);
     g.restore();
-    // player arrow (always up)
-    g.fillStyle = '#f6c343'; g.beginPath(); g.moveTo(W / 2, W / 2 - 8); g.lineTo(W / 2 + 6, W / 2 + 6); g.lineTo(W / 2, W / 2 + 3); g.lineTo(W / 2 - 6, W / 2 + 6); g.closePath(); g.fill();
-    void sim;
+    // own chevron (always up)
+    g.fillStyle = '#f6b03a'; g.strokeStyle = '#fff'; g.lineWidth = 2;
+    g.beginPath(); g.moveTo(W / 2, W / 2 - 11); g.lineTo(W / 2 + 8, W / 2 + 8); g.lineTo(W / 2, W / 2 + 3); g.lineTo(W / 2 - 8, W / 2 + 8); g.closePath(); g.fill(); g.stroke();
   }
 
   /** Circles, squad, UAV, plane path, markers — in world coordinates on a transformed context. */
-  private drawOverlays(g: CanvasRenderingContext2D, me: Player, px: number) {
+  private drawOverlays(g: CanvasRenderingContext2D, me: Player, px: number, mini = false) {
     const sim = this.sim, c = sim.circle;
-    // gas outside the current circle
     g.save();
-    g.beginPath(); g.rect(-2000, -2000, MAP_SIZE + 4000, MAP_SIZE + 4000); g.arc(c.cx, c.cz, Math.max(0, c.r), 0, Math.PI * 2, true);
-    g.fillStyle = 'rgba(230,120,30,0.35)'; g.fill('evenodd');
+    g.beginPath(); g.rect(-3000, -3000, MAP_SIZE + 6000, MAP_SIZE + 6000); g.arc(c.cx, c.cz, Math.max(0, c.r), 0, Math.PI * 2, true);
+    g.fillStyle = 'rgba(220,50,40,0.33)'; g.fill('evenodd');
     g.restore();
-    g.lineWidth = 2 * px; g.strokeStyle = '#f39a3a'; g.beginPath(); g.arc(c.cx, c.cz, Math.max(0, c.r), 0, Math.PI * 2); g.stroke();
-    if (!c.done) { g.strokeStyle = '#ffffff'; g.lineWidth = 2 * px; g.beginPath(); g.arc(c.nx, c.nz, c.nr, 0, Math.PI * 2); g.stroke(); }
+    g.lineWidth = 2 * px; g.strokeStyle = 'rgba(255,90,70,0.9)'; g.beginPath(); g.arc(c.cx, c.cz, Math.max(0, c.r), 0, Math.PI * 2); g.stroke();
+    if (!c.done && !sim.inWarmup) {
+      g.strokeStyle = '#ffffff'; g.lineWidth = 2 * px; g.setLineDash([10 * px, 6 * px]); g.beginPath(); g.arc(c.nx, c.nz, c.nr, 0, Math.PI * 2); g.stroke(); g.setLineDash([]);
+      // line toward the safe zone when outside it
+      if (Math.hypot(me.x - c.nx, me.z - c.nz) > c.nr) { const a = Math.atan2(c.nz - me.z, c.nx - me.x), d = Math.hypot(me.x - c.nx, me.z - c.nz) - c.nr; g.strokeStyle = 'rgba(255,255,255,0.85)'; g.lineWidth = 2 * px; g.beginPath(); g.moveTo(me.x, me.z); g.lineTo(me.x + Math.cos(a) * d, me.z + Math.sin(a) * d); g.stroke(); }
+    }
     if (sim.plane.active) {
-      g.setLineDash([12 * px, 8 * px]); g.strokeStyle = 'rgba(255,255,255,0.8)'; g.lineWidth = 2 * px;
+      g.setLineDash([12 * px, 8 * px]); g.strokeStyle = 'rgba(255,255,255,0.85)'; g.lineWidth = 2 * px;
       const pl = sim.plane; g.beginPath(); g.moveTo(pl.sx, pl.sz); g.lineTo(pl.sx + pl.dx * pl.dur * 62, pl.sz + pl.dz * pl.dur * 62); g.stroke(); g.setLineDash([]);
       g.fillStyle = '#fff'; g.beginPath(); g.arc(pl.x, pl.z, 6 * px, 0, Math.PI * 2); g.fill();
     }
-    // UAV: enemies within range
+    const icon = (x: number, z: number, color: string, shape: 'cart' | 'dot' | 'sq' | 'diamond', size = 5) => {
+      g.fillStyle = color;
+      if (shape === 'dot') { g.beginPath(); g.arc(x, z, size * px, 0, Math.PI * 2); g.fill(); }
+      else if (shape === 'sq') g.fillRect(x - size * px, z - size * px, size * 2 * px, size * 2 * px);
+      else if (shape === 'diamond') { g.beginPath(); g.moveTo(x, z - size * px); g.lineTo(x + size * px, z); g.lineTo(x, z + size * px); g.lineTo(x - size * px, z); g.closePath(); g.fill(); }
+      else { g.strokeStyle = color; g.lineWidth = 1.6 * px; g.beginPath(); g.moveTo(x - size * px, z - size * px); g.lineTo(x - size * 0.6 * px, z + size * 0.4 * px); g.lineTo(x + size * px, z + size * 0.4 * px); g.lineTo(x + size * 1.1 * px, z - size * 0.5 * px); g.stroke(); g.beginPath(); g.arc(x - size * 0.4 * px, z + size * px, size * 0.3 * px, 0, 7); g.arc(x + size * 0.7 * px, z + size * px, size * 0.3 * px, 0, 7); g.fill(); }
+    };
+    for (const b of sim.buyStations) icon(b.x, b.z, '#f39a2a', 'cart', 6);
+    for (const k of sim.contracts) if (!k.taken) icon(k.x, k.z, k.kind === 'bounty' ? '#ff6a4a' : k.kind === 'recon' ? '#f6c343' : '#6ab0ff', 'diamond', 5);
+    if (mini) for (const v of sim.vehicles) if (v.alive && Math.hypot(v.x - me.x, v.z - me.z) < 400) icon(v.x, v.z, 'rgba(255,255,255,0.8)', 'sq', 3);
+    for (const cr of sim.crates) if (cr.squad === me.squad) icon(cr.x, cr.z, '#ff6fb5', 'sq', 5);
     const uav = sim.squadUav.get(me.squad);
-    if (uav && uav.until > sim.time) {
-      g.fillStyle = '#ff3a2a';
-      for (const p of sim.players) if (p.alive && p.squad !== me.squad && p.phase === Phase.Alive && Math.hypot(p.x - uav.x, p.z - uav.z) < 450) { g.beginPath(); g.arc(p.x, p.z, 4 * px, 0, Math.PI * 2); g.fill(); }
-    }
-    // shooters without suppressors show on the minimap briefly (red dots)
-    g.fillStyle = 'rgba(255,60,40,0.9)';
-    for (const p of sim.players) if (p.alive && p.squad !== me.squad && sim.time - p.lastShot < 1.2 && Math.hypot(p.x - me.x, p.z - me.z) < 160) { g.beginPath(); g.arc(p.x, p.z, 3.5 * px, 0, Math.PI * 2); g.fill(); }
-    // bounty target
+    if (uav && uav.until > sim.time) for (const p of sim.players) if (p.alive && p.squad !== me.squad && p.phase === Phase.Alive && Math.hypot(p.x - uav.x, p.z - uav.z) < 450) icon(p.x, p.z, '#ff3a2a', 'dot', 4);
+    for (const p of sim.players) if (p.alive && p.squad !== me.squad && sim.time - p.lastShot < 1.2 && Math.hypot(p.x - me.x, p.z - me.z) < 160) icon(p.x, p.z, 'rgba(255,60,40,0.95)', 'dot', 3.5);
     const ac = sim.active.find((a) => a.squad === me.squad);
     if (ac?.kind === 'bounty') { const t = sim.players[ac.target!]; g.strokeStyle = '#ff4a3a'; g.lineWidth = 2 * px; g.beginPath(); g.arc(t.x + Math.sin(sim.time * 0.3) * 40, t.z + Math.cos(sim.time * 0.3) * 40, 90, 0, Math.PI * 2); g.stroke(); }
-    if (ac?.kind === 'recon') { g.fillStyle = '#f6c343'; g.fillRect(ac.zx! - 6 * px, ac.zz! - 6 * px, 12 * px, 12 * px); }
-    // contracts & buy stations icons
-    for (const b of sim.buyStations) { g.fillStyle = '#3ad060'; g.fillRect(b.x - 4 * px, b.z - 4 * px, 8 * px, 8 * px); }
-    for (const k of sim.contracts) if (!k.taken) { g.fillStyle = k.kind === 'bounty' ? '#ff6a4a' : k.kind === 'recon' ? '#f6c343' : '#6ab0ff'; g.beginPath(); g.arc(k.x, k.z, 3.5 * px, 0, Math.PI * 2); g.fill(); }
-    // squad
-    for (const p of sim.players) if (p.squad === me.squad && p.alive && p.id !== me.id && p.phase !== Phase.GulagWait && p.phase !== Phase.Gulag) {
-      g.fillStyle = p.phase === Phase.Downed ? '#ff4a3a' : '#5aa8ff';
-      g.save(); g.translate(p.x, p.z); g.rotate(-p.yaw); g.beginPath(); g.moveTo(0, -8 * px); g.lineTo(6 * px, 6 * px); g.lineTo(-6 * px, 6 * px); g.closePath(); g.fill(); g.restore();
-    }
+    if (ac?.kind === 'recon') icon(ac.zx!, ac.zz!, '#f6c343', 'sq', 6);
+    const mates = sim.players.filter((p) => p.squad === me.squad && p.id !== me.id);
+    mates.forEach((p, i) => {
+      if (!p.alive || p.phase === Phase.GulagWait || p.phase === Phase.Gulag) return;
+      g.fillStyle = p.phase === Phase.Downed ? '#ff4a3a' : SQUAD_COLORS[i + 1];
+      g.save(); g.translate(p.x, p.z); g.rotate(-p.yaw); g.beginPath(); g.moveTo(0, -9 * px); g.lineTo(7 * px, 7 * px); g.lineTo(-7 * px, 7 * px); g.closePath(); g.fill(); g.restore();
+    });
     for (const pg of this.pings) { g.strokeStyle = '#f6c343'; g.lineWidth = 2 * px; g.beginPath(); g.moveTo(pg.x, pg.z - 8 * px); g.lineTo(pg.x + 8 * px, pg.z); g.lineTo(pg.x, pg.z + 8 * px); g.lineTo(pg.x - 8 * px, pg.z); g.closePath(); g.stroke(); }
   }
 
@@ -268,10 +393,9 @@ export class Hud {
     g.drawImage(this.tac, 0, 0, W, W);
     g.save(); g.scale(s, s);
     this.drawOverlays(g, me, 1 / s);
-    g.fillStyle = '#f6c343'; g.save(); g.translate(me.x, me.z); g.rotate(-me.yaw); g.beginPath(); g.moveTo(0, -14 / s); g.lineTo(10 / s, 10 / s); g.lineTo(-10 / s, 10 / s); g.closePath(); g.fill(); g.restore();
+    g.fillStyle = '#f6b03a'; g.save(); g.translate(me.x, me.z); g.rotate(-me.yaw); g.beginPath(); g.moveTo(0, -14 / s); g.lineTo(10 / s, 10 / s); g.lineTo(-10 / s, 10 / s); g.closePath(); g.fill(); g.restore();
     g.restore();
-    // grid A-J / 0-9 like the in-game tac map (one cell = 375 m)
-    g.strokeStyle = 'rgba(255,255,255,0.12)'; g.lineWidth = 1; g.fillStyle = 'rgba(255,255,255,0.55)'; g.font = 'bold 14px sans-serif';
+    g.strokeStyle = 'rgba(255,255,255,0.12)'; g.lineWidth = 1; g.fillStyle = 'rgba(255,255,255,0.55)'; g.font = '600 15px Rajdhani, sans-serif';
     // grid registered to the 2020 tac map: column B starts at x=85 m, row 1 at z=118 m, cells 381 m
     const cell = 381 * s, ox = (85 - 381) * s, oz = (118 - 381) * s;
     for (let i = 0; i < 11; i++) {
@@ -279,21 +403,34 @@ export class Hud {
       g.beginPath(); g.moveTo(x, 0); g.lineTo(x, W); g.stroke(); g.beginPath(); g.moveTo(0, z); g.lineTo(W, z); g.stroke();
       if (i < 10) { g.fillText('ABCDEFGHIJ'[i], x + cell / 2 - 5, 16); g.fillText(String(i), 4, z + cell / 2 + 5); }
     }
-    g.font = 'bold 15px sans-serif'; g.textAlign = 'center';
+    g.font = '700 16px Rajdhani, sans-serif'; g.textAlign = 'center';
     for (const p of POIS) if (p.tier === 'major') { g.fillStyle = 'rgba(0,0,0,0.55)'; const tw = g.measureText(p.name).width; g.fillRect(p.x * s - tw / 2 - 5, p.z * s - 12, tw + 10, 20); g.fillStyle = '#fff'; g.fillText(p.name, p.x * s, p.z * s + 3); }
     g.textAlign = 'left';
   }
 
   // ---------------------------------------------------------------- menus
-  openBuy(onBuy: (item: keyof typeof PRICES, arg?: number) => string | null, onClose: () => void) {
+  openBuy(onBuy: (item: BuyId, arg?: number) => string | null, onClose: () => void) {
     this.closePanel();
     const me = this.sim.players[this.localId];
-    const p = el('div', 'panel');
-    const items: [keyof typeof PRICES, string][] = [['plates', 'Armor Plates (refill)'], ['selfRevive', 'Self-Revive Kit'], ['gasMask', 'Gas Mask'], ['uav', 'UAV'], ['cluster', 'Cluster Strike'], ['airstrike', 'Precision Airstrike'], ['munitions', 'Munitions Box (refill ammo)'], ['loadout', 'Loadout Drop']];
+    const p = el('div', 'buy');
     const render = (err = '') => {
       const dead = this.sim.players.filter((q) => q.squad === me.squad && q.id !== me.id && q.phase === Phase.Dead);
-      p.innerHTML = `<h3>Buy Station</h3><div class="cash">$${me.cash.toLocaleString()}</div><div class="grid">${items.map(([k, n]) => `<div class="it ${me.cash < PRICES[k] ? 'no' : ''}" data-k="${k}">${n}<em>$${PRICES[k].toLocaleString()}</em></div>`).join('')}${dead.map((q) => `<div class="it ${me.cash < PRICES.buyback ? 'no' : ''}" data-k="buyback" data-a="${q.id}">Buyback ${q.name}<em>$${PRICES.buyback.toLocaleString()}</em></div>`).join('')}</div><div class="err">${err}</div><div class="close">Esc / F to close</div>`;
-      p.querySelectorAll('.it').forEach((n) => n.addEventListener('click', () => { const k = (n as HTMLElement).dataset.k as keyof typeof PRICES; const a = (n as HTMLElement).dataset.a; const e = onBuy(k, a ? +a : undefined); render(e ?? ''); }));
+      const cats = ['Equipment', 'Killstreaks', 'Field Upgrades', 'Squad'];
+      let body = '';
+      for (const cat of cats) {
+        body += `<div class="bcat">${cat}</div><div class="bgrid">`;
+        for (const b of BUY_ITEMS.filter((x) => x.cat === cat)) {
+          if (b.id === 'buyback') {
+            if (!dead.length) body += `<div class="bit no"><div class="bic">${ICON.buyback}</div><div class="bn">Squad Buyback</div><div class="bd">No teammates to buy back</div><div class="bp">$${b.price.toLocaleString()}</div></div>`;
+            for (const q of dead) body += `<div class="bit ${me.cash < b.price ? 'no' : ''}" data-k="buyback" data-a="${q.id}"><div class="bic">${ICON.buyback}</div><div class="bn">Buyback ${q.name}</div><div class="bd">${b.desc}</div><div class="bp">$${b.price.toLocaleString()}</div></div>`;
+            continue;
+          }
+          body += `<div class="bit ${me.cash < b.price ? 'no' : ''}" data-k="${b.id}"><div class="bic">${ICON[b.icon]}</div><div class="bn">${b.name}</div><div class="bd">${b.desc}</div><div class="bp">$${b.price.toLocaleString()}</div></div>`;
+        }
+        body += '</div>';
+      }
+      p.innerHTML = `<div class="bbox"><div class="bhead"><span>${ICON.cart} BUY STATION</span><span class="bcash">$${me.cash.toLocaleString()}</span></div>${body}<div class="berr">${err}</div><div class="bfoot">${this.k('interact')} / Esc to close</div></div>`;
+      p.querySelectorAll<HTMLElement>('.bit[data-k]').forEach((n) => n.onclick = () => { const e = onBuy(n.dataset.k as BuyId, n.dataset.a ? +n.dataset.a : undefined); render(e ?? ''); });
     };
     render();
     this.panel = p; this.root.appendChild(p);
@@ -301,11 +438,11 @@ export class Hud {
   }
   openLoadout(onPick: (i: number) => void) {
     this.closePanel();
-    const p = el('div', 'panel');
-    p.innerHTML = `<h3>Loadout Drop</h3><div class="cash">Choose a custom class (all legendary blueprints)</div><div class="grid">${LOADOUTS.map((l, i) => `<div class="it" data-i="${i}">${l.name}<em>${LETHAL_NAMES[l.lethal]}</em></div>`).join('')}</div>`;
-    p.querySelectorAll('.it').forEach((n) => n.addEventListener('click', () => { onPick(+(n as HTMLElement).dataset.i!); this.closePanel(); }));
+    const p = el('div', 'buy');
+    p.innerHTML = `<div class="bbox"><div class="bhead"><span>${ICON.loadout} LOADOUT DROP</span><span class="bcash">Choose a custom class</span></div><div class="bgrid">${LOADOUTS.map((l, i) => `<div class="bit" data-i="${i}"><div class="bic lo">${sil(l.guns[0], 5)}</div><div class="bn">${l.name}</div><div class="bd">${WEAPON[l.guns[0]].name} + ${WEAPON[l.guns[1]].name} · ${LETHAL_NAMES[l.lethal]} · ${TACTICAL_NAMES[l.tactical]}</div></div>`).join('')}</div></div>`;
+    p.querySelectorAll<HTMLElement>('.bit').forEach((n) => n.onclick = () => { onPick(+n.dataset.i!); this.closePanel(); });
     this.panel = p; this.root.appendChild(p);
   }
   closePanel() { if (this.panel) { const cb = (this.panel as any).onClose; this.panel.remove(); this.panel = null; cb?.(); } }
 }
-export { RARITY_NAMES };
+export { RARITY_NAMES, FIELD_UPGRADE_NAMES };
