@@ -35,6 +35,7 @@ async function boot() {
     if (k === 'quality') sm.setQuality(settings.quality);
     if (k === 'renderScale') sm.setRenderScale(settings.renderScale);
     if (k === 'volume' || k === 'sfx' || k === 'ui') audio.setVolume(settings.volume, settings.sfx, settings.ui);
+    if (k === 'announcer') audio.voiceOn = settings.announcer;
     if (k === 'foliage') sm.setFoliage(settings.foliage);
   };
   const menu = document.createElement('div'); menu.className = 'menu';
@@ -48,7 +49,7 @@ async function boot() {
     ui.appendChild(menu);
   };
   const start = () => {
-    audio.init(); audio.setVolume(settings.volume, settings.sfx, settings.ui);
+    audio.init(); audio.setVolume(settings.volume, settings.sfx, settings.ui); audio.voiceOn = settings.announcer;
     menu.remove();
     match = new Match(sm, world, input, tac, ui, settings, (Date.now() & 0xffff) + 1);
     match.onSettingChange = applySetting;

@@ -51,7 +51,7 @@ export interface Settings {
   fov: number; adsFovAffected: boolean;
   volume: number; sfx: number; ui: number;
   quality: 'low' | 'medium' | 'high' | 'ultra';
-  renderScale: number; foliage: number; showFps: boolean; hitmarkerSounds: boolean;
+  renderScale: number; foliage: number; showFps: boolean; hitmarkerSounds: boolean; announcer: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -67,7 +67,7 @@ export const DEFAULT_SETTINGS: Settings = {
   sens: 1, adsSens: 1, invertY: false,
   fov: 80, adsFovAffected: true,
   volume: 0.7, sfx: 1, ui: 0.8,
-  quality: 'high', renderScale: 1, foliage: 1, showFps: false, hitmarkerSounds: true,
+  quality: 'high', renderScale: 1, foliage: 1, showFps: false, hitmarkerSounds: true, announcer: true,
 };
 
 const KEY = 'vd-settings-v2';

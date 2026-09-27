@@ -49,7 +49,8 @@ export class SettingsMenu {
       body = this.row('Master volume', this.range('volume', 0, 1, 0.01, (v) => Math.round(v * 100) + '%')) +
         this.row('Effects volume', this.range('sfx', 0, 1, 0.01, (v) => Math.round(v * 100) + '%')) +
         this.row('Interface volume', this.range('ui', 0, 1, 0.01, (v) => Math.round(v * 100) + '%')) +
-        this.row('Hitmarker sounds', this.check('hitmarkerSounds'));
+        this.row('Hitmarker sounds', this.check('hitmarkerSounds')) +
+        this.row('Announcer voice', this.check('announcer'), 'radio call-outs ("UAV online", "Welcome to the Gulag")');
     }
     this.el.innerHTML = `<div class="sbox"><div class="stabs">${(['controls', 'binds', 'graphics', 'audio'] as Tab[]).map((x) => `<button data-tab="${x}" class="${x === t ? 'on' : ''}">${{ controls: 'Controls', binds: 'Key bindings', graphics: 'Graphics', audio: 'Audio' }[x]}</button>`).join('')}<button class="sclose">Back ✕</button></div><div class="sbody">${body}</div></div>`;
     this.wire();

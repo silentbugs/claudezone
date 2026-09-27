@@ -44,6 +44,8 @@ export class Match {
   onEnd: (won: boolean, placement: number, me: Player) => void = () => {};
   private pauseEl: HTMLElement | null = null;
   private tpDist = 0;
+  private reloadCue: { at: number; bolt: number } | null = null;
+  private surfCache = new Map<number, string>();
   private tpBlend = 0; private eye = 1.62; private eyeFor = -1; private roll = 0;
   /** Dev/test: pin the camera (position + look target) regardless of phase. */
   debugCam: { pos: [number, number, number]; target: [number, number, number] } | null = null;
@@ -71,7 +73,7 @@ export class Match {
   dispose() {
     this.sm.scene.remove(this.chars.group); this.sm.scene.remove(this.fx.group); this.sm.scene.remove(this.vehMeshes.group); this.sm.scene.remove(this.loot.group);
     this.hud.root.remove(); this.pauseEl?.remove(); this.fpsEl.remove(); this.closeSettings(); this.input.onUnlock = () => {};
-    audio.loop('engine', 0); audio.loop('wind', 0); audio.loop('gas', 0); audio.loop('chute', 0);
+    audio.stopLoops();
   }
 
   get me() { return this.sim.players[0]; }
@@ -149,34 +151,51 @@ export class Match {
     switch (e.t) {
       case 'shot': {
         const def = WEAPON[e.w];
-        const snd = def.cls === 'sniper' ? 'sniper' : def.cls === 'marksman' ? 'marksman' : def.cls === 'shotgun' ? 'shotgun' : def.cls === 'pistol' ? 'pistol' : def.cls === 'smg' ? 'smg' : def.cls === 'lmg' ? 'lmg' : def.cls === 'launcher' ? 'rocket' : 'ar';
-        if (e.p === 0 || e.p === this.spectate) { audio.play(snd, { vol: 0.8 }); if (e.p === this.viewId()) this.vm.fire(); }
-        else { const dist = d(e.x, e.y, e.z); if (dist < 220) audio.play(snd, { x: e.x, y: e.y, z: e.z, range: 120, vol: 1.1 }); else audio.play(def.cls === 'sniper' ? 'distantSniper' : 'distant', { x: e.x, y: e.y, z: e.z, range: 500, vol: 0.9 }); }
+        if (e.p === this.viewId()) { audio.gunshot(def.cls, null); this.vm.fire(); }
+        else audio.gunshot(def.cls, { x: e.x, y: e.y, z: e.z });
+        if (def.bolt && e.p === 0) setTimeout(() => audio.play('bolt', { vol: 0.5 }), 350);
+        if (def.pump && e.p === 0) setTimeout(() => audio.play('bolt', { vol: 0.6, rate: 0.8 }), 260);
         break;
       }
-      case 'hit':
-        if (e.attacker === 0) audio.play(e.kill || e.down ? 'kill' : e.armorBroke ? 'armorBreak' : e.head ? 'headshot' : e.armorHit ? 'hitArmor' : 'hit', { vol: 0.7 });
-        if (e.victim === 0) { audio.play(e.armorBroke ? 'armorBreak' : 'bodyHit', { vol: 0.6 }); }
+      case 'hit': {
+        const hs = this.settings.hitmarkerSounds;
+        if (e.attacker === 0 && hs) {
+          audio.play(e.kill ? 'kill' : e.down ? 'down' : e.armorBroke ? 'armorBreak' : e.armorHit ? 'hitArmor' : e.head ? 'headshot' : 'hit', { vol: e.armorBroke ? 0.95 : 0.7 });
+        }
+        if (e.victim === 0) { audio.play(e.armorBroke ? 'selfArmorBreak' : 'bodyHit', { vol: 0.7 }); }
         break;
-      case 'impact': if (d(e.x, e.y, e.z) < 30) audio.play(e.mat === 3 || e.mat === 9 ? 'impactMetal' : 'impact', { x: e.x, y: e.y, z: e.z, range: 12, vol: 0.5 }); break;
-      case 'explosion': if (e.kind !== 'smoke') audio.play('explosion', { x: e.x, y: e.y, z: e.z, range: 150, vol: e.kind === 'airstrike' ? 1.4 : 1 }); break;
-      case 'step': if (e.p !== 0) { if (d(e.x, e.y, e.z) < 30) audio.play('step', { x: e.x, y: e.y, z: e.z, range: 6, vol: sim.players[e.p].sprinting ? 0.7 : 0.4 }); } else audio.play('step', { vol: 0.12 }); break;
-      case 'plate': if (e.p === 0) audio.play('plate', { vol: 0.6 }); break;
-      case 'reload': if (e.p === 0) audio.play(e.w === 'swap' ? 'swap' : 'reload', { vol: 0.5 }); break;
-      case 'pickup': if (e.p === 0) audio.play(e.kind === 3 ? 'cash' : 'pickup', { vol: 0.5 }); break;
+      }
+      case 'impact': if (d(e.x, e.y, e.z) < 30) audio.play(e.water ? 'impactWater' : e.mat === 3 || e.mat === 9 ? 'impactMetal' : e.mat === 4 ? 'impactWood' : e.mat === 5 ? 'impactGlass' : 'impact', { x: e.x, y: e.y, z: e.z, range: 10, vol: 0.45, throttle: 0.03 }); break;
+      case 'explosion': if (e.kind === 'smoke' || e.kind === 'flash' || e.kind === 'stun') { audio.play('impact', { x: e.x, y: e.y, z: e.z, range: 30, vol: 1 }); break; } audio.play(d(e.x, e.y, e.z) > 250 ? 'explosionFar' : 'explosion', { x: e.x, y: e.y, z: e.z, range: 160, vol: e.kind === 'airstrike' ? 1.4 : 1, delay: true }); break;
+      case 'step': {
+        if (e.p !== 0 && d(e.x, e.y, e.z) > 40) break;
+        const surf = this.surfaceAt(e.x, e.y, e.z);
+        const q = sim.players[e.p];
+        audio.play(('step_' + surf) as any, e.p === 0 ? { vol: 0.16 } : { x: e.x, y: e.y, z: e.z, range: 9, vol: q.sprinting ? 1.0 : 0.6 });
+        break;
+      }
+      case 'plate': if (e.p === 0 && !e.done) audio.play('plate', { vol: 0.65 }); else if (e.p !== 0 && !e.done && d(sim.players[e.p].x, sim.players[e.p].y, sim.players[e.p].z) < 20) { const q = sim.players[e.p]; audio.play('plate', { x: q.x, y: q.y + 1, z: q.z, range: 6, vol: 0.5 }); } break;
+      case 'reload': if (e.p === 0) { if (e.w === 'swap') audio.play('swap', { vol: 0.5 }); else { audio.play('magOut', { vol: 0.55 }); const def = WEAPON[e.w]; this.reloadCue = { at: this.sim.time + (def?.reload ?? 1.5) * 0.7, bolt: this.sim.time + (def?.reload ?? 1.5) * 0.92 }; } } break;
+      case 'pickup': if (e.p === 0) audio.play(e.kind === 3 ? 'cash' : 'pickup', { vol: 0.55 }); break;
       case 'chest': if (d(e.x, e.y, e.z) < 40) audio.play('crate', { x: e.x, y: e.y, z: e.z, range: 12 }); break;
-      case 'jump': if (e.p === 0) audio.play('jump', { vol: 0.3 }); break;
-      case 'land': if (e.p === 0) { audio.play('land', { vol: 0.5 }); this.landDip = e.hard ? 0.35 : 0.15; } break;
-      case 'slide': if (e.p === 0) audio.play('slide', { vol: 0.4 }); break;
-      case 'chute': if (e.p === 0) audio.play('chute', { vol: 0.6 }); break;
-      case 'whiz': audio.play('whiz', { x: e.x, y: e.y, z: e.z, range: 4, vol: 0.5 }); break;
+      case 'jump': if (e.p === 0) audio.play('jump', { vol: 0.35 }); break;
+      case 'land': if (e.p === 0) { audio.play('land', { vol: e.hard ? 0.9 : 0.5 }); this.landDip = e.hard ? 0.35 : 0.15; } break;
+      case 'slide': if (e.p === 0) audio.play('slide', { vol: 0.5 }); else { const q = sim.players[e.p]; if (d(q.x, q.y, q.z) < 25) audio.play('slide', { x: q.x, y: q.y, z: q.z, range: 8, vol: 0.6 }); } break;
+      case 'chute': if (e.p === 0) audio.play(me.phase === Phase.Chute ? 'chute' : 'chuteCut', { vol: 0.8 }); break;
+      case 'whiz': audio.play('whiz', { x: e.x, y: e.y, z: e.z, range: 4, vol: 0.6, throttle: 0.05 }); break;
       case 'dryfire': if (e.p === 0) audio.play('dry', { vol: 0.5 }); break;
       case 'down': if (e.victim === 0) audio.play('downed', { vol: 0.8 }); break;
       case 'revive': if (e.p === 0) audio.play('revive', { vol: 0.6 }); break;
-      case 'buy': if (e.p === 0) audio.play('uiBuy', { vol: 0.5 }); break;
-      case 'uav': if (e.squad === me.squad) audio.play('beep', { vol: 0.5 }); break;
-      case 'gas': if (e.p === 0) audio.play('gasTick', { vol: 0.35 }); break;
-      case 'throw': if (e.p === 0) audio.play('jump', { vol: 0.25 }); break;
+      case 'buy': if (e.p === 0) audio.play('uiBuy', { ui: true, vol: 0.6 }); if (sim.players[e.p].squad === me.squad) { if (e.item === 'uav') {} else if (e.item === 'loadout') audio.say('Loadout drop inbound.'); } break;
+      case 'uav': audio.say(e.squad === me.squad ? 'UAV online.' : 'Enemy UAV overhead.'); break;
+      case 'gas': if (e.p === 0 && Math.random() < 0.35) audio.play('cough', { vol: 0.55, throttle: 1.2 }); break;
+      case 'throw': if (e.p === 0) { audio.play('pin', { vol: 0.4 }); audio.play('throw', { vol: 0.5 }); } break;
+      case 'melee': if (e.p === 0) audio.play('melee', { vol: 0.6 }); break;
+      case 'marker': if (e.squad === me.squad) audio.say(e.kind === 'loadout' ? 'Loadout drop inbound.' : e.kind === 'cluster' ? 'Cluster strike inbound.' : 'Precision airstrike inbound.'); break;
+      case 'circle': if (e.closing) audio.play('stinger', { ui: true, vol: 0.5 }); break;
+      case 'gulag': if (e.p === 0 && e.msg === 'enter') audio.say('Welcome to the Gulag.'); if (e.p === 0 && e.msg === 'overtime') audio.play('flag', { ui: true }); break;
+      case 'squadwipe': if (e.squad === me.squad) audio.say('Your squad has been eliminated.'); break;
+      case 'contract': if (e.p >= 0 && sim.players[e.p].squad === me.squad) audio.say(e.msg === 'start' ? 'Contract accepted.' : e.msg === 'done' ? 'Contract complete.' : e.msg === 'fail' ? 'Contract failed.' : 'Next target marked.'); break;
       case 'announce':
         if (e.text === '__infil__') { this.hud.showBanner('Verdansk', 'Battle Royale — Trios • 150 players'); this.camYaw = Math.atan2(-sim.plane.dx, -sim.plane.dz); this.camPitch = -0.2; audio.play('uiBuy', { vol: 0.4 }); }
         if (e.text === '__buy__' && e.squad === me.squad && me.phase === Phase.Alive && sim.interactTarget(me)?.kind === 'buy') { document.exitPointerLock?.(); this.hud.openBuy((k, a) => { const r = sim.buy(me, k, a); if (!r) audio.play('uiBuy'); return r; }, () => (document.getElementById('game') as HTMLElement).requestPointerLock?.()); }
@@ -184,6 +203,18 @@ export class Match {
         break;
     }
   }
+
+  /** Ground material under a point (for footsteps). */
+  private surfaceAt(x: number, y: number, z: number): string {
+    const col = this.sim.world.col, hit = this.hitTmp;
+    if (col.raycast(x, y + 0.4, z, 0, -1, 0, 1.2, hit, undefined, false)) {
+      if (hit.structure >= 0) return hit.mat === 3 || hit.mat === 9 ? 'metal' : hit.mat === 4 ? 'wood' : 'concrete';
+      const w = this.sim.world, k = Math.round(z / w.hf.step) * w.hf.res + Math.round(x / w.hf.step);
+      return w.extra.road[k] > 0.4 || w.extra.paved[k] > 0.4 ? 'concrete' : 'dirt';
+    }
+    return 'dirt';
+  }
+  private hitTmp = { t: 0, nx: 0, ny: 0, nz: 0, structure: -1, part: -1, mat: 0 as any, terrain: false, water: false };
 
   private viewId() { return this.me.alive || this.me.phase === Phase.Downed ? 0 : this.spectate >= 0 ? this.spectate : 0; }
 
@@ -224,7 +255,8 @@ export class Match {
       if (k > 0.01) { const q0 = cam.quaternion.clone(); cam.lookAt(x, y + 1.4, z); cam.quaternion.copy(q0.slerp(cam.quaternion, k)); }
       const sp = Math.hypot(vp.vx, vp.vy, vp.vz);
       audio.loop('engine', Math.max(0, 0.4 - Math.hypot(sim.plane.x - x, sim.plane.z - z) / 800), 1, 800);
-      audio.loop('wind', phase === Phase.Freefall ? clamp(sp / 70, 0.2, 0.9) : 0.25, phase === Phase.Freefall ? 1 : 0.7, phase === Phase.Freefall ? 6000 : 2500);
+      audio.loop('wind', phase === Phase.Freefall ? clamp(sp / 70, 0.25, 0.95) : 0.2, phase === Phase.Freefall ? 1 + sp / 200 : 0.7, phase === Phase.Freefall ? 5000 : 1800);
+      audio.loop('chute', phase === Phase.Chute ? 0.35 : 0);
     } else if (vehicleOf(sim, vp) && (vp as any).seat === 0) {
       const v = vehicleOf(sim, vp)!, d = VEHICLES[v.type];
       const dist = d.len * 1.4 + 5, cp = Math.max(-0.6, Math.min(0.9, this.camPitch));
@@ -232,7 +264,8 @@ export class Match {
       cam.position.set(vx + Math.sin(this.camYaw) * Math.cos(cp) * dist, vy + d.hgt + 1.5 - Math.sin(cp) * dist, vz + Math.cos(this.camYaw) * Math.cos(cp) * dist);
       cam.lookAt(vx, vy + d.hgt * 0.8, vz);
       this.chars.hidden = -1;
-      audio.loop('engine', 0.25 + Math.min(0.35, v.speed / 60), 0.7 + v.speed / 40, d.air ? 1500 : 700);
+      audio.loop(d.air ? 'heli' : 'vehicle', 0.35 + Math.min(0.35, v.speed / 60), d.air ? 0.8 + v.rotor * 0.3 : 0.7 + v.speed / 30, d.air ? 3000 : 1200);
+      audio.loop(d.air ? 'vehicle' : 'heli', 0);
     } else if (this.spectate >= 0 && phase !== Phase.Gulag) {
       this.chars.hidden = -1;
       cam.position.set(x + Math.sin(yaw) * 4, y + 2.6, z + Math.cos(yaw) * 4);
@@ -250,10 +283,17 @@ export class Match {
       if (vp.slideT > 0) fov += 4;
       if (def && me.ads > 0 && (this.settings.adsFovAffected || def.scope)) fov = fov / (1 + (def.zoom - 1) * me.ads);
       if (me.tacSprint > 0) fov += 6;
-      audio.loop('wind', 0); audio.loop('engine', vehicleOf(sim, vp) ? 0.3 : 0, 0.8, 700); audio.loop('chute', 0);
+      const vv = vehicleOf(sim, vp);
+      audio.loop('wind', 0); audio.loop('engine', 0); audio.loop('chute', 0);
+      audio.loop(vv?.type === 'heli' ? 'heli' : 'vehicle', vv ? 0.3 : 0, vv ? 0.7 + vv.speed / 30 : 1, 1000);
     }
     if (this.debugCam) { cam.position.set(...this.debugCam.pos); cam.lookAt(...this.debugCam.target); this.chars.hidden = -1; }
     audio.loop('gas', sim.inGas(vp) ? 0.45 : 0, 1, 900);
+    audio.loop('tinnitus', vp.flashT > 0 || vp.stunT > 0 ? 0.2 : 0);
+    // environment: indoors if there's a roof overhead; the world muffles in gas, when downed or stunned
+    const roof = sim.world.col.ceilingAt(cam.position.x, cam.position.z, cam.position.y + 0.5, 0.2);
+    audio.setEnvironment(roof - cam.position.y < 12 && vp.phase === Phase.Alive, vp.phase === Phase.Downed ? 0.45 : sim.inGas(vp) ? (vp.hasMask ? 0.2 : 0.35) : vp.flashT > 0 || vp.stunT > 0 ? 0.6 : 0);
+    if (this.reloadCue && vp === me) { if (me.reloadT <= 0) this.reloadCue = null; else if (sim.time >= this.reloadCue.at) { audio.play('magIn', { vol: 0.55 }); this.reloadCue.at = Infinity; } else if (sim.time >= this.reloadCue.bolt) { audio.play('bolt', { vol: 0.45 }); this.reloadCue = null; } }
     if (this.sm.grade) { const u = this.sm.grade.uniforms; u.uGas.value += ((sim.inGas(vp) ? 1 : 0) - u.uGas.value) * Math.min(1, dt * 3); u.uLow.value += ((vp.phase === Phase.Downed ? 0.6 : vp.health < 35 && vp.alive ? 0.35 : 0) - u.uLow.value) * Math.min(1, dt * 4); }
     if (Math.abs(cam.fov - fov) > 0.01) { cam.fov += (fov - cam.fov) * Math.min(1, dt * 18); cam.updateProjectionMatrix(); }
     // listener
