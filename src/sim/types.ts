@@ -7,7 +7,7 @@ export interface WeaponSlot { id: string; rarity: number; mag: number }
 
 export type LethalType = 'frag' | 'semtex' | 'knife' | 'molotov' | 'c4' | 'claymore';
 export type TacticalType = 'stun' | 'flash' | 'smoke' | 'heartbeat' | 'stim';
-export type KillstreakType = 'uav' | 'cluster' | 'airstrike' | 'turret';
+export type KillstreakType = 'uav' | 'cuav' | 'cluster' | 'airstrike' | 'turret';
 export type FieldUpgrade = 'munitions' | 'armorBox';
 
 export interface Intent {
@@ -109,6 +109,7 @@ export type SimEvent =
   | { t: 'redeploy'; p: number }
   | { t: 'buy'; p: number; item: string }
   | { t: 'uav'; squad: number }
+  | { t: 'cuav'; squad: number }
   | { t: 'contract'; p: number; kind: string; msg: 'start' | 'done' | 'fail' | 'progress' }
   | { t: 'announce'; text: string; squad?: number }
   | { t: 'squadwipe'; squad: number }

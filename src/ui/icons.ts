@@ -33,6 +33,8 @@ export const ICON: Record<string, string> = {
   stim: s('<path d="M10 3h4v3h-4z" fill="#555"/><rect x="9" y="6" width="6" height="12" rx="1" fill="#c8cc9a"/><rect x="10" y="8" width="4" height="6" fill="#7a3ab0"/><path d="M11.5 18h1v4h-1z" fill="#ccc"/>'),
   rock: s('<path d="M5 15l3-7 7-2 4 6-3 7H8z" fill="#8a857c"/>'),
   // killstreaks / field upgrades
+  // counter UAV: ring drone with four rotor arms
+  cuav: s('<circle cx="12" cy="12" r="6.5" fill="none" stroke="#fff" stroke-width="1.6"/><rect x="10.6" y="5" width="2.8" height="14" rx="1" fill="#fff"/><path d="M5.5 12h13M3 3l4.5 4.5M21 3l-4.5 4.5M3 21l4.5-4.5M21 21l-4.5-4.5" stroke="#fff" stroke-width="1.4"/>'),
   uav: s('<path d="M2 12l8-2 2-7 2 7 8 2-8 2-2 7-2-7z" fill="#fff"/>'),
   cluster: s('<circle cx="7" cy="8" r="3" fill="#fff"/><circle cx="16" cy="7" r="3" fill="#fff"/><circle cx="11" cy="15" r="3" fill="#fff"/><circle cx="18" cy="16" r="2.4" fill="#fff"/>'),
   airstrike: s('<path d="M12 2l2 8 8 3-8 1-1 8-1-8-8-1 8-3z" fill="#fff"/>'),
@@ -55,4 +57,4 @@ export const ICON: Record<string, string> = {
 
 export const LETHAL_ICON: Record<string, string> = { frag: 'frag', semtex: 'semtex', knife: 'knife', molotov: 'molotov', c4: 'c4', claymore: 'claymore' };
 export const TACTICAL_ICON: Record<string, string> = { stun: 'stun', flash: 'flash', smoke: 'smoke', heartbeat: 'heartbeat', stim: 'stim' };
-export const STREAK_ICON: Record<string, string> = { uav: 'uav', cluster: 'cluster', airstrike: 'airstrike', turret: 'turret', counterUav: 'counterUav' };
+export const STREAK_ICON: Record<string, string> = { uav: 'uav', cuav: 'cuav', cluster: 'cluster', airstrike: 'airstrike', turret: 'turret', counterUav: 'counterUav' };

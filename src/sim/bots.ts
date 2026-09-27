@@ -310,6 +310,8 @@ function botShop(sim: Sim, p: Player) {
   if (p.cash >= PRICES.loadout && !p.loadoutUsed) { sim.buy(p, 'loadout'); return; }
   if (p.cash >= PRICES.plates && p.plates < 3) sim.buy(p, 'plates');
   if (p.cash >= PRICES.selfRevive && !p.selfRevive) sim.buy(p, 'selfRevive');
+  // spare cash: a UAV (or sometimes a Counter UAV / airstrike) for the next fight
+  if (!p.killstreak && p.cash >= PRICES.uav + 2000) sim.buy(p, sim.rng.pick(['uav', 'uav', 'cuav', 'cluster', 'airstrike'] as const));
 }
 
 function decide(sim: Sim, b: BotBrain, p: Player, inGulag: boolean) {
@@ -324,6 +326,12 @@ function decide(sim: Sim, b: BotBrain, p: Player, inGulag: boolean) {
     else if (sim.time - b.seenAt > 6) b.target = -1;
     // stalemate breaker
     if (b.target >= 0 && sim.time - b.engageStart > 18 && p.health + p.armor > 150 && q.health + q.armor > 150) { b.blacklist.set(q.id, sim.time + 20); b.target = -1; }
+  }
+  // killstreaks: scans as soon as a fight starts, strikes on a target that has been dug in for a while
+  if (p.killstreak && p.killstreak !== 'turret' && b.target >= 0 && !inGulag && p.phase === Phase.Alive) {
+    const q = sim.players[b.target], ks = p.killstreak;
+    if ((ks === 'uav' || ks === 'cuav') && sim.time - b.targetSince > 1.5) sim.useKillstreak(p);
+    else if ((ks === 'cluster' || ks === 'airstrike') && sim.time - b.targetSince > 8 && Math.hypot(q.x - p.x, q.z - p.z) > 45) sim.useKillstreak(p, q.x, q.z);
   }
   const c0 = sim.circle;
   const gasNow = !inGulag && Math.hypot(p.x - c0.cx, p.z - c0.cz) > c0.r - 15;

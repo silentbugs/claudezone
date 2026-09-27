@@ -1,11 +1,12 @@
 /** Buy station catalogue (Warzone BR, 2020). Prices from the launch/Season 3-4 lists. */
-export type BuyId = 'plates' | 'gasMask' | 'selfRevive' | 'uav' | 'cluster' | 'airstrike' | 'turret' | 'munitions' | 'armorBox' | 'loadout' | 'buyback';
+export type BuyId = 'plates' | 'gasMask' | 'selfRevive' | 'uav' | 'cuav' | 'cluster' | 'airstrike' | 'turret' | 'munitions' | 'armorBox' | 'loadout' | 'buyback';
 export interface BuyItem { id: BuyId; name: string; price: number; icon: string; desc: string; cat: 'Equipment' | 'Killstreaks' | 'Field Upgrades' | 'Squad' }
 export const BUY_ITEMS: BuyItem[] = [
   { id: 'plates', name: 'Armor Plate Bundle', price: 1500, icon: 'plate', cat: 'Equipment', desc: 'Fills your armor plate pouch (5 plates, 8 with a satchel).' },
   { id: 'gasMask', name: 'Gas Mask', price: 3000, icon: 'gasMask', cat: 'Equipment', desc: 'Puts itself on in the gas. 12 seconds of protection.' },
   { id: 'selfRevive', name: 'Self-Revive Kit', price: 4500, icon: 'selfRevive', cat: 'Equipment', desc: 'Get yourself back up when downed. Hold Use while downed.' },
   { id: 'uav', name: 'UAV', price: 4000, icon: 'uav', cat: 'Killstreaks', desc: 'Sweeps for enemies around you for 40 seconds. Shows them on the minimap.' },
+  { id: 'cuav', name: 'Counter UAV', price: 4500, icon: 'cuav', cat: 'Killstreaks', desc: 'A drone that scrambles all enemy minimaps near where it is deployed, and increasingly disrupts their HUD the closer they get to it. Lasts 40 seconds.' },
   { id: 'cluster', name: 'Cluster Strike', price: 3000, icon: 'cluster', cat: 'Killstreaks', desc: 'Call a carpet of cluster bombs on a location.' },
   { id: 'airstrike', name: 'Precision Airstrike', price: 3500, icon: 'airstrike', cat: 'Killstreaks', desc: 'Two jets strafe a line through the target.' },
   { id: 'turret', name: 'Shield Turret', price: 2000, icon: 'turret', cat: 'Killstreaks', desc: 'A mounted machine gun behind a ballistic shield. Deploy, then man it.' },

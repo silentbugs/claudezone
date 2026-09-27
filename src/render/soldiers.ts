@@ -21,7 +21,7 @@ interface Slot {
   actions: Map<string, THREE.AnimationAction>; cur: string; pid: number;
   bones: Record<string, THREE.Bone>; mats: THREE.MeshStandardMaterial[][];
   gun: THREE.Group; gunKey: string; grip: THREE.Vector3; guard: THREE.Vector3; pistol: boolean;
-  pitch: number; used: boolean;
+  pitch: number; used: boolean; tilt: THREE.Group; proneK: number;
 }
 
 const v1 = new THREE.Vector3(), v2 = new THREE.Vector3(), v3 = new THREE.Vector3(), v4 = new THREE.Vector3();
@@ -58,14 +58,14 @@ export class Soldiers {
         m.material = Array.isArray(m.material) ? cl : cl[0];
       }
     });
-    const root = new THREE.Group(); root.add(model);
+    const root = new THREE.Group(); const tilt = new THREE.Group(); tilt.add(model); root.add(tilt);
     const gun = new THREE.Group(); root.add(gun);
     const mixer = new THREE.AnimationMixer(model);
     const actions = new Map<string, THREE.AnimationAction>();
     for (const c of g.animations) actions.set(c.name, mixer.clipAction(c));
     root.visible = false;
     this.group.add(root);
-    return { root, model, mixer, actions, cur: '', pid: -1, bones, mats, gun, gunKey: '', grip: new THREE.Vector3(), guard: new THREE.Vector3(), pistol: false, pitch: 0, used: false };
+    return { root, model, mixer, actions, cur: '', pid: -1, bones, mats, gun, gunKey: '', grip: new THREE.Vector3(), guard: new THREE.Vector3(), pistol: false, pitch: 0, used: false, tilt, proneK: 0 };
   }
 
   update(players: Player[], alpha: number, cam: THREE.Vector3, dt: number) {
@@ -92,7 +92,7 @@ export class Soldiers {
         const c = CAMO[p.squad % CAMO.length];
         for (const m of s.mats[0]) m.color.setHex(c[0]);
         for (const m of s.mats[1]) m.color.setHex(c[1]);
-        s.pitch = p.pitch;
+        s.pitch = p.pitch; s.proneK = p.stance === Stance.Prone ? 1 : 0;
       }
       this.pose(s, p, alpha, dt);
       this.ids.add(p.id);
@@ -118,8 +118,14 @@ export class Soldiers {
     const speed = Math.hypot(p.vx, p.vz);
     const fwdV = -(p.vx * Math.sin(yaw) + p.vz * Math.cos(yaw)), sideV = p.vx * Math.cos(yaw) - p.vz * Math.sin(yaw);
     const inVeh = (p as any).vehicle !== undefined;
+    // prone: the whole body lies flat (pivoting so the player's position is mid-body); a slow walk cycle reads as a crawl
+    const prone = p.stance === Stance.Prone && !inVeh;
+    s.proneK += ((prone ? 1 : 0) - s.proneK) * Math.min(1, dt * 6);
+    const pk = s.proneK;
+    s.tilt.rotation.x = -Math.PI / 2 * pk; s.tilt.position.set(0, 0.13 * pk, 0.85 * pk);
     let clip = 'Idle';
     if (inVeh) clip = 'Driving';
+    else if (prone) clip = speed > 0.3 ? 'Walk' : 'Idle';
     else if (p.slideT > 0) clip = 'Slide_Loop';
     else if (p.swimming) clip = speed > 0.5 ? 'Swim' : 'Swim_Idle';
     else if (!p.onGround && p.mantleT <= 0) clip = 'Jump_Loop';
@@ -132,7 +138,7 @@ export class Soldiers {
     }
     this.play(s, clip);
     const a = s.actions.get(s.cur);
-    if (a) a.timeScale = NOMINAL[s.cur] ? THREE.MathUtils.clamp(speed / NOMINAL[s.cur], 0.55, 1.7) : 1;
+    if (a) a.timeScale = prone ? (speed > 0.3 ? 0.6 : 1) : NOMINAL[s.cur] ? THREE.MathUtils.clamp(speed / NOMINAL[s.cur], 0.55, 1.7) : 1;
     s.mixer.update(dt);
 
     // --- upper body: pitch the spine to the aim, hold the gun in both hands
@@ -142,7 +148,7 @@ export class Soldiers {
     s.root.updateMatrixWorld(true);
     const right = v4.set(1, 0, 0).applyQuaternion(s.root.quaternion);
     const chest = s.bones.Chest ?? s.bones.Torso;
-    if (chest && !inVeh) rotateWorld(chest, right, s.pitch * 0.45);
+    if (chest && !inVeh && pk < 0.5) rotateWorld(chest, right, s.pitch * 0.45);
     if (!armed) { s.gun.visible = false; return; }
     const key = `${w!.id}:${w!.rarity}`;
     if (key !== s.gunKey) {
@@ -160,20 +166,23 @@ export class Soldiers {
     const reload = p.reloadT > 0;
     s.gun.position.set(sprint ? 0.1 : 0.13 - p.ads * 0.06, sh - (sprint ? 0.2 : p.ads > 0.5 ? 0.06 : 0.12), sprint ? -0.24 : s.pistol ? -0.42 : -0.3 + p.ads * 0.06);
     s.gun.rotation.set(sprint ? -0.55 : s.pitch * 0.9 + (reload ? -0.35 : 0), sprint ? 0.9 : 0.03, sprint ? 0.5 : reload ? 0.4 : 0, 'YXZ');
+    if (pk > 0.5) { s.gun.position.set(0.1, 0.24, s.pistol ? -1.2 : -1.02); s.gun.rotation.set(s.pitch * 0.5, 0.02, 0, 'YXZ'); }
     s.gun.updateMatrixWorld(true);
     // arms: two-bone IK from the shoulders to the grip / handguard
     const tR = v1.copy(s.grip).applyMatrix4(s.gun.matrixWorld);
     const tL = v2.copy(s.guard).applyMatrix4(s.gun.matrixWorld);
     if (reload) tL.copy(v3.set(0, -0.12, 0.02).applyMatrix4(s.gun.matrixWorld));
     const down = v3.set(0, -1, 0);
-    ik(s.bones.UpperArmR, s.bones.LowerArmR, s.bones.WristR, tR, poleOf(s.root, 0.55, down));
-    if (p.plateT <= 0) ik(s.bones.UpperArmL, s.bones.LowerArmL, s.bones.WristL, tL, poleOf(s.root, -0.55, down));
+    // prone: elbows rest on the ground out to the sides
+    const pr = poleOf(s.root, 0.55, down), pl = poleOf(s.root, -0.55, down);
+    if (pk > 0.5) { pr.set(0.9, -0.6, 0.3).applyQuaternion(s.root.quaternion); pl.set(-0.9, -0.6, 0.3).applyQuaternion(s.root.quaternion); }
+    ik(s.bones.UpperArmR, s.bones.LowerArmR, s.bones.WristR, tR, pr);
+    if (p.plateT <= 0) ik(s.bones.UpperArmL, s.bones.LowerArmL, s.bones.WristL, tL, pl);
   }
 }
 
 function eligible(p: Player) {
   if (p.phase === Phase.Plane || p.phase === Phase.Dead || p.phase === Phase.Spectate || p.phase === Phase.Freefall || p.phase === Phase.Chute || p.phase === Phase.Downed) return false;
-  if (p.stance === Stance.Prone) return false;
   if (p.phase === Phase.GulagWait) return false;
   return true;
 }

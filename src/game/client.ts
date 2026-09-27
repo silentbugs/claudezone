@@ -194,6 +194,7 @@ export class Match {
       case 'revive': if (e.p === 0) audio.play('revive', { vol: 0.6 }); break;
       case 'buy': if (e.p === 0) audio.play('uiBuy', { ui: true, vol: 0.6 }); if (sim.players[e.p].squad === me.squad) { if (e.item === 'uav') {} else if (e.item === 'loadout') audio.say('Loadout drop inbound.'); } break;
       case 'uav': audio.say(e.squad === me.squad ? 'UAV online.' : 'Enemy UAV overhead.'); break;
+      case 'cuav': audio.say(e.squad === me.squad ? 'Counter UAV online.' : 'Enemy Counter UAV deployed.'); break;
       case 'gas': if (e.p === 0 && Math.random() < 0.35) audio.play('cough', { vol: 0.55, throttle: 1.2 }); break;
       case 'throw': if (e.p === 0) { audio.play('pin', { vol: 0.4 }); audio.play('throw', { vol: 0.5 }); } break;
       case 'melee': if (e.p === 0) audio.play('melee', { vol: 0.6 }); break;

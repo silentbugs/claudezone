@@ -131,6 +131,7 @@ export class Hud {
       case 'announce': if ((e.squad === undefined || e.squad === me.squad) && !e.text.startsWith('__')) this.showNote(e.text); break;
       case 'contract': if (this.sim.players[e.p].squad === me.squad) this.showBanner(`${e.kind} contract`, e.msg === 'start' ? 'Contract accepted' : e.msg === 'done' ? 'Contract complete' : e.msg === 'fail' ? 'Contract failed' : 'Next target marked'); break;
       case 'uav': this.showNote(e.squad === me.squad ? 'UAV online' : 'Enemy UAV overhead'); break;
+      case 'cuav': this.showNote(e.squad === me.squad ? 'Counter UAV online' : 'Enemy Counter UAV deployed'); break;
       case 'pickup': if (e.p === this.localId) this.showNote(e.label); break;
       case 'squadwipe': if (e.squad !== me.squad) this.feedLine(`<span style="color:#ff5a4a">Squad eliminated</span>`); break;
       case 'flash': if (e.p === this.localId) this.flash.style.opacity = String(Math.min(1, 0.6 + e.s)); break;
@@ -269,6 +270,7 @@ export class Hud {
     for (const cr of sim.crates) if (cr.squad === me.squad) tag(cr.x, cr.y + 2, cr.z, 'mk', `LOADOUT<div class="d">${Math.round(Math.hypot(cr.x - view.x, cr.z - view.z))}m</div>`);
     this.set('tags', this.tags, tg);
     this.drawMinimap(view, camYaw);
+    this.jam(this.sim.jamLevel(view));
     if (opts.mapOpen) this.drawFullMap(view);
     this.fullmap.style.display = opts.mapOpen ? 'flex' : 'none';
     (this.root.querySelector('.mm') as HTMLElement).style.display = view.phase === Phase.Gulag || view.phase === Phase.GulagWait ? 'none' : '';
@@ -344,6 +346,23 @@ export class Hud {
   }
 
   // ---------------------------------------------------------------- minimap
+  /** Enemy Counter UAV: static over the minimap, a shaking / flickering compass the closer you are. */
+  private jam(j: number) {
+    const on = j > 0;
+    this.compass.style.transform = on ? `translateX(${((Math.random() - 0.5) * 14 * j).toFixed(1)}px)` : '';
+    this.compass.style.opacity = on ? String(1 - j * 0.6 * Math.random()) : '';
+    this.heading.style.opacity = on && Math.random() < j * 0.5 ? '0.15' : '';
+    if (!on) return;
+    const g = this.mmCtx, W = this.mm.width;
+    g.save();
+    g.fillStyle = 'rgba(40,44,46,0.92)'; g.fillRect(0, 0, W, W);
+    const n = 900 + j * 900;
+    for (let i = 0; i < n; i++) { const v = (Math.random() * 200) | 0; g.fillStyle = `rgba(${v},${v},${v},0.7)`; g.fillRect(Math.random() * W, Math.random() * W, 2 + Math.random() * 3, 1 + Math.random() * 2); }
+    for (let y = 0; y < W; y += 4) { g.fillStyle = `rgba(0,0,0,${0.15 + Math.random() * 0.2})`; g.fillRect(0, y, W, 1); }
+    const by = Math.random() * W; g.fillStyle = 'rgba(200,210,215,0.25)'; g.fillRect(0, by, W, 6 + Math.random() * 14);
+    g.restore();
+  }
+
   private drawMinimap(me: Player, yaw: number) {
     const g = this.mmCtx, W = this.mm.width;
     const air = me.phase === Phase.Plane || me.phase === Phase.Freefall || me.phase === Phase.Chute;

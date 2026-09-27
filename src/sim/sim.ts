@@ -31,6 +31,9 @@ export interface LoadoutCrate { id: number; squad: number; x: number; y: number;
 
 const NAMES = ['Ghost', 'Price', 'Gaz', 'Nikolai', 'Farah', 'Alex', 'Mace', 'Zane', 'Krueger', 'Grinch', 'Azur', 'Bale', 'Raines', 'Otter', 'Charly', 'Wyatt', 'Talon', 'Minotaur', 'Iskra', 'Mara', 'Ronin', 'Syd', 'Domino', 'Wolf', 'Rook', 'Nomad', 'Viper', 'Hawk', 'Bishop', 'Kilo', 'Echo', 'Sierra', 'Reaper', 'Havoc', 'Blaze', 'Frost', 'Shadow', 'Spectre', 'Jackal', 'Cobra', 'Onyx', 'Banshee', 'Dagger', 'Rogue', 'Maverick', 'Striker', 'Titan', 'Ember', 'Venom', 'Warden'];
 
+/** Counter UAV jamming radius (m) */
+export const COUNTER_UAV_R = 400;
+
 export class Sim {
   rng: Rng;
   time = 0;
@@ -60,6 +63,8 @@ export class Sim {
   aliveCount = PLAYERS;
   over = false; winner = -1;
   squadUav = new Map<number, { until: number; x: number; z: number }>();
+  /** active Counter UAVs: enemies within COUNTER_UAV_R have their minimap scrambled */
+  counterUavs: { squad: number; x: number; z: number; until: number }[] = [];
   squadReveal = new Set<number>(); // squads that see the next circle early (recon)
   placementCounter = 0;
   private itemGrid = new Map<number, Item[]>();
@@ -496,6 +501,17 @@ export class Sim {
     this.pending = this.pending.filter((e) => e.delay > 0);
   }
 
+  /** 0..1 how badly an enemy Counter UAV jams this player's HUD (any >0 scrambles the minimap). */
+  jamLevel(p: Player): number {
+    let j = 0;
+    for (const c of this.counterUavs) {
+      if (c.until <= this.time || c.squad === p.squad) continue;
+      const d = Math.hypot(p.x - c.x, p.z - c.z);
+      if (d < COUNTER_UAV_R) j = Math.max(j, 0.25 + 0.75 * (1 - d / COUNTER_UAV_R));
+    }
+    return j;
+  }
+
   // ------------------------------------------------------------ killstreaks & buying
   private hitBuf: RayHit = { t: 0, nx: 0, ny: 0, nz: 0, structure: -1, part: -1, mat: Mat.Rock, terrain: false, water: false };
   aimPoint(p: Player, maxD = 600): [number, number, number] {
@@ -506,6 +522,7 @@ export class Sim {
   useKillstreak(p: Player, tx?: number, tz?: number) {
     const k = p.killstreak!; p.killstreak = null;
     if (k === 'uav') { this.squadUav.set(p.squad, { until: this.time + 40, x: p.x, z: p.z }); this.emit({ t: 'uav', squad: p.squad }); return; }
+    if (k === 'cuav') { this.counterUavs.push({ squad: p.squad, x: p.x, z: p.z, until: this.time + 40 }); this.emit({ t: 'cuav', squad: p.squad }); return; }
     if (k === 'turret') { this.deployTurret(p); return; }
     let [x, , z] = this.aimPoint(p);
     if (tx !== undefined && tz !== undefined) { x = tx; z = tz; }
@@ -521,7 +538,7 @@ export class Sim {
     if (p.cash < price) return 'Not enough cash';
     switch (item) {
       case 'plates': if (p.plates >= p.maxPlates) return 'Plates full'; p.plates = p.maxPlates; break;
-      case 'uav': case 'cluster': case 'airstrike': case 'turret': if (p.killstreak) return 'Already carrying a killstreak'; p.killstreak = item; break;
+      case 'uav': case 'cuav': case 'cluster': case 'airstrike': case 'turret': if (p.killstreak) return 'Already carrying a killstreak'; p.killstreak = item; break;
       case 'munitions': case 'armorBox': if (p.fieldUpgrade) return 'Already carrying a field upgrade'; p.fieldUpgrade = item; break;
       case 'gasMask': if (p.hasMask && p.gasMask >= GAS.maskTime) return 'Already have a gas mask'; p.hasMask = true; p.gasMask = GAS.maskTime; break;
       case 'selfRevive': if (p.selfRevive) return 'Already have a Self-Revive Kit'; p.selfRevive = true; break;
