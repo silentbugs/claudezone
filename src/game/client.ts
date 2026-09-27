@@ -162,8 +162,8 @@ export class Match {
       }
       case 'shot': {
         const def = WEAPON[e.w];
-        if (e.p === this.viewId()) { audio.gunshot(def.cls, null); this.vm.fire(); }
-        else audio.gunshot(def.cls, { x: e.x, y: e.y, z: e.z });
+        if (e.p === this.viewId()) { audio.gunshot(def.cls, null, 1, e.suppressed); this.vm.fire(); }
+        else audio.gunshot(def.cls, { x: e.x, y: e.y, z: e.z }, 1, e.suppressed, e.p);
         if (def.bolt && e.p === 0) setTimeout(() => audio.play('bolt', { vol: 0.5 }), 350);
         if (def.pump && e.p === 0) setTimeout(() => audio.play('bolt', { vol: 0.6, rate: 0.8 }), 260);
         break;

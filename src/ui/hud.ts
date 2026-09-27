@@ -412,7 +412,7 @@ export class Hud {
     for (const cr of sim.crates) if (cr.squad === me.squad) icon(cr.x, cr.z, '#ff6fb5', 'sq', 5);
     const uav = sim.squadUav.get(me.squad);
     if (uav && uav.until > sim.time) for (const p of sim.players) if (p.alive && p.squad !== me.squad && p.phase === Phase.Alive && Math.hypot(p.x - uav.x, p.z - uav.z) < 450) icon(p.x, p.z, '#ff3a2a', 'dot', 4);
-    for (const p of sim.players) if (p.alive && p.squad !== me.squad && sim.time - p.lastShot < 1.2 && Math.hypot(p.x - me.x, p.z - me.z) < 160) icon(p.x, p.z, 'rgba(255,60,40,0.95)', 'dot', 3.5);
+    for (const p of sim.players) if (p.alive && p.squad !== me.squad && sim.time - ((p as any).lastLoudShot ?? -99) < 1.2 && Math.hypot(p.x - me.x, p.z - me.z) < 160) icon(p.x, p.z, 'rgba(255,60,40,0.95)', 'dot', 3.5);
     const ac = sim.active.find((a) => a.squad === me.squad);
     if (ac?.kind === 'bounty') { const t = sim.players[ac.target!]; g.strokeStyle = '#ff4a3a'; g.lineWidth = 2 * px; g.beginPath(); g.arc(t.x + Math.sin(sim.time * 0.3) * 40, t.z + Math.cos(sim.time * 0.3) * 40, 90, 0, Math.PI * 2); g.stroke(); }
     if (ac?.kind === 'recon') icon(ac.zx!, ac.zz!, '#f6c343', 'sq', 6);

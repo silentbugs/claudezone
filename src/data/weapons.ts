@@ -204,6 +204,12 @@ const ATTACH_POOL: Record<string, string[]> = {
   laser: ['Tac Laser', '1mW Laser', '5mW Laser'],
   grip: ['Rubberized Grip Tape', 'Stippled Grip Tape'],
 };
+/** Legendary and loadout guns carry a suppressor (matches the model's attachment): quiet, and off enemy minimaps. */
+export function isSuppressed(id: string, rarity: number): boolean {
+  const c = WEAPON[id]?.cls;
+  return rarity >= 4 && c !== 'shotgun' && c !== 'launcher' && c !== 'melee';
+}
+
 /** Deterministic attachment list for a loot gun (for the item card). */
 export function attachmentsFor(id: string, rarity: number, seed = 0): string[] {
   const n = RARITY_ATTACH[rarity] ?? 0, slots = ['muzzle', 'barrel', 'optic', 'mag', 'underbarrel', 'stock', 'laser', 'grip'];

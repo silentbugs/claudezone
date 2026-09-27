@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import { GLTFLoader, GLTF } from 'three/addons/loaders/GLTFLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { clone as skClone } from 'three/addons/utils/SkeletonUtils.js';
-import { WEAPON } from '../data/weapons';
+import { WEAPON, isSuppressed } from '../data/weapons';
 
 interface ManEntry { file: string; kind: string; sockets?: Record<string, [number, number, number]>; bbox?: number[]; bboxMin?: number[] }
 
@@ -72,7 +72,7 @@ class Models {
     else if (rarity >= 1 && def.cls !== 'shotgun' && def.cls !== 'launcher' && def.cls !== 'pistol') { if (attach(rarity >= 3 ? 'att_holo' : 'att_red_dot', top)) { sight = top.y + (rarity >= 3 ? 0.034 : 0.03); optic = true; } }
     const mz = sk('Attach_Muzzle');
     let muzzle = mz ? -mz.z : 0.4;
-    if (rarity >= 4 && mz && def.cls !== 'shotgun' && def.cls !== 'launcher') { if (attach('att_suppressor', mz)) muzzle += 0.14 * 1; }
+    if (isSuppressed(id, rarity) && mz) { if (attach('att_suppressor', mz)) muzzle += 0.14 * 1; }
     root.traverse((o) => { const m = o as THREE.Mesh; if (m.isMesh) { m.castShadow = true; m.receiveShadow = true; m.frustumCulled = false; } });
     return { obj: root, muzzle, sight, scope, optic };
   }

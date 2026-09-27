@@ -22,6 +22,9 @@ export type SoundName =
 
 type Loop = 'engine' | 'wind' | 'gas' | 'chute' | 'vehicle' | 'heli' | 'tinnitus';
 
+/** Audible radius (m) of an unsuppressed shot per weapon class. */
+const GUN_RANGE: Record<string, number> = { pistol: 150, smg: 200, shotgun: 220, ar: 300, lmg: 330, marksman: 380, sniper: 550, launcher: 400 };
+
 export class Audio {
   ctx: AudioContext | null = null;
   private buffers = new Map<SoundName, AudioBuffer[]>();
@@ -76,10 +79,10 @@ export class Audio {
   }
 
   /** Play a sound; positioned sounds are HRTF-panned, air-absorbed and (optionally) delayed by distance. */
-  play(name: SoundName, opts: { x?: number; y?: number; z?: number; vol?: number; rate?: number; range?: number; delay?: boolean; ui?: boolean; music?: boolean; throttle?: number } = {}) {
+  play(name: SoundName, opts: { x?: number; y?: number; z?: number; vol?: number; rate?: number; range?: number; maxDist?: number; delay?: boolean; ui?: boolean; music?: boolean; throttle?: number; key?: string } = {}) {
     const ctx = this.ctx; if (!ctx || ctx.state !== 'running') return;
     const list = this.buffers.get(name); if (!list) return;
-    if (opts.throttle) { const k = name + (opts.x ?? ''); const l = this.last.get(k) ?? 0; if (ctx.currentTime - l < opts.throttle) return; this.last.set(k, ctx.currentTime); }
+    if (opts.throttle) { const k = opts.key ?? name + (opts.x ?? ''); const l = this.last.get(k) ?? 0; if (ctx.currentTime - l < opts.throttle) return; this.last.set(k, ctx.currentTime); }
     const buf = list[(Math.random() * list.length) | 0];
     const src = ctx.createBufferSource(); src.buffer = buf;
     src.playbackRate.value = (opts.rate ?? 1) * (0.97 + Math.random() * 0.06);
@@ -90,10 +93,12 @@ export class Audio {
       const dx = opts.x - this.lx, dy = (opts.y ?? 0) - this.ly, dz = opts.z! - this.lz;
       const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
       const range = opts.range ?? 60;
-      if (d > range * 14) return;
+      // maxDist: hard audible radius with a linear fade to silence (gunshots); otherwise the old soft inverse falloff
+      if (d > (opts.maxDist ?? range * 4)) return;
       const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = Math.max(350, 20000 / (1 + d / (range * 0.5)));
-      const p = ctx.createPanner(); p.panningModel = d < 60 ? 'HRTF' : 'equalpower'; p.distanceModel = 'inverse';
-      p.refDistance = range * 0.12; p.rolloffFactor = 1.15; p.maxDistance = range * 14;
+      const p = ctx.createPanner(); p.panningModel = d < 60 ? 'HRTF' : 'equalpower';
+      if (opts.maxDist) { p.distanceModel = 'linear'; p.refDistance = Math.min(8, opts.maxDist * 0.1); p.maxDistance = opts.maxDist; p.rolloffFactor = 1; }
+      else { p.distanceModel = 'inverse'; p.refDistance = range * 0.12; p.rolloffFactor = 1.15; p.maxDistance = range * 4; }
       p.positionX.value = opts.x; p.positionY.value = opts.y ?? 0; p.positionZ.value = opts.z!;
       g.connect(lp); lp.connect(p); p.connect(this.sfx);
       if (opts.delay) when += d / 343;
@@ -102,13 +107,30 @@ export class Audio {
   }
 
   /** Gunshot: close or distant layers depending on distance; local shots are dry and full. */
-  gunshot(cls: string, pos: { x: number; y: number; z: number } | null, vol = 1) {
+  /**
+   * Gunshot with Warzone-like audible radii: a sharp close layer out to ~40% of the class range and a
+   * low distant "crack/boom" tail out to the full range, fading linearly to silence. Suppressed guns
+   * only carry ~40 m and have no tail. Distant tails are rate-limited per shooter and capped globally,
+   * so a busy lobby doesn't turn into constant far-off gunfire.
+   */
+  private farVoices: number[] = [];
+  gunshot(cls: string, pos: { x: number; y: number; z: number } | null, vol = 1, suppressed = false, shooter = -1) {
     const c = cls === 'tactical' ? 'ar' : cls === 'melee' ? 'pistol' : cls;
     const close = (this.indoor ? 'shotIn_' : 'shot_') + c as SoundName;
-    if (!pos) { this.play(close, { vol: 0.85 * vol }); return; }
+    if (!pos) { this.play(close, { vol: (suppressed ? 0.55 : 0.85) * vol, rate: suppressed ? 1.15 : 1 }); return; }
     const d = Math.hypot(pos.x - this.lx, pos.y - this.ly, pos.z - this.lz);
-    if (d < 150) this.play(close, { ...pos, range: 140, vol: 1.1 * vol, delay: true });
-    if (d > 70) this.play(c === 'sniper' || c === 'marksman' || c === 'shotgun' || c === 'launcher' ? 'far_heavy' : c === 'smg' || c === 'pistol' ? 'far_light' : 'far_rifle', { ...pos, range: 600, vol: Math.min(1, (d - 70) / 80) * vol, delay: true });
+    if (suppressed) { if (d < 40) this.play(close, { ...pos, maxDist: 40, vol: 0.55 * vol, rate: 1.15, delay: true }); return; }
+    const range = GUN_RANGE[c] ?? 300, near = Math.min(120, range * 0.4);
+    if (d < near) this.play(close, { ...pos, maxDist: near, vol: 1.1 * vol, delay: true });
+    if (d > near * 0.6 && d < range) {
+      const now = this.ctx?.currentTime ?? 0;
+      this.farVoices = this.farVoices.filter((t) => t > now);
+      if (this.farVoices.length >= 6) return;
+      const tail = c === 'sniper' || c === 'marksman' || c === 'shotgun' || c === 'launcher' ? 'far_heavy' : c === 'smg' || c === 'pistol' ? 'far_light' : 'far_rifle';
+      const k = Math.min(1, (d - near * 0.6) / (near * 0.4));
+      this.play(tail, { ...pos, maxDist: range, vol: k * vol, delay: true, throttle: 0.11, key: 'far' + shooter });
+      this.farVoices.push(now + d / 343 + 0.6);
+    }
   }
 
   /** Radio-style announcer line (speech synthesis; British voice when available). */

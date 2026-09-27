@@ -1,5 +1,5 @@
 /** Weapons, bullets, throwables, explosions. */
-import { WEAPON, damageAt, rarityMods, AMMO_MAX } from '../data/weapons';
+import { WEAPON, damageAt, rarityMods, AMMO_MAX , isSuppressed } from '../data/weapons';
 import { Mat, PENETRATION, RayHit } from '../world/collision';
 import { Bullet, Phase, Player, Stance, Throwable } from './types';
 import type { Sim } from './sim';
@@ -156,7 +156,9 @@ function fire(sim: Sim, p: Player, w: { id: string; rarity: number; mag: number 
     const b: Bullet = { owner: p.id, weapon: w.id, rarity: w.rarity, x: p.x + dir[0] * 0.2, y: ey, z: p.z + dir[2] * 0.2, vx: dx * vel, vy: dy * vel, vz: dz * vel, dist: 0, dmgMul: 1, life: def.cls === 'launcher' ? 6 : 2.5, tracer: i === 0, rocket: def.cls === 'launcher' };
     sim.bullets.push(b);
   }
-  sim.emit({ t: 'shot', p: p.id, w: w.id, x: p.x, y: ey, z: p.z, dx: dir[0], dy: dir[1], dz: dir[2] });
+  const quiet = isSuppressed(w.id, w.rarity);
+  if (!quiet) (p as any).lastLoudShot = sim.time;
+  sim.emit({ t: 'shot', p: p.id, w: w.id, x: p.x, y: ey, z: p.z, dx: dir[0], dy: dir[1], dz: dir[2], suppressed: quiet });
   // recoil
   const rk = def.recoilV * mods.recoil * (p.ads > 0.5 ? 1 : 1.3) * (p.stance === Stance.Prone ? 0.6 : p.stance === Stance.Crouch ? 0.85 : 1);
   p.recoil += rk * (0.8 + sim.rng.next() * 0.4);
