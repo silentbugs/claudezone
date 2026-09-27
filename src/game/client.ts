@@ -53,7 +53,7 @@ export class Match {
   constructor(public sm: SceneMgr, private world: WorldData, private input: Input, tac: HTMLCanvasElement, private ui: HTMLElement, public settings: Settings, seed: number) {
     this.sim = new Sim(world, seed, { humans: 1, warmup: 45 });
     this.controls = new Controls(input, settings);
-    input.onUnlock = () => { if (!this.paused && !this.hud.panel && !this.done) this.togglePause(); };
+    input.onUnlock = () => { if (!this.menuOpen && !this.hud.panel && !this.done) this.togglePause(); };
     this.fpsEl.className = 'fps'; ui.appendChild(this.fpsEl);
     this.hud = new Hud(this.sim, tac, 0, settings);
     ui.appendChild(this.hud.root);
@@ -79,15 +79,16 @@ export class Match {
   get me() { return this.sim.players[0]; }
 
   private fillIntent() {
-    const blocked = !!this.hud.panel || this.paused;
+    const blocked = !!this.hud.panel || this.paused || this.menuOpen;
     this.controls.apply(this.me, this.camYaw, this.camPitch, blocked);
+    (this.me as any).prefs = { autoChute: this.settings.chuteAutoDeploy, emptySwitch: this.settings.depletedAmmoSwitch };
     if (this.mapOpen) { this.me.intent.fire = false; this.me.intent.ads = false; }
   }
 
   private look() {
     const { dx, dy } = this.input.consumeMouse();
     this.lastMouse = { dx, dy };
-    if (this.hud.panel || this.paused) return;
+    if (this.hud.panel || this.menuOpen) return;
     const p = this.me, w = p.weapons[p.cur];
     const zoom = w ? 1 + (WEAPON[w.id].zoom * (rarityMods(w.rarity).scope && !WEAPON[w.id].scope ? 1.3 : 1) - 1) * p.ads : 1;
     // ADS: sensitivity follows the zoom (MW "relative" behaviour) times the ADS multiplier
@@ -100,8 +101,9 @@ export class Match {
   frame(dt: number, time: number) {
     const inp = this.input;
     if (inp.wasPressed('Escape')) { if (this.settingsEl) this.closeSettings(); else if (this.hud.panel) this.hud.closePanel(); else if (this.mapOpen) this.mapOpen = false; else this.togglePause(); }
+    this.paused = this.menuOpen && this.settings.pauseOnMenu;
     this.look();
-    if (!this.paused && !this.hud.panel) {
+    if (!this.menuOpen && !this.hud.panel) {
       this.controls.poll(this.me, time);
       const ui = this.controls.takeUi();
       if (ui.map) this.mapOpen = !this.mapOpen;
@@ -124,15 +126,17 @@ export class Match {
   }
   private placement() { return this.sim.over && this.sim.winner === this.me.squad ? 1 : this.sim.squadsLeft() + 1; }
 
+  private menuOpen = false;
   private togglePause() {
-    this.paused = !this.paused;
-    if (this.paused) {
+    this.menuOpen = !this.menuOpen;
+    this.paused = this.menuOpen && this.settings.pauseOnMenu;
+    if (this.menuOpen) {
       document.exitPointerLock?.();
       const p = document.createElement('div'); p.className = 'menu pause';
-      p.innerHTML = `<h1>PAUSED</h1><h2>VERDANSK • BATTLE ROYALE</h2><button data-a="resume">Resume</button><button data-a="settings">Settings</button><button data-a="quit">Leave match</button><div class="sub">The match is paused while this menu is open.</div>`;
+      p.innerHTML = `<h1>PAUSED</h1><h2>VERDANSK • BATTLE ROYALE</h2><button data-a="resume">Resume</button><button data-a="settings">Settings</button><button data-a="quit">Leave match</button><div class="sub">${this.settings.pauseOnMenu ? 'The match is paused while this menu is open.' : 'The match keeps running while this menu is open.'}</div>`;
       p.querySelector<HTMLElement>('[data-a=resume]')!.onclick = () => this.togglePause();
       p.querySelector<HTMLElement>('[data-a=settings]')!.onclick = () => this.openSettings();
-      p.querySelector<HTMLElement>('[data-a=quit]')!.onclick = () => { this.paused = false; this.pauseEl?.remove(); this.done = true; this.onEnd(false, this.placement(), this.me); };
+      p.querySelector<HTMLElement>('[data-a=quit]')!.onclick = () => { this.paused = false; this.menuOpen = false; this.pauseEl?.remove(); this.done = true; this.onEnd(false, this.placement(), this.me); };
       this.ui.appendChild(p); this.pauseEl = p;
     } else { this.closeSettings(); this.pauseEl?.remove(); this.pauseEl = null; this.input.lock(); }
   }
@@ -192,12 +196,13 @@ export class Match {
       case 'throw': if (e.p === 0) { audio.play('pin', { vol: 0.4 }); audio.play('throw', { vol: 0.5 }); } break;
       case 'melee': if (e.p === 0) audio.play('melee', { vol: 0.6 }); break;
       case 'marker': if (e.squad === me.squad) audio.say(e.kind === 'loadout' ? 'Loadout drop inbound.' : e.kind === 'cluster' ? 'Cluster strike inbound.' : 'Precision airstrike inbound.'); break;
-      case 'circle': if (e.closing) audio.play('stinger', { ui: true, vol: 0.5 }); break;
+      case 'circle': if (e.closing) audio.play('stinger', { music: true, vol: 0.7 }); break;
+      case 'win': audio.play(e.squad === me.squad ? 'musicVictory' : 'musicDefeat', { music: true }); break;
       case 'gulag': if (e.p === 0 && e.msg === 'enter') audio.say('Welcome to the Gulag.'); if (e.p === 0 && e.msg === 'overtime') audio.play('flag', { ui: true }); break;
       case 'squadwipe': if (e.squad === me.squad) audio.say('Your squad has been eliminated.'); break;
       case 'contract': if (e.p >= 0 && sim.players[e.p].squad === me.squad) audio.say(e.msg === 'start' ? 'Contract accepted.' : e.msg === 'done' ? 'Contract complete.' : e.msg === 'fail' ? 'Contract failed.' : 'Next target marked.'); break;
       case 'announce':
-        if (e.text === '__infil__') { this.hud.showBanner('Verdansk', 'Battle Royale — Trios • 150 players'); this.camYaw = Math.atan2(-sim.plane.dx, -sim.plane.dz); this.camPitch = -0.2; audio.play('uiBuy', { vol: 0.4 }); }
+        if (e.text === '__infil__') { audio.play('musicInfil', { music: true, vol: 0.8 }); this.hud.showBanner('Verdansk', 'Battle Royale — Trios • 150 players'); this.camYaw = Math.atan2(-sim.plane.dx, -sim.plane.dz); this.camPitch = -0.2; audio.play('uiBuy', { vol: 0.4 }); }
         if (e.text === '__buy__' && e.squad === me.squad && me.phase === Phase.Alive && sim.interactTarget(me)?.kind === 'buy') { document.exitPointerLock?.(); this.hud.openBuy((k, a) => { const r = sim.buy(me, k, a); if (!r) audio.play('uiBuy'); return r; }, () => (document.getElementById('game') as HTMLElement).requestPointerLock?.()); }
         if (e.text === '__loadout__' && e.squad === me.squad && me.phase === Phase.Alive) { document.exitPointerLock?.(); this.hud.openLoadout((i) => { sim.applyLoadout(me, i); (document.getElementById('game') as HTMLElement).requestPointerLock?.(); }); }
         break;

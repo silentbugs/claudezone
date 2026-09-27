@@ -17,6 +17,7 @@ export type SoundName =
   | 'plate' | 'magOut' | 'magIn' | 'bolt' | 'swap' | 'dry' | 'melee' | 'throw' | 'pin'
   | 'step_dirt' | 'step_concrete' | 'step_metal' | 'step_wood' | 'land' | 'jump' | 'slide' | 'gear'
   | 'pickup' | 'cash' | 'chute' | 'chuteCut' | 'explosion' | 'explosionFar' | 'whiz' | 'impact' | 'impactMetal' | 'impactWood' | 'impactGlass' | 'impactWater'
+  | 'musicInfil' | 'musicVictory' | 'musicDefeat'
   | 'uiOpen' | 'uiHover' | 'uiBuy' | 'uiDeny' | 'downed' | 'cough' | 'beep' | 'revive' | 'crate' | 'stinger' | 'flag' | 'rock';
 
 type Loop = 'engine' | 'wind' | 'gas' | 'chute' | 'vehicle' | 'heli' | 'tinnitus';
@@ -26,6 +27,8 @@ export class Audio {
   private buffers = new Map<SoundName, AudioBuffer[]>();
   private loopBufs = new Map<Loop, AudioBuffer>();
   private master!: GainNode; private sfx!: GainNode; private uiBus!: GainNode; private muffle!: BiquadFilterNode;
+  private musicBus!: GainNode; musicVol = 0.6;
+  setMusic(v: number) { this.musicVol = v; if (this.musicBus) this.musicBus.gain.value = v; }
   private roomSend!: GainNode; private room!: ConvolverNode;
   private loops = new Map<Loop, { src: AudioBufferSourceNode; gain: GainNode; filter: BiquadFilterNode }>();
   volume = 0.7; sfxVol = 1; uiVol = 0.8; voiceOn = true;
@@ -43,6 +46,7 @@ export class Audio {
     this.muffle = ctx.createBiquadFilter(); this.muffle.type = 'lowpass'; this.muffle.frequency.value = 20000; this.muffle.Q.value = 0.5;
     this.sfx = ctx.createGain(); this.sfx.gain.value = this.sfxVol; this.sfx.connect(this.muffle); this.muffle.connect(this.master);
     this.uiBus = ctx.createGain(); this.uiBus.gain.value = this.uiVol; this.uiBus.connect(this.master);
+    this.musicBus = ctx.createGain(); this.musicBus.gain.value = this.musicVol; this.musicBus.connect(this.master);
     this.room = ctx.createConvolver(); this.room.buffer = this.roomIR();
     this.roomSend = ctx.createGain(); this.roomSend.gain.value = 0;
     this.sfx.connect(this.roomSend); this.roomSend.connect(this.room); this.room.connect(this.muffle);
@@ -71,7 +75,7 @@ export class Audio {
   }
 
   /** Play a sound; positioned sounds are HRTF-panned, air-absorbed and (optionally) delayed by distance. */
-  play(name: SoundName, opts: { x?: number; y?: number; z?: number; vol?: number; rate?: number; range?: number; delay?: boolean; ui?: boolean; throttle?: number } = {}) {
+  play(name: SoundName, opts: { x?: number; y?: number; z?: number; vol?: number; rate?: number; range?: number; delay?: boolean; ui?: boolean; music?: boolean; throttle?: number } = {}) {
     const ctx = this.ctx; if (!ctx || ctx.state !== 'running') return;
     const list = this.buffers.get(name); if (!list) return;
     if (opts.throttle) { const k = name + (opts.x ?? ''); const l = this.last.get(k) ?? 0; if (ctx.currentTime - l < opts.throttle) return; this.last.set(k, ctx.currentTime); }
@@ -92,7 +96,7 @@ export class Audio {
       p.positionX.value = opts.x; p.positionY.value = opts.y ?? 0; p.positionZ.value = opts.z!;
       g.connect(lp); lp.connect(p); p.connect(this.sfx);
       if (opts.delay) when += d / 343;
-    } else g.connect(opts.ui ? this.uiBus : this.sfx);
+    } else g.connect(opts.music ? this.musicBus : opts.ui ? this.uiBus : this.sfx);
     src.start(when);
   }
 
@@ -310,6 +314,20 @@ export class Audio {
     this.add('uiDeny', tone(0.25, (t) => Math.sign(Math.sin(2 * Math.PI * 180 * t)) * Math.exp(-t * 12) * 0.4));
     this.add('beep', tone(0.1, (t) => Math.sin(2 * Math.PI * 1500 * t) * Math.exp(-t * 30)));
     this.add('stinger', tone(1.8, (t) => (Math.sin(2 * Math.PI * 73 * t) * 0.7 + Math.sin(2 * Math.PI * 110 * t) * 0.4 + Math.sin(2 * Math.PI * 146.8 * t) * 0.3) * Math.min(1, t * 8) * Math.exp(-t * 1.6)).mix(N(1.8, 1900).filter('lp', 200).env((t) => Math.exp(-t * 2)), 0.8));
+    // music cues: a brooding drum/string infil ostinato, a brass-ish victory swell, a low defeat hit
+    {
+      const drum = (sd: number) => tone(0.5, (t) => Math.sin(2 * Math.PI * (70 - t * 40) * t) * Math.exp(-t * 9)).mix(N(0.3, sd).filter('lp', 400).env((t) => Math.exp(-t * 20)), 0.6);
+      const pad = (f: number, len: number) => S(len).add((t) => [1, 2.001, 3.002, 4.003].reduce((s, h, i) => s + Math.sign(Math.sin(2 * Math.PI * f * h * t)) * 0.12 / (i + 1), 0)).filter('lp', 1400).env((t) => Math.min(1, t * 2) * Math.min(1, (len - t) * 1.5));
+      const infil = S(8);
+      infil.mix(pad(55, 8), 0.8).mix(pad(82.4, 8), 0.5).mix(pad(65.4, 4), 0.4, 4);
+      for (let b = 0; b < 16; b++) infil.mix(drum(4000 + b), b % 4 === 3 ? 0.6 : 1, b * 0.5);
+      this.add('musicInfil', infil);
+      const vic = S(6);
+      for (const [f, at] of [[196, 0], [246.9, 0.25], [293.7, 0.5], [392, 1.0]] as [number, number][]) vic.mix(pad(f, 5 - at), 0.7, at);
+      for (let b = 0; b < 6; b++) vic.mix(drum(4100 + b), 1, b * 0.25);
+      this.add('musicVictory', vic);
+      this.add('musicDefeat', pad(49, 3.5).mix(drum(4200), 1.5).mix(pad(58.3, 3.5), 0.6));
+    }
     this.add('flag', tone(0.5, (t) => Math.sin(2 * Math.PI * (440 + t * 400) * t) * Math.exp(-t * 5)));
     // ---- body / status
     this.add('downed', tone(1.2, (t) => Math.sin(2 * Math.PI * 62 * t) * Math.exp(-t * 2.5)).mix(N(1.2, 2000).filter('lp', 300).env((t) => Math.exp(-t * 3)), 0.5));

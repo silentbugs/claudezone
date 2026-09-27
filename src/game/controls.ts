@@ -32,7 +32,6 @@ export class Controls {
     // crouch / prone: toggles send one edge per press; hold mode sends an edge on press and release
     const cp = this.pressed('crouch'), cr = this.released('crouch');
     if (cp) P.crouch = true;
-    if (cr && s.crouchMode === 'hold' && (p.stance === Stance.Crouch || p.slideT > 0)) P.crouch = true;
     const pp = this.pressed('prone'), pr = this.released('prone');
     if (pp) P.prone = true;
     if (pr && s.proneMode === 'hold' && p.stance === Stance.Prone) P.prone = true;
@@ -79,6 +78,7 @@ export class Controls {
     (it as any).tac = P.tac;
     it.jump = P.jump; it.crouch = P.crouch; it.prone = P.prone; it.reload = P.reload;
     it.swap = P.swap; it.slot = P.slot; it.lethal = P.lethal; it.tactical = P.tactical; it.killstreak = P.killstreak;
+    (it as any).slideHold = s.slideMode === 'hold'; (it as any).crouchHoldMode = s.crouchMode === 'hold'; (it as any).crouchHeld = this.down('crouch');
     (it as any).fieldUpgrade = P.fieldUpgrade; (it as any).melee = P.melee;
     it.fire = this.down('fire');
     it.ads = s.adsMode === 'toggle' ? this.adsToggled : this.down('ads');

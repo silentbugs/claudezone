@@ -50,7 +50,7 @@ function air(sim: Sim, p: Player, dt: number, chute: boolean) {
     const tv = -(DEPLOY.freefallFall + dive * (DEPLOY.diveFall - DEPLOY.freefallFall));
     if ((p as any).launchT > 0) { (p as any).launchT -= dt; p.vy -= 20 * dt; } // balloon launch: ballistic climb first
     else p.vy += (tv - p.vy) * Math.min(1, dt * 1.2);
-    if (((it.jump && agl > DEPLOY.minChuteAGL) || agl < DEPLOY.autoChuteAGL) && !((p as any).launchT > 0)) { p.phase = Phase.Chute; p.vy = Math.max(p.vy, -18); sim.emit({ t: 'chute', p: p.id }); p.intent.jump = false; }
+    if (((it.jump && agl > DEPLOY.minChuteAGL) || (agl < DEPLOY.autoChuteAGL && (p as any).prefs?.autoChute !== false) || agl < 8) && !((p as any).launchT > 0)) { p.phase = Phase.Chute; p.vy = Math.max(p.vy, -18); sim.emit({ t: 'chute', p: p.id }); p.intent.jump = false; }
   } else {
     const fwd = clamp(it.mz, -0.5, 1);
     const hs = DEPLOY.chuteH * (0.55 + 0.45 * Math.max(0, fwd));
@@ -118,6 +118,7 @@ function ground(sim: Sim, p: Player, dt: number) {
       if (ns !== p.stance) { p.stanceT = 0.45; p.stance = ns; p.slideT = 0; p.sprinting = false; }
     }
   }
+  if ((it as any).crouchHoldMode && !(it as any).crouchHeld && p.stance === Stance.Crouch && p.slideT <= 0 && !downed) { const ns = tryStand(sim, p); if (ns !== p.stance) { p.stance = ns; p.stanceT = 0.12; } }
   if (p.slideCd > 0) p.slideCd -= dt;
   if (p.stanceT > 0) p.stanceT -= dt;
   // --- water
@@ -157,6 +158,7 @@ function ground(sim: Sim, p: Player, dt: number) {
     tx = p.slideDx; tz = p.slideDz;
     const ss = Math.hypot(p.slideDx, p.slideDz);
     if (ss < MOVE.crouch * 1.1 || p.slideT <= 0) p.slideT = 0;
+    if ((it as any).slideHold && !(it as any).crouchHeld && p.slideT > 0 && p.slideT < MOVE.slideTime - 0.15) p.slideT = 0; // hold mode: releasing crouch ends the slide (stay crouched)
     if (it.jump) { p.slideT = 0; p.stance = tryStand(sim, p); p.vx = p.slideDx; p.vz = p.slideDz; } // slide into a jump keeps the speed
   }
   const acc = p.slideT > 0 ? 80 : p.onGround || p.swimming ? MOVE.accel : MOVE.airAccel;

@@ -86,7 +86,12 @@ export function weaponTick(sim: Sim, p: Player, dt: number) {
   if (it.fire && canShoot(p) && p.stanceT <= 0.05) {
     if (w.mag <= 0) {
       if (p.ammo[def.ammo] > 0) startReload(sim, p);
-      else if (!p.triggerHeld) sim.emit({ t: 'dryfire', p: p.id });
+      else {
+        if (!p.triggerHeld) sim.emit({ t: 'dryfire', p: p.id });
+        // depleted-ammo weapon switch
+        const o = p.weapons[p.cur === 0 ? 1 : 0];
+        if (o && (p as any).prefs?.emptySwitch !== false && (o.mag > 0 || p.ammo[WEAPON[o.id].ammo] > 0)) { p.cur = p.cur === 0 ? 1 : 0; p.swapT = 0.6; sim.emit({ t: 'reload', p: p.id, w: 'swap' }); }
+      }
       p.triggerHeld = true;
       return;
     }

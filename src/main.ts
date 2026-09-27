@@ -23,7 +23,7 @@ async function boot() {
   await new Promise((r) => setTimeout(r, 30));
   const world = generateWorld(masks, 1);
   sm.buildWorld(world);
-  sm.setQuality(settings.quality); sm.setRenderScale(settings.renderScale); sm.setFoliage(settings.foliage);
+  sm.setQuality(settings.quality); sm.setRenderScale(settings.renderScale); sm.setFoliage(settings.foliage); sm.renderer.toneMappingExposure = settings.brightness;
   const tac = renderTacMap(world);
   loading.remove();
   const input = new Input(canvas);
@@ -35,8 +35,10 @@ async function boot() {
     if (k === 'quality') sm.setQuality(settings.quality);
     if (k === 'renderScale') sm.setRenderScale(settings.renderScale);
     if (k === 'volume' || k === 'sfx' || k === 'ui') audio.setVolume(settings.volume, settings.sfx, settings.ui);
-    if (k === 'announcer') audio.voiceOn = settings.announcer;
+    if (k === 'announcer') audio.voiceOn = settings.announcer; audio.setMusic(settings.musicVolume);
     if (k === 'foliage') sm.setFoliage(settings.foliage);
+    if (k === 'brightness') sm.renderer.toneMappingExposure = settings.brightness;
+    if (k === 'musicVolume') audio.setMusic(settings.musicVolume);
   };
   const menu = document.createElement('div'); menu.className = 'menu';
   const showMenu = () => {

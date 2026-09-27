@@ -29,7 +29,11 @@ export class SettingsMenu {
         this.row('Aim down sights', this.select('adsMode', [['hold', 'Hold'], ['toggle', 'Toggle']])) +
         this.row('Sprint', this.select('sprintMode', [['hold', 'Hold'], ['toggle', 'Toggle'], ['auto', 'Automatic']])) +
         this.row('Tactical sprint', this.select('tacSprint', [['doubleTap', 'Double tap sprint'], ['pressWhileSprinting', 'Press sprint while sprinting']])) +
-        this.row('Armor plating', this.select('plateMode', [['hold', 'Hold to chain plates'], ['tap', 'Tap: plate until full']]));
+        this.row('Armor plating', this.select('plateMode', [['hold', 'Hold to chain plates'], ['tap', 'Tap: plate until full']])) +
+        this.row('Slide behaviour', this.select('slideMode', [['tap', 'Tap'], ['hold', 'Hold (release to stop sliding)']])) +
+        this.row('Parachute auto-deploy', this.check('chuteAutoDeploy'), 'opens the chute near the ground if you have not') +
+        this.row('Depleted ammo weapon switch', this.check('depletedAmmoSwitch'), 'switch guns automatically when completely out of ammo') +
+        this.row('Pause the match in the Esc menu', this.check('pauseOnMenu'), 'off = the match keeps running, like the real game');
     } else if (t === 'binds') {
       let group = '';
       for (const a of ACTIONS) {
@@ -44,11 +48,19 @@ export class SettingsMenu {
         this.row('ADS field of view', this.select('adsFovAffected', [['true', 'Affected (zooms)'], ['false', 'Independent']])) +
         this.row('Render resolution', this.range('renderScale', 0.5, 1.5, 0.05, (v) => Math.round(v * 100) + '%')) +
         this.row('Foliage density', this.range('foliage', 0, 1.5, 0.05, (v) => Math.round(v * 100) + '%'), 'grass and bushes near you') +
-        this.row('Show FPS counter', this.check('showFps'));
+        this.row('Brightness', this.range('brightness', 0.6, 1.6, 0.01, (v) => Math.round(v * 100) + '%')) +
+        this.row('Show FPS counter', this.check('showFps')) +
+        '<div class="sgroup">Interface</div>' +
+        this.row('Minimap shape', this.select('minimapShape', [['circle', 'Circle'], ['square', 'Square']])) +
+        this.row('Compass', this.check('showCompass')) +
+        this.row('Kill feed', this.check('showKillfeed')) +
+        this.row('Crosshair', this.check('showCrosshair')) +
+        this.row('Hit markers', this.check('showHitmarkers'));
     } else {
       body = this.row('Master volume', this.range('volume', 0, 1, 0.01, (v) => Math.round(v * 100) + '%')) +
         this.row('Effects volume', this.range('sfx', 0, 1, 0.01, (v) => Math.round(v * 100) + '%')) +
         this.row('Interface volume', this.range('ui', 0, 1, 0.01, (v) => Math.round(v * 100) + '%')) +
+        this.row('Music volume', this.range('musicVolume', 0, 1, 0.01, (v) => Math.round(v * 100) + '%'), 'infil theme, circle stingers, victory') +
         this.row('Hitmarker sounds', this.check('hitmarkerSounds')) +
         this.row('Announcer voice', this.check('announcer'), 'radio call-outs ("UAV online", "Welcome to the Gulag")');
     }
@@ -87,7 +99,7 @@ export class SettingsMenu {
   }
   private fmt(k: keyof Settings, v: number) {
     if (k === 'fov') return v.toFixed(0);
-    if (k === 'volume' || k === 'sfx' || k === 'ui' || k === 'renderScale' || k === 'foliage') return Math.round(v * 100) + '%';
+    if (k === 'volume' || k === 'sfx' || k === 'ui' || k === 'renderScale' || k === 'foliage' || k === 'brightness' || k === 'musicVolume') return Math.round(v * 100) + '%';
     return v.toFixed(2);
   }
 }

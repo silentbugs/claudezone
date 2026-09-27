@@ -145,6 +145,12 @@ export class Hud {
     const c = sim.circle;
     const inGas = sim.inGas(view);
     const air = view.phase === Phase.Freefall || view.phase === Phase.Chute || view.phase === Phase.Plane;
+    // --- interface settings (live)
+    const S = this.settings, mmEl = this.root.querySelector('.mm') as HTMLElement;
+    mmEl.style.borderRadius = S.minimapShape === 'square' ? '4px' : '50%';
+    this.compass.style.display = this.heading.style.display = this.loc.style.display = S.showCompass ? '' : 'none';
+    this.feed.style.display = S.showKillfeed ? '' : 'none';
+    this.hm.style.visibility = S.showHitmarkers ? '' : 'hidden';
     // --- circle timer
     if (sim.inWarmup) this.set('circ', this.circ, `<span style="color:#f6c343">WARM-UP</span> ${fmtT(sim.warmup - sim.time)}`);
     else if (c.done) this.set('circ', this.circ, `<span class="badge">${CIRCLES.length}</span> <span class="sub">FINAL CIRCLE</span>`);
@@ -193,7 +199,7 @@ export class Hud {
       this.set('fu', this.fu, `${view.killstreak ? `<div class="ring" title="${KILLSTREAK_NAMES[view.killstreak]}">${ICON[STREAK_ICON[view.killstreak]]}${this.k('killstreak')}</div>` : ''}<div class="ring" style="opacity:${view.fieldUpgrade ? 1 : 0.5}">${view.fieldUpgrade ? ICON[view.fieldUpgrade] : ''}${this.k('fieldUpgrade')}</div>`);
     } else { this.set('weap', this.weap, ''); this.set('fu', this.fu, ''); }
     // --- crosshair
-    const showXh = opts.ads < 0.5 && (view.phase === Phase.Alive || view.phase === Phase.Gulag) && !(vehicleOf(sim, view) && (view as any).seat === 0) && !air;
+    const showXh = this.settings.showCrosshair && opts.ads < 0.5 && (view.phase === Phase.Alive || view.phase === Phase.Gulag) && !(vehicleOf(sim, view) && (view as any).seat === 0) && !air;
     this.xh.style.display = showXh ? '' : 'none';
     if (showXh && w) {
       const d = WEAPON[w.id];

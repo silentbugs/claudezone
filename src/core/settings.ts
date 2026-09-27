@@ -52,6 +52,8 @@ export interface Settings {
   volume: number; sfx: number; ui: number;
   quality: 'low' | 'medium' | 'high' | 'ultra';
   renderScale: number; foliage: number; showFps: boolean; hitmarkerSounds: boolean; announcer: boolean;
+  brightness: number; minimapShape: 'circle' | 'square'; showCompass: boolean; showKillfeed: boolean; showCrosshair: boolean; showHitmarkers: boolean;
+  chuteAutoDeploy: boolean; depletedAmmoSwitch: boolean; pauseOnMenu: boolean; musicVolume: number;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -68,6 +70,8 @@ export const DEFAULT_SETTINGS: Settings = {
   fov: 80, adsFovAffected: true,
   volume: 0.7, sfx: 1, ui: 0.8,
   quality: 'high', renderScale: 1, foliage: 1, showFps: false, hitmarkerSounds: true, announcer: true,
+  brightness: 1, minimapShape: 'circle', showCompass: true, showKillfeed: true, showCrosshair: true, showHitmarkers: true,
+  chuteAutoDeploy: true, depletedAmmoSwitch: true, pauseOnMenu: true, musicVolume: 0.6,
 };
 
 const KEY = 'vd-settings-v2';
