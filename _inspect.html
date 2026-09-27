@@ -18,6 +18,7 @@ root.traverse(o=>{ if(o.isBone) info.bones.push(o.name);
   if(o.isMesh){info.meshes++; if(o.isSkinnedMesh) info.skinned++; const gg=o.geometry; info.tris+=(gg.index?gg.index.count:gg.attributes.position.count)/3;
    for(const m of [].concat(o.material)){ if(!mats.has(m)){mats.add(m); info.materials.push({name:m.name,type:m.type,color:m.color?.getHexString(),map:!!m.map,normal:!!m.normalMap,tex:m.map?.image?.width});}}}});
 let mixer;
+if(mode==='bind'){ root.traverse(o=>{if(o.isSkinnedMesh){o.skeleton.pose();}}); }
 if(mode==='anim' && clipName){ const c=THREE.AnimationClip.findByName(g.animations,clipName); mixer=new THREE.AnimationMixer(root); mixer.clipAction(c).play(); mixer.update(t); }
 root.updateMatrixWorld(true);
 const box=new THREE.Box3().setFromObject(root,true); const s=box.getSize(new THREE.Vector3()), ctr=box.getCenter(new THREE.Vector3());

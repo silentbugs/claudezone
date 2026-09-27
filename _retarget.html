@@ -1,0 +1,132 @@
+<!doctype html><html><body>
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
+
+const L = new GLTFLoader();
+const tgt = await L.loadAsync('/public/models/_cand/swat.glb');
+const src1 = await L.loadAsync('/public/models/_cand/ual1.glb');
+const src2 = await L.loadAsync('/public/models/_cand/ual2.glb');
+
+// target(SWAT) bone -> source(UAL / UE-mannequin naming) bone
+const map = { Hips:'pelvis', Abdomen:'spine_01', Torso:'spine_02', Chest:'spine_03', Neck:'neck_01', Head:'Head' };
+for (const [s, u] of [['L','l'],['R','r']]) {
+  Object.assign(map, {
+    ['Shoulder'+s]:'clavicle_'+u, ['UpperArm'+s]:'upperarm_'+u, ['LowerArm'+s]:'lowerarm_'+u, ['Wrist'+s]:'hand_'+u,
+    ['UpperLeg'+s]:'thigh_'+u, ['LowerLeg'+s]:'calf_'+u, ['Foot'+s]:'foot_'+u,
+    ['Thumb1'+s]:'thumb_01_'+u, ['Thumb2'+s]:'thumb_02_'+u, ['Thumb3'+s]:'thumb_03_'+u,
+  });
+  for (const [f, uf] of [['Index','index'],['Middle','middle'],['Ring','ring'],['Pinky','pinky']])
+    for (let i = 1; i <= 3; i++) map[f+i+s] = uf+'_0'+i+'_'+u;
+}
+
+function skel(root) { let sk; root.traverse(o => { if (o.isSkinnedMesh && !sk) sk = o.skeleton; }); return sk; }
+const tSk = skel(tgt.scene), tRoot = tgt.scene;
+const byName = (sk, n) => sk.bones.find(b => b.name === n);
+
+// rest (bind) world quaternions
+function restWorld(root, sk) {
+  sk.pose(); root.updateMatrixWorld(true);
+  const q = new Map(), p = new Map();
+  for (const b of sk.bones) { q.set(b.name, b.getWorldQuaternion(new THREE.Quaternion())); p.set(b.name, b.getWorldPosition(new THREE.Vector3())); }
+  return { q, p };
+}
+const tRest = restWorld(tRoot, tSk);
+// SWAT rig: legs hang off Body (not Hips) and feet are IK bones parented to Root.
+// So hip translation goes on Body, and each foot's position is re-derived from its lower leg.
+const footFrom = { FootL:'LowerLegL', FootR:'LowerLegR' };
+const footOffset = {};
+{ tSk.pose(); tRoot.updateMatrixWorld(true);
+  for (const [f, l] of Object.entries(footFrom)) { const lb = byName(tSk, l), fb = byName(tSk, f);
+    footOffset[f] = lb.worldToLocal(fb.getWorldPosition(new THREE.Vector3())); } }
+const tRestLocal = new Map(tSk.bones.map(b => [b.name, { q: b.quaternion.clone(), p: b.position.clone() }]));
+
+// target bones in hierarchy order (parents first)
+const order = [];
+// traverse only from the topmost bone
+const topBone = tSk.bones.find(b => !b.parent || !b.parent.isBone);
+order.length = 0; topBone.traverse(o => { if (o.isBone) order.push(o); });
+
+const FPS = 30;
+function retargetClip(srcGltf, clipName, outName) {
+  const sRoot = srcGltf.scene, sSk = skel(sRoot);
+  const sRest = restWorld(sRoot, sSk);
+  const clip = THREE.AnimationClip.findByName(srcGltf.animations, clipName);
+  if (!clip) throw new Error('no clip ' + clipName);
+  const mixer = new THREE.AnimationMixer(sRoot);
+  const act = mixer.clipAction(clip); act.play();
+  const n = Math.max(2, Math.round(clip.duration * FPS) + 1);
+  const times = new Float32Array(n);
+  const qv = new Map(order.map(b => [b.name, new Float32Array(n * 4)]));
+  const hipPos = new Float32Array(n * 3);
+  const posTracks = { FootL: new Float32Array(n*3), FootR: new Float32Array(n*3) };
+  const tBody = byName(tSk, 'Body');
+  const sHip = byName(sSk, 'pelvis'), tHip = byName(tSk, 'Hips');
+  const ratio = tRest.p.get('Hips').y / sRest.p.get('pelvis').y;
+  const tmpQ = new THREE.Quaternion(), pq = new THREE.Quaternion(), v = new THREE.Vector3();
+  for (let i = 0; i < n; i++) {
+    const t = Math.min(clip.duration, i / FPS * (clip.duration / ((n - 1) / FPS)));
+    times[i] = t;
+    mixer.setTime(t); sRoot.updateMatrixWorld(true);
+    // reset target to rest
+    for (const b of order) { const r = tRestLocal.get(b.name); b.quaternion.copy(r.q); b.position.copy(r.p); }
+    tRoot.updateMatrixWorld(true);
+    for (const b of order) {
+      const sn = map[b.name];
+      if (sn) {
+        const sb = byName(sSk, sn);
+        const sw = sb.getWorldQuaternion(new THREE.Quaternion());
+        const delta = sw.multiply(sRest.q.get(sn).clone().invert());
+        const tw = delta.multiply(tRest.q.get(b.name));
+        b.parent.getWorldQuaternion(pq);
+        b.quaternion.copy(pq.invert().multiply(tw));
+        if (b === tHip) {
+          const sp = sHip.getWorldPosition(new THREE.Vector3()).sub(sRest.p.get('pelvis')).multiplyScalar(ratio);
+          const wp = tRest.p.get('Body').clone().add(sp);
+          tBody.position.copy(tBody.parent.worldToLocal(wp)); tBody.updateMatrixWorld(true);
+        }
+        if (footFrom[b.name]) {
+          const lb = byName(tSk, footFrom[b.name]); lb.updateMatrixWorld(true);
+          const wp = lb.localToWorld(footOffset[b.name].clone());
+          b.position.copy(b.parent.worldToLocal(wp));
+          b.position.toArray(posTracks[b.name], i * 3);
+        }
+      }
+      b.updateMatrixWorld(true);
+      b.quaternion.toArray(qv.get(b.name), i * 4);
+    }
+    tBody.position.toArray(hipPos, i * 3);
+  }
+  act.stop(); mixer.uncacheRoot(sRoot);
+  const tracks = [];
+  for (const b of order) {
+    if (!map[b.name]) continue;
+    tracks.push(new THREE.QuaternionKeyframeTrack(b.name + '.quaternion', times, qv.get(b.name)));
+  }
+  tracks.push(new THREE.VectorKeyframeTrack('Body.position', times, hipPos));
+  for (const [f, arr] of Object.entries(posTracks)) tracks.push(new THREE.VectorKeyframeTrack(f + '.position', times, arr));
+  return new THREE.AnimationClip(outName, clip.duration, tracks);
+}
+
+const want1 = { Idle:'Idle_Loop', Walk:'Walk_Loop', Jog:'Jog_Fwd_Loop', Sprint:'Sprint_Loop', Crouch_Idle:'Crouch_Idle_Loop', Crouch_Walk:'Crouch_Fwd_Loop',
+  Jump_Start:'Jump_Start', Jump_Loop:'Jump_Loop', Jump_Land:'Jump_Land', Death:'Death01', Hit_Chest:'Hit_Chest', Hit_Head:'Hit_Head', Roll:'Roll',
+  Pistol_Idle:'Pistol_Idle_Loop', Pistol_Aim_Neutral:'Pistol_Aim_Neutral', Pistol_Aim_Up:'Pistol_Aim_Up', Pistol_Aim_Down:'Pistol_Aim_Down',
+  Pistol_Shoot:'Pistol_Shoot', Pistol_Reload:'Pistol_Reload', Interact:'Interact', PickUp:'PickUp_Table', Driving:'Driving_Loop', Swim:'Swim_Fwd_Loop', Swim_Idle:'Swim_Idle_Loop', Punch:'Punch_Jab' };
+const want2 = { Slide_Start:'Slide_Start', Slide_Loop:'Slide_Loop', Slide_Exit:'Slide_Exit', Throw:'OverhandThrow', Climb_1m:'ClimbUp_1m', Prone_GetUp:'LayToIdle',
+  Hit_Knockback:'Hit_Knockback', Consume:'Consume', Chest_Open:'Chest_Open', Walk_Carry:'Walk_Carry_Loop' };
+
+const out = [];
+// keep original SWAT clips (renamed, prefixed Swat_)
+for (const c of tgt.animations) { const k = c.clone(); k.name = 'Swat_' + c.name.replace(/^.*\|/, ''); out.push(k); }
+for (const [k, v] of Object.entries(want1)) out.push(retargetClip(src1, v, k));
+for (const [k, v] of Object.entries(want2)) out.push(retargetClip(src2, v, k));
+tSk.pose();
+tRoot.updateMatrixWorld(true);
+
+const glb = await new GLTFExporter().parseAsync(tRoot, { binary: true, animations: out });
+const bytes = new Uint8Array(glb);
+let s = ''; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+window.__glb = btoa(s);
+window.__done = out.map(c => c.name + ':' + c.duration.toFixed(2));
+</script></body></html>

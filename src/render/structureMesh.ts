@@ -25,7 +25,7 @@ class GeoBuf {
     // compact vertex format: float32 position, int8 normal, half-float uv, uint8 colour + layer
     g.setAttribute('position', new THREE.Float32BufferAttribute(this.pos, 3));
     g.setAttribute('normal', new THREE.BufferAttribute(Int8Array.from(this.nor, (v) => Math.round(v * 127)), 3, true));
-    g.setAttribute('uv', new THREE.Float16BufferAttribute(this.uv, 2));
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(this.uv, 2));
     g.setAttribute('color', new THREE.BufferAttribute(Uint8Array.from(this.col, (v) => Math.min(255, Math.round(Math.sqrt(Math.max(0, v)) * 255))), 3, true));
     g.setAttribute('aLayer', new THREE.BufferAttribute(Uint8Array.from(this.lay), 1, false));
     g.setIndex(this.count > 65535 ? new THREE.Uint32BufferAttribute(this.idx, 1) : new THREE.Uint16BufferAttribute(this.idx, 1));
