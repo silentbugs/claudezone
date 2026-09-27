@@ -11,6 +11,8 @@ function freshPlayer(sim: Sim) {
   const p = sim.players[0];
   p.phase = 4; p.bot = false; p.vx = p.vy = p.vz = 0; p.onGround = true;
   for (const q of sim.players) if (q.id !== 0) { q.phase = 6; q.alive = false; }
+  // keep one idle enemy alive far away, or the match ends (last squad standing) and the sim stops
+  const e = sim.players[149]; Object.assign(e, { phase: 4, alive: true, bot: false, x: 3000, z: 300, y: 300 });
   return p;
 }
 function walk(sim: Sim, p: any, tx: number, tz: number, maxT = 20) {
@@ -38,14 +40,12 @@ test('climb an apartment stair core to the roof', () => {
     const lx = (r.x0 + r.x1) / 2;
     const lo = r.dir === 1 ? r.z0 + 0.3 : r.z1 - 0.3, hi = r.dir === 1 ? r.z1 - 0.3 : r.z0 + 0.3;
     const [ax, az] = toWorld(s, lx, lo), [bx, bz] = toWorld(s, lx, hi);
-    const okLo = walk(sim, p, ax, az, 6); const t1 = sim.time; const okHi = walk(sim, p, bx, bz, 8);
-    if (i === 5) console.log('f5 lo', okLo, 'hi', okHi, 'hiTime', (sim.time - t1).toFixed(2), 'intent', p.intent.mz, p.intent.yaw.toFixed(2), 'v', p.vx.toFixed(2), p.vz.toFixed(2), 'onGround', p.onGround, 'phase', p.phase, 'hp', p.health.toFixed(0));
+    walk(sim, p, ax, az, 6); walk(sim, p, bx, bz, 8);
     heights.push(+(p.y - s.y).toFixed(2));
-    const [llx, llz] = [(p.x - s.x) * s.cos - (p.z - s.z) * s.sin, (p.x - s.x) * s.sin + (p.z - s.z) * s.cos];
-    console.log('flight', i, 'local', llx.toFixed(2), llz.toFixed(2), 'y', (p.y - s.y).toFixed(2), 'ramp', r.x0.toFixed(2), r.z0.toFixed(2), r.x1.toFixed(2), r.z1.toFixed(2), r.y0.toFixed(2), r.y1.toFixed(2));
   }
   console.log('stair heights', heights.join(' '), 'roof at', (s.by1).toFixed(1));
-  assert.ok(Math.max(...heights) > s.by1 - 4, 'reached the top floor/roof level');
+  const roof = Math.max(...s.ramps.map((r) => r.y1));
+  assert.ok(Math.max(...heights) > roof - 0.5, 'reached the roof');
   assert.ok(p.health >= 100, 'no fall damage on the stairs');
 });
 
