@@ -24,6 +24,7 @@ export function canShoot(p: Player) {
 export function weaponTick(sim: Sim, p: Player, dt: number) {
   const it = p.intent;
   if (p.fireCd > 0) p.fireCd -= dt;
+  if (p.meleeCd > 0) p.meleeCd -= dt;
   if (p.boltT > 0) p.boltT -= dt;
   // ADS
   const w = p.weapons[p.cur];
@@ -71,7 +72,16 @@ export function weaponTick(sim: Sim, p: Player, dt: number) {
       return;
     }
   }
-  if (it.reload && w.mag < magSize && p.ammo[def.ammo] > 0) { startReload(sim, p); return; }
+  if (it.reload && w.mag < magSize && p.ammo[def.ammo] > 0 && def.cls !== 'melee') { startReload(sim, p); return; }
+  // quick melee (all weapons) and the combat knife
+  if ((it as any).melee || (def.cls === 'melee' && it.fire && !p.triggerHeld)) { (it as any).melee = false; if (p.meleeCd <= 0) melee(sim, p, def.cls === 'melee' ? def.melee!.damage : 60); p.triggerHeld = it.fire; return; }
+  if (def.cls === 'melee') { if (!it.fire) p.triggerHeld = false; return; }
+  // a burst in progress keeps firing without the trigger
+  if (p.burstLeft > 0) {
+    if (p.fireCd <= 0 && w.mag > 0 && canShoot(p)) { fire(sim, p, w, def, mods); p.burstLeft--; if (p.burstLeft <= 0 || w.mag <= 0) { p.burstLeft = 0; p.fireCd = 60 / (def.burstRpm ?? def.rpm); } }
+    if (!it.fire) p.triggerHeld = false;
+    return;
+  }
   // firing
   if (it.fire && canShoot(p) && p.stanceT <= 0.05) {
     if (w.mag <= 0) {
@@ -85,8 +95,25 @@ export function weaponTick(sim: Sim, p: Player, dt: number) {
     if (p.sprinting) { p.sprinting = false; p.sprintOut = p.tacSprint > 0 ? 0.3 : 0.18; p.tacSprint = 0; return; } // sprint-to-fire delay
     if (p.sprintOut > 0) return;
     fire(sim, p, w, def, mods);
+    if (def.burst && def.burst > 1) { p.burstLeft = def.burst - 1; if (w.mag <= 0) { p.burstLeft = 0; p.fireCd = 60 / (def.burstRpm ?? def.rpm); } }
     p.triggerHeld = true;
   } else p.triggerHeld = false;
+}
+
+/** Melee: hits the closest enemy in a short cone in front. */
+function melee(sim: Sim, p: Player, dmg: number) {
+  p.meleeCd = 0.7; p.reloadT = 0; p.plateT = 0;
+  sim.emit({ t: 'melee', p: p.id });
+  const fx = -Math.sin(p.yaw), fz = -Math.cos(p.yaw);
+  let best: Player | null = null, bd = 2.4;
+  for (const q of sim.playersNear(p.x, p.z, 3)) {
+    if (q.id === p.id || !q.alive || q.squad === p.squad) continue;
+    const dx = q.x - p.x, dz = q.z - p.z, d = Math.hypot(dx, dz);
+    if (d > bd || Math.abs(q.y - p.y) > 1.8) continue;
+    if ((dx * fx + dz * fz) / Math.max(0.01, d) < 0.6) continue;
+    best = q; bd = d;
+  }
+  if (best) sim.damage(best, dmg, p.id, 'melee', false, false, best.x, best.y + 1.1, best.z);
 }
 
 function startReload(sim: Sim, p: Player) {

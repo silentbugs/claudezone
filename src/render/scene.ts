@@ -7,6 +7,8 @@ import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
+import { CSM } from 'three/addons/csm/CSM.js';
+import { SUN_DIR } from './environment';
 
 export type Quality = 'low' | 'medium' | 'high' | 'ultra';
 
@@ -45,6 +47,9 @@ export class SceneMgr {
   grade: ShaderPass | null = null;
   private gtao: GTAOPass | null = null;
   quality: Quality = 'high';
+  csm: CSM | null = null;
+  private csmTimer = 0;
+  private lastFov = 0;
 
   constructor(canvas: HTMLCanvasElement) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance', logarithmicDepthBuffer: false });
@@ -62,6 +67,7 @@ export class SceneMgr {
   }
   resize() {
     this.renderer.setSize(innerWidth, innerHeight, false);
+    this.csm?.updateFrustums();
     this.composer?.setSize(innerWidth, innerHeight);
     this.camera.aspect = innerWidth / innerHeight; this.camera.updateProjectionMatrix();
   }
@@ -99,6 +105,17 @@ export class SceneMgr {
     r.shadowMap.enabled = q !== 'low';
     if (this.sun) { this.sun.castShadow = q !== 'low'; this.sun.shadow.mapSize.set(q === 'medium' ? 1024 : 2048, q === 'medium' ? 1024 : 2048); this.sun.shadow.map?.dispose(); (this.sun.shadow as any).map = null; }
     if (this.structures) this.structures.detailDist = q === 'low' ? 260 : q === 'medium' ? 360 : 460;
+    // cascaded shadows on high/ultra: long-range shadows from buildings, trees and players
+    if (this.csm) { this.csm.remove(); this.csm.dispose(); this.csm = null; }
+    if (this.sun && (q === 'high' || q === 'ultra')) {
+      this.csm = new CSM({ maxFar: q === 'ultra' ? 1400 : 900, cascades: q === 'ultra' ? 4 : 3, mode: 'practical', parent: this.scene, shadowMapSize: q === 'ultra' ? 4096 : 2048, lightDirection: SUN_DIR.clone().negate(), camera: this.camera, lightIntensity: 2.5, lightFar: 3000, lightMargin: 250 });
+      this.csm.fade = true;
+      for (const l of this.csm.lights) { l.color.setHex(0xfff0dc); l.shadow.bias = -0.0003; l.shadow.normalBias = 0.5; }
+      this.sun.intensity = 0; this.sun.castShadow = false;
+      this.csmMaterials = new WeakSet();
+      this.scene.traverse((o) => { const m = (o as THREE.Mesh).material as THREE.Material; if (m) m.needsUpdate = true; });
+      this.setupCsm();
+    } else if (this.sun) { this.sun.intensity = 2.5; this.scene.traverse((o) => { const m = (o as THREE.Mesh).material as THREE.Material; if (m && (m as any).defines?.USE_CSM) { delete (m as any).defines.USE_CSM; delete (m as any).defines.CSM_CASCADES; delete (m as any).defines.CSM_FADE; m.needsUpdate = true; } }); }
     this.composer = null; this.grade = null; this.gtao = null;
     if (q !== 'low') {
       const c = new EffectComposer(r);
@@ -113,11 +130,32 @@ export class SceneMgr {
     this.resize();
   }
 
+  private csmMaterials = new WeakSet<THREE.Material>();
+  /** Flag every lit material for CSM, chaining its own shader patch after CSM's uniform hook. */
+  setupCsm() {
+    const csm = this.csm; if (!csm) return;
+    this.scene.traverse((o) => {
+      const mats = (o as THREE.Mesh).material; if (!mats) return;
+      for (const m of Array.isArray(mats) ? mats : [mats]) {
+        if (!(m instanceof THREE.MeshStandardMaterial) || this.csmMaterials.has(m)) continue;
+        this.csmMaterials.add(m);
+        const prev = (m as any).__ownHook ?? m.onBeforeCompile; (m as any).__ownHook = prev;
+        csm.setupMaterial(m);
+        const csmHook = m.onBeforeCompile;
+        m.onBeforeCompile = (sh, r) => { csmHook.call(m, sh, r); prev.call(m, sh, r); };
+        const key = prev.toString();
+        m.customProgramCacheKey = () => key + '|csm';
+        m.needsUpdate = true;
+      }
+    });
+  }
+
   render() {
     const cam = this.camera.position;
     this.terrain.update(cam);
     this.structures.update(cam);
     followSun(this.sun, cam);
+    if (this.csm) { if (this.camera.fov !== this.lastFov) { this.lastFov = this.camera.fov; this.csm.updateFrustums(); } this.camera.updateMatrixWorld(); this.csm.update(); this.csmTimer -= 1 / 60; if (this.csmTimer <= 0) { this.csmTimer = 1; this.setupCsm(); } }
     this.grass?.update(cam, (performance.now() - this.t0) / 1000);
     this.trees?.update(cam, (performance.now() - this.t0) / 1000);
     const sh = (this.water as any).userData.shader; if (sh) sh.uniforms.uTime.value = (performance.now() - this.t0) / 1000;

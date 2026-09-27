@@ -126,9 +126,11 @@ function bestWeaponFor(p: Player, dist: number): number {
     const ammo = w.mag + p.ammo[d.ammo];
     if (ammo <= 0) return;
     let s = w.rarity * 0.3;
-    if (dist < 15) s += d.cls === 'shotgun' || d.cls === 'smg' ? 3 : d.cls === 'ar' ? 2 : d.cls === 'lmg' ? 1.5 : d.cls === 'pistol' ? 1 : 0.5;
-    else if (dist < 60) s += d.cls === 'ar' ? 3 : d.cls === 'lmg' ? 2.6 : d.cls === 'smg' ? 2 : d.cls === 'marksman' ? 1.5 : 1;
-    else s += d.cls === 'sniper' || d.cls === 'marksman' ? 3 : d.cls === 'ar' || d.cls === 'lmg' ? 2.4 : 0.8;
+    if (d.cls === 'melee') s -= 5;
+    const cls = d.cls === 'tactical' ? 'ar' : d.cls;
+    if (dist < 15) s += cls === 'shotgun' || cls === 'smg' ? 3 : cls === 'ar' ? 2 : cls === 'lmg' ? 1.5 : cls === 'pistol' ? 1 : 0.5;
+    else if (dist < 60) s += cls === 'ar' ? 3 : cls === 'lmg' ? 2.6 : cls === 'smg' ? 2 : cls === 'marksman' ? 1.5 : 1;
+    else s += cls === 'sniper' || cls === 'marksman' ? 3 : cls === 'ar' || cls === 'lmg' ? 2.4 : 0.8;
     if (s > bs) { bs = s; best = i; }
   });
   return best;

@@ -51,6 +51,8 @@ export interface Player {
   triggerHeld: boolean;
   stanceT: number;
   sprintOut: number;
+  burstLeft: number;
+  meleeCd: number;
   prevSprint: boolean;
   loadoutUsed: boolean;
   spectating: number;
@@ -112,5 +114,6 @@ export type SimEvent =
   | { t: 'whiz'; p: number; x: number; y: number; z: number }
   | { t: 'gas'; p: number }
   | { t: 'slide'; p: number }
+  | { t: 'melee'; p: number }
   | { t: 'flash'; p: number; s: number }
   | { t: 'marker'; x: number; z: number; kind: string; squad: number; dur: number };

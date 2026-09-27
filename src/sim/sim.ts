@@ -101,7 +101,7 @@ export class Sim {
     p.phase = Phase.Alive; p.alive = true; p.health = 100; p.armor = 150; p.onGround = true; p.stance = Stance.Stand;
     const gun = this.rng.pick(['m4', 'kilo', 'grau', 'mp5', 'mp7', 'm13', 'aug', 'ram7']);
     p.weapons = [{ id: gun, rarity: 1, mag: magSize(gun, 1) }, { id: 'm1911', rarity: 0, mag: 8 }]; p.cur = 0;
-    p.ammo = { ar: 240, smg: 240, sniper: 20, shotgun: 20, pistol: 60, rocket: 0 };
+    p.ammo = { heavy: 240, light: 240, sniper: 20, shotgun: 20, rocket: 0 };
     (p as any).respawnAt = undefined;
   }
   private endWarmup() {
@@ -109,7 +109,7 @@ export class Sim {
     for (const p of this.players) {
       if ((p as any).vehicle !== undefined) exitVehicle(this, p);
       Object.assign(p, { phase: Phase.Plane, alive: true, health: 100, armor: 0, plates: 0, kills: 0, damage: 0, cash: 0, lethal: null, tactical: null, killstreak: null, selfRevive: false, hasMask: false, gasMask: 0, gulagUsed: false, stance: Stance.Stand, reloadT: 0, plateT: 0, swapT: 0, ads: 0, downT: 0, reviveBy: -1, killedBy: -1 });
-      p.weapons = [{ id: 'x16', rarity: 0, mag: 15 }, null]; p.cur = 0; p.ammo = { ar: 0, smg: 0, sniper: 0, shotgun: 0, pistol: 30, rocket: 0 };
+      p.weapons = [{ id: 'x16', rarity: 0, mag: 13 }, null]; p.cur = 0; p.ammo = { heavy: 0, light: 30, sniper: 0, shotgun: 0, rocket: 0 };
       this.brains[p.id].target = -1; this.brains[p.id].goal = 'drop'; this.brains[p.id].dropX = 0;
     }
     for (const v of this.vehicles) v.seats = v.seats.map(() => -1);
@@ -153,8 +153,8 @@ export class Sim {
       stance: Stance.Stand, sprinting: false, tacSprint: 0, tacCooldown: 0, slideT: 0, slideCd: 0, slideDx: 0, slideDz: 0,
       swimming: false, mantleT: 0, mantleY: 0,
       health: 100, armor: 0, plates: 0, maxPlates: HEALTH.carry,
-      weapons: [{ id: 'x16', rarity: 0, mag: 15 }, null], cur: 0,
-      ammo: { ar: 0, smg: 0, sniper: 0, shotgun: 0, pistol: 30, rocket: 0 },
+      weapons: [{ id: 'x16', rarity: 0, mag: 13 }, null], cur: 0,
+      ammo: { heavy: 0, light: 30, sniper: 0, shotgun: 0, rocket: 0 },
       lethal: null, tactical: null, killstreak: null, selfRevive: false, gasMask: 0, hasMask: false,
       cash: 0, kills: 0, damage: 0,
       fireCd: 0, reloadT: 0, swapT: 0, plateT: 0, ads: 0, recoil: 0, recoilYaw: 0, bloom: 0, boltT: 0,
@@ -163,7 +163,7 @@ export class Sim {
       gulagUsed: false, deadAt: -1, killedBy: -1,
       interactT: 0, interactTarget: -1,
       intent: emptyIntent(), lastShot: -99, lastStep: 0, uavUntil: 0, bountyOn: 0, contractId: -1,
-      alive: true, placement: 0, gulagSlot: -1, triggerHeld: false, stanceT: 0, sprintOut: 0, prevSprint: false, loadoutUsed: false, spectating: -1,
+      alive: true, placement: 0, gulagSlot: -1, triggerHeld: false, stanceT: 0, sprintOut: 0, burstLeft: 0, meleeCd: 0, prevSprint: false, loadoutUsed: false, spectating: -1,
     };
   }
 
@@ -609,7 +609,7 @@ export class Sim {
     p.x = clamp(c.cx + Math.cos(a) * d, 50, MAP_SIZE - 50); p.z = clamp(c.cz + Math.sin(a) * d, 50, MAP_SIZE - 50);
     p.y = this.world.hf.at(p.x, p.z) + DEPLOY.redeployAlt;
     p.phase = Phase.Freefall; p.alive = true; p.health = 100; p.armor = 0; p.vx = p.vz = 0; p.vy = -20;
-    p.weapons = [{ id: 'x16', rarity: 0, mag: 15 }, null]; p.cur = 0; p.ammo.pistol = 30;
+    p.weapons = [{ id: 'x16', rarity: 0, mag: 13 }, null]; p.cur = 0; p.ammo.light = Math.max(p.ammo.light, 30);
     p.gulagUsed = true;
     this.emit({ t: 'redeploy', p: p.id });
     this.aliveCount = this.players.filter((q) => q.alive).length;

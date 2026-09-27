@@ -1,5 +1,5 @@
 /** Loot tables, ground spawns, supply boxes, pickup and death drops. */
-import { WEAPONS, WEAPON, AMMO_PICKUP, AMMO_MAX, rarityMods, AmmoType } from '../data/weapons';
+import { WEAPONS, WEAPON, AMMO_PICKUP, AMMO_MAX, AMMO_NAMES, rarityMods, AmmoType } from '../data/weapons';
 import { Item, ItemKind, Player, LethalType, TacticalType, KillstreakType, Phase } from './types';
 import { LOOT_TIER_WEIGHTS, HEALTH, CASH } from './config';
 import type { Sim } from './sim';
@@ -26,7 +26,7 @@ export function magSize(id: string, rarity: number) { const d = WEAPON[id]; retu
 export function itemLabel(it: Item): string {
   switch (it.kind) {
     case ItemKind.Weapon: return WEAPON[it.weapon!].name;
-    case ItemKind.Ammo: return `${it.ammo!.toUpperCase()} Ammo`;
+    case ItemKind.Ammo: return AMMO_NAMES[it.ammo!];
     case ItemKind.Plate: return 'Armor Plate';
     case ItemKind.Cash: return `$${it.n}`;
     case ItemKind.Lethal: return LETHAL_NAMES[it.lethal!];
@@ -43,7 +43,7 @@ export function randomItem(sim: Sim, x: number, y: number, z: number, bonus = 0)
   const rng = sim.rng, r = rng.next();
   const base = { id: sim.nextId++, x, y, z, alive: true } as Item;
   if (r < 0.28) { const w = rollWeapon(rng, bonus); return { ...base, kind: ItemKind.Weapon, weapon: w.id, rarity: w.rarity, mag: magSize(w.id, w.rarity) }; }
-  if (r < 0.52) { const a = rng.pick(['ar', 'ar', 'smg', 'smg', 'sniper', 'shotgun', 'pistol'] as AmmoType[]); return { ...base, kind: ItemKind.Ammo, ammo: a, n: AMMO_PICKUP[a] }; }
+  if (r < 0.52) { const a = rng.pick(['heavy', 'heavy', 'heavy', 'light', 'light', 'light', 'sniper', 'shotgun'] as AmmoType[]); return { ...base, kind: ItemKind.Ammo, ammo: a, n: AMMO_PICKUP[a] }; }
   if (r < 0.67) return { ...base, kind: ItemKind.Plate, n: 1 };
   if (r < 0.82) return { ...base, kind: ItemKind.Cash, n: rng.pick(CASH.stack) };
   if (r < 0.89) return { ...base, kind: ItemKind.Lethal, lethal: rng.pick(LETHALS), n: 1 };
@@ -63,7 +63,7 @@ export function chestContents(sim: Sim, x: number, y: number, z: number, legenda
     const [ix, iy, iz] = spot(i, n);
     const base = { id: sim.nextId++, x: ix, y: iy, z: iz, alive: true, vy: 3 } as Item;
     if (i === 0) { const w = rollWeapon(rng, legendary ? 3 : 0.6); out.push({ ...base, kind: ItemKind.Weapon, weapon: w.id, rarity: legendary ? Math.max(3, w.rarity) : w.rarity, mag: magSize(w.id, w.rarity) }); }
-    else if (i === 1) { const a = rng.pick(['ar', 'smg', 'sniper', 'shotgun'] as AmmoType[]); out.push({ ...base, kind: ItemKind.Ammo, ammo: a, n: AMMO_PICKUP[a] * 2 }); }
+    else if (i === 1) { const a = rng.pick(['heavy', 'light', 'sniper', 'shotgun'] as AmmoType[]); out.push({ ...base, kind: ItemKind.Ammo, ammo: a, n: AMMO_PICKUP[a] * 2 }); }
     else if (i === 2) out.push({ ...base, kind: ItemKind.Plate, n: 1 });
     else if (i === 3) out.push({ ...base, kind: ItemKind.Cash, n: rng.int(CASH.chestCash[0] / 100, CASH.chestCash[1] / 100) * 100 });
     else {
@@ -85,7 +85,7 @@ export function tryPickup(sim: Sim, p: Player, it: Item, explicit: boolean): boo
   switch (it.kind) {
     case ItemKind.Ammo: {
       const cap = AMMO_MAX[it.ammo!] - p.ammo[it.ammo!]; if (cap <= 0) break;
-      const t = Math.min(cap, it.n!); p.ammo[it.ammo!] += t; it.n! -= t; took = it.n! <= 0; if (!took) { sim.emit({ t: 'pickup', p: p.id, kind: it.kind, label: `+${t} ${it.ammo!.toUpperCase()}` }); return false; }
+      const t = Math.min(cap, it.n!); p.ammo[it.ammo!] += t; it.n! -= t; took = it.n! <= 0; if (!took) { sim.emit({ t: 'pickup', p: p.id, kind: it.kind, label: `+${t} ${AMMO_NAMES[it.ammo!]}` }); return false; }
       break;
     }
     case ItemKind.Plate: if (p.plates < p.maxPlates) { p.plates++; took = true; } break;
