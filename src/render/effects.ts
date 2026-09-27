@@ -102,8 +102,6 @@ export class Effects {
   private tracerPos = new Float32Array(1024 * 6);
   private gas: THREE.Mesh;
   private plane: THREE.Group;
-  private itemMeshes: THREE.InstancedMesh[] = [];
-  private chestMesh: THREE.InstancedMesh;
   private lights: THREE.PointLight[] = [];
   private lightT: number[] = [];
   private itemTimer = 0;
@@ -121,23 +119,6 @@ export class Effects {
     this.gas = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 900, 96, 1, true), gasMaterial());
     this.gas.frustumCulled = false; this.gas.renderOrder = 3; this.group.add(this.gas);
     this.plane = planeModel(); this.group.add(this.plane);
-    // loot: one instanced mesh per visual kind
-    const itemGeos = [
-      colored(new THREE.BoxGeometry(0.12, 0.14, 0.8), 0x2a2c2e), // weapon
-      colored(new THREE.BoxGeometry(0.25, 0.16, 0.18), 0x6a6a3a), // ammo
-      colored(new THREE.BoxGeometry(0.3, 0.05, 0.38), 0x3a3c38), // plate
-      colored(new THREE.BoxGeometry(0.22, 0.1, 0.14), 0x4a8a4a), // cash
-      colored(new THREE.SphereGeometry(0.09, 8, 6), 0x5a6a3a), // lethal
-      colored(new THREE.CylinderGeometry(0.06, 0.06, 0.2, 8), 0x7a7a7a), // tactical
-      colored(new THREE.BoxGeometry(0.3, 0.1, 0.22), 0x9a3a2a), // killstreak tablet
-      colored(new THREE.BoxGeometry(0.3, 0.2, 0.22), 0xc8c8c0), // self revive / mask / satchel
-    ];
-    const im = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6, emissive: 0x000000 });
-    for (const g of itemGeos) { const m = new THREE.InstancedMesh(g, im, 1500); m.count = 0; m.frustumCulled = false; m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); this.itemMeshes.push(m); this.group.add(m); }
-    // glow beacons for loot rarity (additive points refreshed with items)
-    const crate = mergeGeometries([colored(new THREE.BoxGeometry(1.2, 0.5, 0.7).translate(0, 0.25, 0), 0x4c5238), colored(new THREE.BoxGeometry(1.25, 0.12, 0.75).translate(0, 0.56, 0), 0x3c4228), colored(new THREE.BoxGeometry(1.26, 0.03, 0.76).translate(0, 0.5, 0), 0xffd070)])!;
-    this.chestMesh = new THREE.InstancedMesh(crate, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.7 }), 3000);
-    this.chestMesh.count = 0; this.chestMesh.frustumCulled = false; this.chestMesh.castShadow = true; this.group.add(this.chestMesh);
     for (let i = 0; i < 8; i++) { const l = new THREE.PointLight(0xffb060, 0, 30, 2); this.lights.push(l); this.lightT.push(0); this.group.add(l); }
     this.buildStatic();
   }
@@ -249,37 +230,7 @@ export class Effects {
       this.plane.rotation.set(0, Math.atan2(-pl.dx, -pl.dz), 0);
       this.plane.children.forEach((ch) => { if (ch.name === 'prop') ch.rotation.z += dt * 40; });
     }
-    // loot & chests near the camera (refresh 4x/s)
-    this.itemTimer -= dt;
-    if (this.itemTimer <= 0) { this.itemTimer = 0.25; this.refreshLoot(cam, time); }
     void alpha;
   }
 
-  private refreshLoot(cam: THREE.Vector3, time: number) {
-    const sim = this.sim, m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(1, 1, 1), p = new THREE.Vector3(), e = new THREE.Euler(), col = new THREE.Color();
-    const counts = this.itemMeshes.map(() => 0);
-    for (const it of sim.itemsNear(cam.x, cam.z, 90)) {
-      const k = it.kind === ItemKind.Weapon ? 0 : it.kind === ItemKind.Ammo ? 1 : it.kind === ItemKind.Plate ? 2 : it.kind === ItemKind.Cash ? 3 : it.kind === ItemKind.Lethal ? 4 : it.kind === ItemKind.Tactical ? 5 : it.kind === ItemKind.Killstreak ? 6 : 7;
-      const mesh = this.itemMeshes[k]; const i = counts[k]++; if (i >= 1500) continue;
-      e.set(0, (it.id * 1.7) % 6.28, 0); q.setFromEuler(e);
-      p.set(it.x, it.y + 0.08 + Math.sin(time * 2 + it.id) * 0.02, it.z);
-      m.compose(p, q, s); mesh.setMatrixAt(i, m);
-      col.set(it.kind === ItemKind.Weapon ? RARITY_COLORS[it.rarity ?? 0] : '#ffffff'); mesh.setColorAt(i, col);
-      // rarity beacon glint
-      if (it.kind === ItemKind.Weapon && (it.rarity ?? 0) >= 1 && Math.random() < 0.5) { col.set(RARITY_COLORS[it.rarity!]); this.add.spawn(it.x, it.y + 0.35, it.z, 0, 0.3, 0, 0.3, 0.35, 0.2, col.r, col.g, col.b, 0.6); }
-    }
-    this.itemMeshes.forEach((mm, k) => { mm.count = Math.min(1500, counts[k]); mm.instanceMatrix.needsUpdate = true; if (mm.instanceColor) mm.instanceColor.needsUpdate = true; });
-    let n = 0;
-    for (const ch of sim.chests) {
-      if (Math.abs(ch.x - cam.x) > 220 || Math.abs(ch.z - cam.z) > 220) continue;
-      if (n >= 3000) break;
-      e.set(ch.opened ? 0 : 0, (ch.id * 2.3) % 6.28, 0); q.setFromEuler(e);
-      m.compose(p.set(ch.x, ch.y, ch.z), q, s); this.chestMesh.setMatrixAt(n, m);
-      col.set(ch.opened ? '#555555' : ch.legendary ? '#ffb52e' : '#ffffff'); this.chestMesh.setColorAt(n, col);
-      if (!ch.opened && Math.random() < 0.3) this.add.spawn(ch.x, ch.y + 0.6, ch.z, 0, 0.2, 0, 0.3, 0.5, 0.3, 1, 0.8, 0.4, 0.35);
-      n++;
-    }
-    this.chestMesh.count = n; this.chestMesh.instanceMatrix.needsUpdate = true; if (this.chestMesh.instanceColor) this.chestMesh.instanceColor.needsUpdate = true;
-    void eyeHeight;
-  }
 }

@@ -11,6 +11,7 @@ import { Characters } from '../render/characters';
 import { ViewModel } from '../render/viewmodel';
 import { Effects } from '../render/effects';
 import { VehicleMeshes } from '../render/vehicles';
+import { LootMeshes } from '../render/loot';
 import { vehicleOf, VEHICLES } from '../sim/vehicles';
 import { Hud } from '../ui/hud';
 import { audio } from '../audio/audio';
@@ -28,6 +29,7 @@ export class Match {
   vm = new ViewModel();
   fx: Effects;
   vehMeshes = new VehicleMeshes();
+  loot: LootMeshes;
   clock = new FixedStep(1 / 60);
   controls: Controls;
   private settingsEl: SettingsMenu | null = null;
@@ -56,6 +58,7 @@ export class Match {
     this.fx = new Effects(this.sim, sm.scene);
     sm.scene.add(this.chars.group);
     sm.scene.add(this.vehMeshes.group);
+    this.loot = new LootMeshes(this.sim); sm.scene.add(this.loot.group);
     this.chars.hidden = 0;
     this.camYaw = Math.atan2(-this.sim.plane.dx, -this.sim.plane.dz);
     this.vm.setAspect(innerWidth / innerHeight);
@@ -66,7 +69,7 @@ export class Match {
   }
 
   dispose() {
-    this.sm.scene.remove(this.chars.group); this.sm.scene.remove(this.fx.group); this.sm.scene.remove(this.vehMeshes.group);
+    this.sm.scene.remove(this.chars.group); this.sm.scene.remove(this.fx.group); this.sm.scene.remove(this.vehMeshes.group); this.sm.scene.remove(this.loot.group);
     this.hud.root.remove(); this.pauseEl?.remove(); this.fpsEl.remove(); this.closeSettings(); this.input.onUnlock = () => {};
     audio.loop('engine', 0); audio.loop('wind', 0); audio.loop('gas', 0); audio.loop('chute', 0);
   }
@@ -260,6 +263,7 @@ export class Match {
     this.chars.update(sim.players, a, cam.position, dt, me.squad);
     this.fx.update(dt, a, cam.position, time, cam.fov);
     this.vehMeshes.update(sim.vehicles, a, dt, cam.position);
+    { const t = me.phase === Phase.Alive ? sim.interactTarget(me) : null; this.loot.update(dt, cam.position, time, t?.kind === 'item' ? t.id : -1); }
     // hide the local body in first person, show it otherwise
     this.sm.render();
     // viewmodel
