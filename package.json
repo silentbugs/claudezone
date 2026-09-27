@@ -2,7 +2,7 @@
   "name": "verdansk",
   "version": "1.0.0",
   "scripts": {
-    "dev": "vite --host 127.0.0.1",
+    "dev": "vite",
     "build": "tsc && vite build",
     "typecheck": "tsc",
     "test": "node scripts/build-tests.mjs && node --test .build/test/"
