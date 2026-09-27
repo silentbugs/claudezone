@@ -155,6 +155,11 @@ export class Match {
     const cam = this.sm.camera.position;
     const d = (x: number, y: number, z: number) => Math.hypot(x - cam.x, y - cam.y, z - cam.z);
     switch (e.t) {
+      case 'kill': {
+        const v = sim.players[e.victim];
+        if (e.victim !== this.viewId() && e.x !== undefined && d(e.x, e.y!, e.z!) < 90 && v.phase !== Phase.Gulag) this.soldiers.addCorpse(e.x, e.y!, e.z!, e.yaw!, v.squad, sim.time);
+        break;
+      }
       case 'shot': {
         const def = WEAPON[e.w];
         if (e.p === this.viewId()) { audio.gunshot(def.cls, null); this.vm.fire(); }
@@ -309,7 +314,7 @@ export class Match {
     audio.setListener(cam.position.x, cam.position.y, cam.position.z, fwd.x, fwd.y, fwd.z);
     // world
     this.soldiers.hidden = this.chars.hidden;
-    this.soldiers.update(sim.players, a, cam.position, dt);
+    this.soldiers.update(sim.players, a, cam.position, dt, sim.time);
     this.chars.skip = this.soldiers.ids;
     this.chars.update(sim.players, a, cam.position, dt, me.squad);
     this.fx.update(dt, a, cam.position, time, cam.fov);

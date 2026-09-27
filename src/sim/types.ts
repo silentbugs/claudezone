@@ -93,7 +93,7 @@ export type SimEvent =
   | { t: 'impact'; x: number; y: number; z: number; nx: number; ny: number; nz: number; mat: number; water: boolean }
   | { t: 'hit'; attacker: number; victim: number; dmg: number; head: boolean; armorBroke: boolean; armorHit: boolean; kill: boolean; down: boolean; x: number; y: number; z: number }
   | { t: 'down'; victim: number; attacker: number; w: string }
-  | { t: 'kill'; victim: number; attacker: number; w: string; head: boolean; finish: boolean }
+  | { t: 'kill'; victim: number; attacker: number; w: string; head: boolean; finish: boolean; x?: number; y?: number; z?: number; yaw?: number }
   | { t: 'revive'; p: number }
   | { t: 'plate'; p: number; done: boolean }
   | { t: 'reload'; p: number; w: string }

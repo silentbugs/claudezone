@@ -458,12 +458,12 @@ export class Sim {
   kill(v: Player, attacker: number, weapon: string, head: boolean, finish: boolean) {
     if (v.turret >= 0) this.unmanTurret(v);
     if ((v as any).vehicle !== undefined) exitVehicle(this, v);
-    if (this.inWarmup) { this.emit({ t: 'kill', victim: v.id, attacker, w: weapon, head, finish }); if (attacker >= 0) this.players[attacker].kills++; v.phase = Phase.Dead; (v as any).respawnAt = this.time + 3; return; }
+    if (this.inWarmup) { this.emit({ t: 'kill', victim: v.id, attacker, w: weapon, head, finish, x: v.x, y: v.y, z: v.z, yaw: v.yaw }); if (attacker >= 0) this.players[attacker].kills++; v.phase = Phase.Dead; (v as any).respawnAt = this.time + 3; return; }
     const inGulag = v.phase === Phase.Gulag;
     v.health = 0; v.armor = 0;
     const att = attacker >= 0 ? this.players[attacker] : null;
     if (att && att.squad !== v.squad) att.kills++;
-    this.emit({ t: 'kill', victim: v.id, attacker, w: weapon, head, finish });
+    this.emit({ t: 'kill', victim: v.id, attacker, w: weapon, head, finish, x: v.x, y: v.y, z: v.z, yaw: v.yaw });
     this.checkBounty(v, attacker);
     if (inGulag) { this.gulagResult(v.id); return; }
     dropBag(this, v);

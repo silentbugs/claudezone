@@ -34,6 +34,23 @@ export class Soldiers {
   private slots: Slot[] = [];
   private byPid = new Map<number, Slot>();
   hidden = -1;
+  private corpses: { s: Slot; t0: number }[] = [];
+  private now = 0;
+
+  /** A body that plays the death clip where a player fell (the player itself has already moved on to the Gulag / spectating). */
+  addCorpse(x: number, y: number, z: number, yaw: number, squad: number, now: number) {
+    if (!this.ready) return;
+    let c = this.corpses.length >= 8 ? this.corpses.shift()! : null;
+    const s = c?.s ?? this.make();
+    s.mixer.stopAllAction(); s.cur = ''; s.gun.visible = false; s.proneK = 0;
+    s.tilt.rotation.set(0, 0, 0); s.tilt.position.set(0, 0, 0);
+    const cm = CAMO[squad % CAMO.length];
+    for (const m of s.mats[0]) m.color.setHex(cm[0]);
+    for (const m of s.mats[1]) m.color.setHex(cm[1]);
+    s.root.position.set(x, y, z); s.root.rotation.set(0, yaw, 0); s.root.visible = true;
+    this.play(s, 'Death', 0);
+    this.corpses.push({ s, t0: now });
+  }
 
   get ready() { return models.gltf.has('soldier_swat'); }
 
@@ -68,9 +85,17 @@ export class Soldiers {
     return { root, model, mixer, actions, cur: '', pid: -1, bones, mats, gun, gunKey: '', grip: new THREE.Vector3(), guard: new THREE.Vector3(), pistol: false, pitch: 0, used: false, tilt, proneK: 0 };
   }
 
-  update(players: Player[], alpha: number, cam: THREE.Vector3, dt: number) {
+  update(players: Player[], alpha: number, cam: THREE.Vector3, dt: number, now = 0) {
     this.ids.clear();
     if (!this.ready) return;
+    // bodies: play the fall once, lie there, then sink away after 25 s
+    this.now = now;
+    for (const c of this.corpses) {
+      const age = now - c.t0;
+      c.s.mixer.update(dt);
+      if (age > 25) c.s.root.position.y -= dt * 0.25;
+    }
+    while (this.corpses.length && now - this.corpses[0].t0 > 30) { const c = this.corpses.shift()!; this.group.remove(c.s.root); }
     // nearest eligible players get a slot
     const cand: [number, Player][] = [];
     for (const p of players) {
@@ -104,7 +129,7 @@ export class Soldiers {
     const next = s.actions.get(name) ?? s.actions.get('Idle'); if (!next) return;
     const prev = s.cur ? s.actions.get(s.cur) : null;
     next.reset().setEffectiveWeight(1).play();
-    if (name === 'Slide_Start' || name === 'Jump_Land') { next.setLoop(THREE.LoopOnce, 1); next.clampWhenFinished = true; }
+    if (name === 'Slide_Start' || name === 'Jump_Land' || name === 'Death') { next.setLoop(THREE.LoopOnce, 1); next.clampWhenFinished = true; }
     if (prev && prev !== next) prev.crossFadeTo(next, s.cur ? fade : 0, false);
     s.cur = name;
   }
