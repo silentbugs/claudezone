@@ -51,6 +51,7 @@ export class Audio {
     this.roomSend = ctx.createGain(); this.roomSend.gain.value = 0;
     this.sfx.connect(this.roomSend); this.roomSend.connect(this.room); this.room.connect(this.muffle);
     this.generate();
+    void this.loadSamples();
   }
 
   setVolume(v: number, sfx = this.sfxVol, ui = this.uiVol) { this.volume = v; this.sfxVol = sfx; this.uiVol = ui; if (this.master) { this.master.gain.value = v; this.sfx.gain.value = sfx; this.uiBus.gain.value = ui; } }
@@ -121,6 +122,63 @@ export class Audio {
       speechSynthesis.cancel(); speechSynthesis.speak(u);
       this.play('beep', { ui: true, vol: 0.35, rate: 1.4 });
     } catch { /* not supported */ }
+  }
+
+  /**
+   * Recorded samples (public/sfx, CC0) replace the synthesized versions where available. Each file is
+   * trimmed (manifest hints + automatic leading-silence trim), peak-normalised and faded out.
+   */
+  samplesLoaded = 0;
+  async loadSamples(base = 'sfx/') {
+    const ctx = this.ctx; if (!ctx) return;
+    let man: Record<string, { file: string; trimStart?: number; trimEnd?: number; gain?: number }>;
+    try { const r = await fetch(base + 'manifest.json'); if (!r.ok) return; man = await r.json(); } catch { return; }
+    const decoded = new Map<string, AudioBuffer>();
+    await Promise.all(Object.entries(man).map(async ([key, m]) => {
+      try { const r = await fetch(base + m.file); if (!r.ok) return; const b = await ctx.decodeAudioData(await r.arrayBuffer()); decoded.set(key, this.prep(b, m.trimStart, m.trimEnd, key.endsWith('_loop'))); } catch { /* skip unreadable file */ }
+    }));
+    const group = (prefix: string) => [...decoded.entries()].filter(([k]) => (k === prefix || k.startsWith(prefix + '_')) && !k.includes('burst') && !k.endsWith('_loop_2')).map(([, b]) => b);
+    const set = (name: SoundName, bufs: AudioBuffer[]) => { if (bufs.length) { this.buffers.set(name, bufs); this.samplesLoaded++; } };
+    for (const cls of ['ar', 'smg', 'pistol', 'sniper', 'shotgun', 'lmg', 'launcher']) {
+      let b = group('shot_' + cls);
+      if (!b.length && cls === 'lmg') b = group('shot_ar');
+      if (!b.length && cls === 'smg') b = group('shot_pistol');
+      set(('shot_' + cls) as SoundName, b); set(('shotIn_' + cls) as SoundName, b);
+    }
+    set('shot_marksman', group('shot_sniper')); set('shotIn_marksman', group('shot_sniper'));
+    const far = group('far');
+    set('far_rifle', far); set('far_light', far); set('far_heavy', far.length ? far : group('explosionFar'));
+    const direct: [SoundName, string][] = [['explosion', 'explosion'], ['explosionFar', 'explosionFar'], ['impact', 'impact'], ['impactMetal', 'impactMetal'], ['impactWood', 'impactWood'], ['impactGlass', 'impactGlass'], ['impactWater', 'impactWater'], ['whiz', 'whiz'], ['magOut', 'magOut'], ['magIn', 'magIn'], ['bolt', 'bolt'], ['swap', 'swap'], ['dry', 'dry'], ['step_dirt', 'step_dirt'], ['step_concrete', 'step_concrete'], ['step_metal', 'step_metal'], ['step_wood', 'step_wood'], ['land', 'land'], ['chute', 'chute'], ['cough', 'cough'], ['uiBuy', 'uiBuy'], ['crate', 'crate'], ['hitArmor', 'armorTink'], ['armorBreak', 'armorBreak'], ['selfArmorBreak', 'armorBreak'], ['gear', 'cloth'], ['uiHover', 'uiClick']];
+    for (const [n, k] of direct) set(n, group(k));
+    // plate insert: recorded velcro + clack laid out like the real sequence
+    const vel = group('velcro')[0], clack = group('plateClack')[0];
+    if (vel || clack) {
+      const len = 1.25, out = ctx.createBuffer(1, Math.floor(len * ctx.sampleRate), ctx.sampleRate), d = out.getChannelData(0);
+      const put = (b: AudioBuffer | undefined, at: number, g: number, maxLen = 1) => { if (!b) return; const s = b.getChannelData(0), o = Math.floor(at * ctx.sampleRate); for (let i = 0; i < s.length && i < maxLen * ctx.sampleRate && o + i < d.length; i++) d[o + i] += s[i] * g; };
+      put(vel, 0, 0.8, 0.3); put(clack, 0.66, 1); put(vel, 0.92, 0.45, 0.14);
+      this.buffers.set('plate', [out]); this.samplesLoaded++;
+    }
+    for (const [loop, k] of [['wind', 'wind_loop'], ['engine', 'engine_loop'], ['heli', 'heli_loop'], ['vehicle', 'vehicle_loop'], ['gas', 'gas_loop']] as [Loop, string][]) {
+      const b = decoded.get(k); if (b) { this.loopBufs.set(loop, b); this.samplesLoaded++; const l = this.loops.get(loop); if (l) { l.src.stop(); this.loops.delete(loop); } }
+    }
+  }
+  /** Trim, drop leading silence, normalise, fade the tail. Loops get crossfaded ends. */
+  private prep(b: AudioBuffer, t0 = 0, t1?: number, loop = false): AudioBuffer {
+    const ctx = this.ctx!, sr = b.sampleRate;
+    let s = Math.floor(t0 * sr), e = Math.min(b.length, t1 !== undefined ? Math.floor(t1 * sr) : b.length);
+    const mono = new Float32Array(b.length);
+    for (let c = 0; c < b.numberOfChannels; c++) { const d = b.getChannelData(c); for (let i = 0; i < b.length; i++) mono[i] += d[i] / b.numberOfChannels; }
+    let peak = 0; for (let i = s; i < e; i++) peak = Math.max(peak, Math.abs(mono[i]));
+    if (!loop) { const th = peak * 0.05; while (s < e && Math.abs(mono[s]) < th) s++; s = Math.max(0, s - Math.floor(0.002 * sr)); }
+    const n = Math.max(1, e - s), out = ctx.createBuffer(loop ? 2 : 1, n, sr);
+    for (let c = 0; c < out.numberOfChannels; c++) {
+      const src = b.getChannelData(Math.min(c, b.numberOfChannels - 1)), d = out.getChannelData(c);
+      for (let i = 0; i < n; i++) d[i] = (loop ? src[s + i] : mono[s + i]) / Math.max(1e-4, peak) * 0.95;
+      const f = Math.min(n, Math.floor((loop ? 0.1 * n : 0.03 * sr)));
+      if (loop) for (let i = 0; i < f; i++) { const k = i / f; d[i] = d[i] * k + d[n - f + i] * (1 - k); }
+      else for (let i = 0; i < f; i++) d[n - 1 - i] *= i / f;
+    }
+    return out;
   }
 
   loop(key: Loop, vol: number, rate = 1, cutoff = 20000) {

@@ -23,7 +23,7 @@ export class TerrainMesh {
   private chunks: { lods: THREE.Mesh[]; cx: number; cz: number; cur: number }[] = [];
   material: THREE.MeshStandardMaterial;
 
-  constructor(hf: Heightfield, extra: TerrainExtras, tex: THREE.DataArrayTexture) {
+  constructor(hf: Heightfield, extra: TerrainExtras, tex: THREE.DataArrayTexture, normalTex?: THREE.DataArrayTexture) {
     const n = hf.res, sp = hf.step;
     // per-vertex normals (shared by all LODs, sampled at the vertex)
     const normals = new Float32Array(n * n * 3);
@@ -34,7 +34,7 @@ export class TerrainMesh {
       normals[(j * n + i) * 3] = nx / l; normals[(j * n + i) * 3 + 1] = ny / l; normals[(j * n + i) * 3 + 2] = nz / l;
     }
     const mat = new THREE.MeshStandardMaterial({ roughness: 0.95, metalness: 0 });
-    const tnorm = normalArrayFrom(tex, [2.5, 2.5, 3.5, 5, 1.5, 2.5, 2, 1.5, 3]);
+    const tnorm = normalTex ?? normalArrayFrom(tex, [2.5, 2.5, 3.5, 5, 1.5, 2.5, 2, 1.5, 3]);
     mat.onBeforeCompile = (sh) => {
       sh.uniforms.tLayers = { value: tex };
       sh.uniforms.tTN = { value: tnorm };

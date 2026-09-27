@@ -137,3 +137,61 @@ vec3 perturbN(vec3 N, vec3 viewPos, vec2 uv, vec3 mapN) {
   float sc = det == 0.0 ? 0.0 : inversesqrt(det);
   return normalize(T * (mapN.x * sc) + B * (mapN.y * sc) + N * mapN.z);
 }`;
+
+// ------------------------------------------------------------------ photo materials (Poly Haven, CC0)
+export interface PhotoSpec { layer: number; name: string; gray?: boolean }
+/** Building layers (index = Mat): gray = tinted by vertex colour, otherwise the photo's own colour is kept. */
+export const BUILDING_PHOTOS: PhotoSpec[] = [
+  { layer: 0, name: 'concrete', gray: true }, { layer: 1, name: 'brick' }, { layer: 2, name: 'plaster', gray: true }, { layer: 3, name: 'metal', gray: true },
+  { layer: 4, name: 'wood' }, { layer: 6, name: 'stone' }, { layer: 7, name: 'asphalt', gray: true }, { layer: 8, name: 'roof', gray: true },
+  { layer: 9, name: 'container', gray: true }, { layer: 10, name: 'trim', gray: true }, { layer: 13, name: 'pavers', gray: true }, { layer: 14, name: 'snow' },
+];
+/** Terrain layers: 0 grass, 1 dry grass, 2 dirt, 3 rock, 4 snow, 5 asphalt, 6 sand, 7 ice, 8 pavement. */
+export const TERRAIN_PHOTOS: PhotoSpec[] = [
+  { layer: 0, name: 'grass' }, { layer: 1, name: 'dry' }, { layer: 2, name: 'dirt' }, { layer: 3, name: 'rock' }, { layer: 4, name: 'snow' },
+  { layer: 5, name: 'asphalt' }, { layer: 6, name: 'sand' }, { layer: 8, name: 'concrete' },
+];
+
+async function loadImage(url: string): Promise<HTMLImageElement | null> {
+  try { const img = new Image(); img.src = url; await img.decode(); return img; } catch { return null; }
+}
+
+/**
+ * Build colour + normal arrays at `size`, using photo textures where available and upscaled procedural
+ * layers otherwise. Colour layers marked gray are converted to luminance so vertex tints set the hue.
+ */
+export async function photoArrays(proc: THREE.DataArrayTexture, procNormals: THREE.DataArrayTexture, specs: PhotoSpec[], size = 512, base = 'tex/'): Promise<{ color: THREE.DataArrayTexture; normal: THREE.DataArrayTexture; colored: number[] }> {
+  const { width: PW, depth: L } = proc.image as { width: number; height: number; depth: number };
+  const pdata = proc.image.data as Uint8Array, ndata = procNormals.image.data as Uint8Array;
+  const color = new Uint8Array(size * size * 4 * L), normal = new Uint8Array(size * size * 4 * L);
+  const colored = new Array(L).fill(0);
+  // upscale procedural layers (nearest-ish bilinear)
+  for (let l = 0; l < L; l++) for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+    const sx = Math.floor((x * PW) / size), sy = Math.floor((y * PW) / size), si = l * PW * PW * 4 + (sy * PW + sx) * 4, di = l * size * size * 4 + (y * size + x) * 4;
+    for (let c = 0; c < 4; c++) { color[di + c] = pdata[si + c]; normal[di + c] = ndata[si + c]; }
+  }
+  const cv = document.createElement('canvas'); cv.width = cv.height = size;
+  const g = cv.getContext('2d', { willReadFrequently: true })!;
+  await Promise.all(specs.map(async (s) => {
+    const [d, n] = await Promise.all([loadImage(`${base}${s.name}_diff.jpg`), loadImage(`${base}${s.name}_nor.jpg`)]);
+    const o = s.layer * size * size * 4;
+    if (d) {
+      g.drawImage(d, 0, 0, size, size); const px = g.getImageData(0, 0, size, size).data;
+      if (s.gray) for (let i = 0; i < px.length; i += 4) { const v = px[i] * 0.3 + px[i + 1] * 0.59 + px[i + 2] * 0.11; px[i] = px[i + 1] = px[i + 2] = v; }
+      color.set(px, o); colored[s.layer] = s.gray ? 0 : 1;
+    }
+    if (n) { g.drawImage(n, 0, 0, size, size); normal.set(g.getImageData(0, 0, size, size).data, o); }
+  }));
+  const mk = (data: Uint8Array, srgb: boolean) => {
+    const t = new THREE.DataArrayTexture(data, size, size, L);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping; t.magFilter = THREE.LinearFilter; t.minFilter = THREE.LinearMipmapLinearFilter; t.generateMipmaps = true; t.anisotropy = 8;
+    if (srgb) t.colorSpace = THREE.SRGBColorSpace;
+    t.needsUpdate = true; return t;
+  };
+  const colorTex = mk(color, true);
+  // per-layer mean (linear luminance) for the tint normalisation in the building shader
+  const avg: number[] = [];
+  for (let l = 0; l < L; l++) { let s = 0, n = 0; const o = l * size * size * 4; for (let i = 0; i < size * size; i += 13) { const k = o + i * 4; s += srgbToLin(color[k]) * 0.3 + srgbToLin(color[k + 1]) * 0.59 + srgbToLin(color[k + 2]) * 0.11; n++; } avg.push(s / n); }
+  colorTex.userData.avg = avg;
+  return { color: colorTex, normal: mk(normal, false), colored };
+}

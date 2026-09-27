@@ -27,7 +27,8 @@ const GradeShader = {
       gl_FragColor = vec4(c, t.a); }`,
 };
 import type { WorldData } from '../world/mapgen';
-import { materialArray, terrainArray } from './textures';
+import { materialArray, terrainArray, normalArrayFrom, photoArrays, BUILDING_PHOTOS, TERRAIN_PHOTOS } from './textures';
+import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { TerrainMesh } from './terrainMesh';
 import { StructureMesh } from './structureMesh';
 import { Trees } from './trees';
@@ -72,11 +73,29 @@ export class SceneMgr {
     this.camera.aspect = innerWidth / innerHeight; this.camera.updateProjectionMatrix();
   }
 
+  /** Photo-scanned materials + HDRI lighting; call before buildWorld. Falls back to procedural. */
+  private photos: { b?: Awaited<ReturnType<typeof photoArrays>>; t?: Awaited<ReturnType<typeof photoArrays>> } = {};
+  async loadPhotoMaterials() {
+    try {
+      const mats = materialArray(), terr = terrainArray();
+      const [b, t] = await Promise.all([
+        photoArrays(mats, normalArrayFrom(mats, [0.8, 3, 0.4, 1.6, 2.2, 0.1, 2.5, 1.2, 0.9, 2, 0.25, 0.6, 2, 1.6, 0.8, 1]), BUILDING_PHOTOS),
+        photoArrays(terr, normalArrayFrom(terr, [2.5, 2.5, 3.5, 5, 1.5, 2.5, 2, 1.5, 3]), TERRAIN_PHOTOS),
+      ]);
+      this.photos = { b, t };
+      const hdr = await new RGBELoader().loadAsync('tex/sky_1k.hdr');
+      hdr.mapping = THREE.EquirectangularReflectionMapping;
+      const pm = new THREE.PMREMGenerator(this.renderer);
+      this.hdrEnv = pm.fromEquirectangular(hdr).texture; hdr.dispose(); pm.dispose();
+    } catch (e) { console.warn('photo materials unavailable', e); }
+  }
+  private hdrEnv: THREE.Texture | null = null;
+
   buildWorld(w: WorldData) {
-    const mats = materialArray(), terr = terrainArray();
-    this.terrain = new TerrainMesh(w.hf, w.extra, terr);
+    const mats = this.photos.b?.color ?? materialArray(), terr = this.photos.t?.color ?? terrainArray();
+    this.terrain = new TerrainMesh(w.hf, w.extra, terr, this.photos.t?.normal);
     this.scene.add(this.terrain.group);
-    this.structures = new StructureMesh(w.col.structures, mats, w.hf.size);
+    this.structures = new StructureMesh(w.col.structures, mats, w.hf.size, this.photos.b?.normal, this.photos.b?.colored);
     this.scene.add(this.structures.group);
     this.trees = new Trees(w.trees); this.scene.add(this.trees.group);
     this.grass = new Foliage(w); this.grass.density = this.foliage; this.scene.add(this.grass.mesh);
@@ -84,8 +103,8 @@ export class SceneMgr {
     this.scene.add(new THREE.LineSegments(wg, new THREE.LineBasicMaterial({ color: 0x1e1e1e })));
     this.scene.add(makeSky());
     const pm = new THREE.PMREMGenerator(this.renderer);
-    this.scene.environment = pm.fromScene(new RoomEnvironment(), 0.04).texture;
-    this.scene.environmentIntensity = 0.35;
+    this.scene.environment = this.hdrEnv ?? pm.fromScene(new RoomEnvironment(), 0.04).texture;
+    this.scene.environmentIntensity = this.hdrEnv ? 0.55 : 0.35;
     const { sun } = makeLights(this.scene);
     this.sun = sun;
     this.water = waterMaterial();
