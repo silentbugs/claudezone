@@ -91,7 +91,7 @@ export function terrainArray(size = 256): THREE.DataArrayTexture {
     (u, v) => { const n = tfbm(u, v, 24, 3, 28) * 0.5 + hash2(Math.floor(u * 512), Math.floor(v * 512), 7) * 0.5; const crack = Math.abs(tfbm(u, v, 5, 3, 29) - 0.5) < 0.012 ? -25 : 0; const c = 78 + n * 38 + crack; return [c, c, c * 1.03]; },
     (u, v) => { const n = tfbm(u, v, 14, 4, 30); return [178 + n * 40, 164 + n * 36, 132 + n * 30]; },
     (u, v) => { const n = tfbm(u, v, 5, 4, 31), cr = Math.abs(tfbm(u, v, 7, 3, 32) - 0.5) < 0.01 ? 30 : 0; return [180 + n * 30 + cr, 205 + n * 25 + cr, 222 + n * 20]; },
-    (u, v) => { const seam = (u * 4) % 1 < 0.03 || (v * 4) % 1 < 0.03 ? -28 : 0; const n = tfbm(u, v, 12, 3, 33) * 30 + cell(u, v, 4, 34) * 14; const st = tfbm(u, v, 3, 3, 35) > 0.64 ? -16 : 0; const c = 150 + n + seam + st; return [c, c * 0.98, c * 0.95]; },
+    (u, v) => { const seam = (u * 4) % 1 < 0.03 || (v * 4) % 1 < 0.03 ? -28 : 0; const n = tfbm(u, v, 12, 3, 33) * 30 + cell(u, v, 4, 34) * 14; const st = tfbm(u, v, 3, 3, 35) > 0.64 ? -16 : 0; const c = 128 + n + seam + st; return [c, c * 0.98, c * 0.94]; },
   ];
   fns.forEach((fn, i) => layer(size, fn, data, i * size * size * 4));
   const tex = new THREE.DataArrayTexture(data, size, size, L);

@@ -193,6 +193,16 @@ export function apartment(rng: Rng, w: number, d: number, floors: number, st: St
       b.slab(-hw, -hd, hw, hd, yy, 0.3, Mat.Concrete, [[cx0, cz0 + 1.1, -cx0, cz1]]);
     }
   }
+  // facade: a slab-edge band at every floor and a darker plinth (Soviet panel-block look)
+  for (let f = 1; f <= floors; f++) {
+    const y = f * H + 0.05, band = opts.glassBands ? 0.45 : 0.22, out = opts.glassBands ? 0.12 : 0.08, col = opts.glassBands ? 0x8a8e92 : 0xb8b4aa;
+    b.box(-hw - out, y - band, -hd - out, hw + out, y + 0.02, -hd + 0.02, Mat.Trim, { color: col, noCollide: true });
+    b.box(-hw - out, y - band, hd - 0.02, hw + out, y + 0.02, hd + out, Mat.Trim, { color: col, noCollide: true });
+    b.box(-hw - out, y - band, -hd, -hw + 0.02, y + 0.02, hd, Mat.Trim, { color: col, noCollide: true });
+    b.box(hw - 0.02, y - band, -hd, hw + out, y + 0.02, hd, Mat.Trim, { color: col, noCollide: true });
+  }
+  b.box(-hw - 0.06, 0.05, -hd - 0.06, hw + 0.06, 0.75, hd + 0.06, Mat.Concrete, { color: 0x77736c, noCollide: true });
+  if (opts.glassBands) for (let x = -hw + 3; x < hw - 1; x += 3) { b.box(x - 0.08, 0.05, -hd - 0.1, x + 0.08, floors * H, -hd + 0.05, Mat.Metal, { color: 0x6a6e72, noCollide: true }); b.box(x - 0.08, 0.05, hd - 0.05, x + 0.08, floors * H, hd + 0.1, Mat.Metal, { color: 0x6a6e72, noCollide: true }); }
   // roof: parapet + stair head house over the core
   const top = floors * H + 0.05;
   b.wall(0, -hw, hw, -hd + 0.15, top, 1.0, 0.3, st.wall, [], st.wallColor);

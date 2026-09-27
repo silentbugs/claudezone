@@ -14,7 +14,7 @@ const DETAIL_DIST = 460;
 
 /** texture metres per repeat for each material layer */
 const SCALE: Record<number, number> = { [Mat.Concrete]: 4, [Mat.Brick]: 2.4, [Mat.Plaster]: 3, [Mat.Metal]: 3, [Mat.Wood]: 2, [Mat.Glass]: 3, [Mat.Rock]: 5, [Mat.Asphalt]: 6, [Mat.Roof]: 3, [Mat.Container]: 2.5, [Mat.Trim]: 2, [Mat.Dark]: 2, [Mat.Foliage]: 2, [Mat.Tile]: 2, [Mat.Snow]: 4, [Mat.Water]: 4 };
-const DEFAULT_TINT: Record<number, number> = { [Mat.Concrete]: 0xb4b0a8, [Mat.Brick]: 0xffffff, [Mat.Plaster]: 0xe0dccf, [Mat.Metal]: 0x9aa0a4, [Mat.Wood]: 0xc8b8a0, [Mat.Glass]: 0x8fb2c0, [Mat.Rock]: 0xa8a298, [Mat.Asphalt]: 0x8a8a8a, [Mat.Roof]: 0xa8a6a2, [Mat.Container]: 0x8a3a2a, [Mat.Trim]: 0xdddddd, [Mat.Dark]: 0x333333, [Mat.Foliage]: 0x6a8a4a, [Mat.Tile]: 0xdddddd, [Mat.Snow]: 0xffffff, [Mat.Water]: 0x335566 };
+const DEFAULT_TINT: Record<number, number> = { [Mat.Concrete]: 0xb4b0a8, [Mat.Brick]: 0xffffff, [Mat.Plaster]: 0xe0dccf, [Mat.Metal]: 0x9aa0a4, [Mat.Wood]: 0xc8b8a0, [Mat.Glass]: 0x3c4c56, [Mat.Rock]: 0xa8a298, [Mat.Asphalt]: 0x8a8a8a, [Mat.Roof]: 0xa8a6a2, [Mat.Container]: 0x8a3a2a, [Mat.Trim]: 0xdddddd, [Mat.Dark]: 0x333333, [Mat.Foliage]: 0x6a8a4a, [Mat.Tile]: 0xdddddd, [Mat.Snow]: 0xffffff, [Mat.Water]: 0x335566 };
 
 class GeoBuf {
   pos: number[] = []; nor: number[] = []; uv: number[] = []; col: number[] = []; lay: number[] = []; idx: number[] = [];
@@ -134,8 +134,8 @@ class Emitter {
 let NORMALS: THREE.DataArrayTexture | null = null;
 export function structureMaterial(tex: THREE.DataArrayTexture, transparent = false): THREE.MeshStandardMaterial {
   // per-layer bump strength: 0 concrete,1 brick,2 plaster,3 metal,4 wood,5 glass,6 rock,7 asphalt,8 roof,9 container,10 trim,11 dark,12 foliage,13 tile,14 snow,15 facade
-  NORMALS ??= normalArrayFrom(tex, [1.1, 3.5, 0.45, 2, 2.5, 0.2, 3, 1.5, 1.1, 2.5, 0.5, 0.8, 2, 2, 1, 1.2]);
-  const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85, metalness: 0.0, transparent, opacity: transparent ? 0.38 : 1, depthWrite: !transparent, side: transparent ? THREE.DoubleSide : THREE.FrontSide });
+  NORMALS ??= normalArrayFrom(tex, [0.8, 3, 0.4, 1.6, 2.2, 0.1, 2.5, 1.2, 0.9, 2, 0.25, 0.6, 2, 1.6, 0.8, 1]);
+  const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85, metalness: 0.0, transparent, opacity: transparent ? 0.86 : 1, depthWrite: !transparent, side: transparent ? THREE.DoubleSide : THREE.FrontSide });
   m.onBeforeCompile = (sh) => {
     sh.uniforms.tLayers = { value: tex };
     sh.uniforms.uAvg = { value: tex.userData.avg };
@@ -151,7 +151,7 @@ export function structureMaterial(tex: THREE.DataArrayTexture, transparent = fal
       .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
         roughnessFactor *= 0.85 + texel.g * 0.3;
         float L = floor(vLayer + 0.5);
-        if (L == 5.0) roughnessFactor = 0.08;
+        if (L == 5.0) roughnessFactor = 0.05;
         else if (L == 3.0 || L == 9.0) roughnessFactor = 0.55;
         else if (L == 7.0) roughnessFactor = 0.8;`)
       .replace('#include <metalnessmap_fragment>', `#include <metalnessmap_fragment>
