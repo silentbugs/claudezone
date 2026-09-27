@@ -141,12 +141,18 @@
 .hud .scope:after { top: 50%; left: 0; right: 0; height: 2px; transform: translateY(-1px); }
 .hud .reddot { position: absolute; left: 50%; top: 50%; width: 4px; height: 4px; margin: -2px 0 0 -2px; border-radius: 50%; background: #ff2a1a; box-shadow: 0 0 4px #ff2a1a; display: none; }
 /* altimeter */
-.hud .alt { position: absolute; left: 65vw; top: 28vh; height: 49vh; width: calc(var(--u) * 5); display: none; }
-.hud .alt .rule { position: absolute; left: calc(var(--u) * 2.6); top: 0; bottom: 0; width: calc(var(--u) * 0.9); background: repeating-linear-gradient(180deg, rgba(255,255,255,0.8) 0 1px, transparent 1px 7px); border-left: 2px solid rgba(255,255,255,0.85); }
-.hud .alt .lab { position: absolute; left: calc(var(--u) * 1.8); background: rgba(0,0,0,0.5); border: 1px solid #fff; font-size: calc(var(--u) * 0.7); padding: 0 4px; }
-.hud .alt .mk { position: absolute; left: 0; transform: translateY(-50%); display: flex; align-items: center; gap: 4px; font-size: calc(var(--u) * 0.8); }
-.hud .alt .mk b { background: rgba(0,0,0,0.5); border: 1px solid #fff; padding: 0 4px; font-weight: 600; }
-.hud .alt .mk i { width: calc(var(--u) * 0.8); height: calc(var(--u) * 0.8); border: 2px solid #fff; border-radius: 50%; }
+/* freefall altimeter (2020): tape at x 1350, y 298-810; SPEED tag top-left of it, GROUND tag bottom-right */
+.hud .alt { position: absolute; left: calc(var(--px) * 1350); top: calc(var(--px) * 298); height: calc(var(--px) * 512); width: 0; display: none; color: #ecfdf3; }
+.hud .alt .rule { position: absolute; left: 0; top: 0; bottom: 0; width: calc(var(--px) * 20); border-left: 2px solid #ecfdf3; background: repeating-linear-gradient(180deg, rgba(236,253,243,0.85) 0 1px, transparent 1px calc(var(--px) * 6)) no-repeat calc(var(--px) * 8) 0 / calc(var(--px) * 12) 100%; }
+.hud .alt .rule::before, .hud .alt .rule::after { content: ''; position: absolute; left: calc(var(--px) * -5); width: calc(var(--px) * 47); height: 2px; background: #ecfdf3; }
+.hud .alt .rule::before { top: 0; } .hud .alt .rule::after { bottom: 0; }
+.hud .alt .lab { position: absolute; background: #000; border: 1px solid #fff; font-size: calc(var(--px) * 15); line-height: calc(var(--px) * 16); padding: 0 calc(var(--px) * 6); white-space: nowrap; }
+.hud .alt .lab.s { right: calc(var(--px) * -3); top: calc(var(--px) * -15); }
+.hud .alt .lab.g { left: calc(var(--px) * 23); bottom: calc(var(--px) * -23); }
+.hud .alt .mk { position: absolute; right: 0; transform: translateY(-50%); display: flex; align-items: center; font-size: calc(var(--px) * 16); }
+.hud .alt .mk b { background: rgba(0,0,0,0.75); border: 1px solid #fff; padding: 0 calc(var(--px) * 6); line-height: calc(var(--px) * 17); font-weight: 600; margin-right: calc(var(--px) * 6); }
+.hud .alt .mk i { width: calc(var(--px) * 13); height: calc(var(--px) * 13); background: #fff; border-radius: 50%; }
+.hud .alt .mk u { width: calc(var(--px) * 37); height: 1px; background: #fff; }
 /* tac map */
 .fullmap { position: absolute; inset: 0; background: rgba(8,10,12,0.9); display: none; align-items: center; justify-content: center; pointer-events: auto; }
 .fullmap canvas { height: 92vh; width: 92vh; }

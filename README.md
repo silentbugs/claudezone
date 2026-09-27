@@ -2,8 +2,8 @@
 
 A browser rebuild of the original 2020 Warzone Battle Royale on Verdansk: a 150-player trios
 match against 149 bots, on a map traced from the 2020 tac map. Everything you see and hear is
-generated in code (no ripped assets): terrain, buildings, soldiers, weapons, vehicles, textures,
-and sound.
+generated in code or comes from CC0 asset libraries (no ripped assets): terrain, buildings, vehicles and
+fallback sounds are generated; soldiers, guns, photo textures and most sounds are CC0 downloads.
 
 ```sh
 npm install
@@ -93,7 +93,7 @@ Every key is rebindable in **Settings → Key bindings** (from the main menu or 
 | `public/map/masks.bin` | Road, built-up, snow and sea masks (1080², 3 m/px) |
 | `src/world` | Terrain, collision (oriented structures of boxes and ramps), building archetypes, landmarks, placement |
 | `src/sim` | The headless, deterministic game: players, movement, combat, loot, circle, Gulag, contracts, vehicles, bots |
-| `src/render` | three.js scene: chunked terrain LODs, merged building chunks with facade LODs, instanced soldiers, viewmodel, effects, vehicles |
+| `src/render` | three.js scene: chunked terrain LODs, merged building chunks with facade LODs, animated rigged soldiers up close (clip blending + arm IK) and instanced proxies far away, GLB gun models, viewmodel, effects, vehicles |
 | `src/ui` | DOM HUD, minimap and tac map, menus |
 | `src/audio` | WebAudio sounds synthesized at startup, with HRTF positional playback |
 | `scripts/export-map.mjs` | One-off tool that turned the traced references into `verdansk.ts` and `masks.bin` |
@@ -102,4 +102,5 @@ Every key is rebindable in **Settings → Key bindings** (from the main menu or 
 
 - **Sound effects:** recorded CC0 / public-domain clips from Freesound, BigSoundBank and Kenney (113 files in `public/sfx`; per-file sources in `public/sfx/CREDITS.md`). Anything missing falls back to the in-code synthesizer.
 - **Materials and sky lighting:** CC0 photo-scanned textures and an HDRI from [Poly Haven](https://polyhaven.com) (`public/tex`, resized to 512 px).
-- Nothing is taken from Call of Duty itself.
+- **3D models:** CC0 models by Quaternius (rigged soldier + Universal Animation Library clips, props), Pichuliru (guns and attachments) and others (`public/models`; per-file sources in `public/models/CREDITS.md`). Guns without a matching model, melee weapons and the crossbow fall back to procedural geometry.
+- Nothing is taken from Call of Duty itself. The HUD was laid out against 2020 screenshots, but no Activision art is shipped.

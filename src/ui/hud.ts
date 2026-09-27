@@ -74,7 +74,7 @@ export class Hud {
     this.compass.append(this.strip);
     this.xh.innerHTML = '<i></i><i></i><i></i><i></i><i class="dot"></i>';
     this.hm.innerHTML = [45, 135, 225, 315].map((d) => `<i style="transform:rotate(${d}deg)"></i>`).join('') + `<div class="glyph a">${ICON.shield}</div><div class="glyph b">${ICON.shieldBroken}</div>`;
-    this.alt.innerHTML = '<div class="lab" style="top:-1.6em">SPEED</div><div class="rule"></div><div class="lab" style="bottom:-1.6em">GROUND</div><div class="mk"><b>0</b><i></i></div>';
+    this.alt.innerHTML = '<div class="rule"></div><div class="lab s">SPEED</div><div class="lab g">GROUND</div><div class="mk"><b>0</b><i></i><u></u></div>';
     this.fmCanvas = document.createElement('canvas'); this.fmCanvas.width = this.fmCanvas.height = 1200;
     this.fullmap.append(this.fmCanvas, el('div', 'legend', '<b style="color:#fff;font-size:18px">TAC MAP</b><br>White ring: next safe zone<br>Red: gas<br>Coloured arrows: your squad<br>Dashed line: C-130 route<br>Red dots: enemies (UAV / gunfire)<br>Orange carts: buy stations<br><br>Click to place a marker — your squad will head there'));
     this.fmCanvas.addEventListener('mousedown', (e) => { const r = this.fmCanvas.getBoundingClientRect(); const x = ((e.clientX - r.left) / r.width) * MAP_SIZE, z = ((e.clientY - r.top) / r.height) * MAP_SIZE; this.pings = [{ x, z, t: 999 }]; (this.sim.players[this.localId] as any).ping = { x, z }; });
