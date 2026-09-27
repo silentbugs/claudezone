@@ -153,8 +153,9 @@ export class Effects {
         if (e.water) { for (let i = 0; i < 6; i++) this.smoke.spawn(e.x, e.y, e.z, (R() - 0.5), 2 + R() * 3, (R() - 0.5), 0.6, 0.15, 0.5, 0.8, 0.85, 0.9, 0.6, 1, 6); break; }
         const metal = e.mat === Mat.Metal || e.mat === Mat.Container;
         const col = e.mat === Mat.Glass ? [0.8, 0.9, 1] : e.mat === Mat.Wood ? [0.55, 0.42, 0.3] : [0.62, 0.58, 0.52];
-        for (let i = 0; i < 4; i++) this.smoke.spawn(e.x + e.nx * 0.05, e.y + e.ny * 0.05, e.z + e.nz * 0.05, e.nx * (1 + R()) + (R() - 0.5), e.ny * (1 + R()) + R() * 0.8, e.nz * (1 + R()) + (R() - 0.5), 0.5 + R() * 0.4, 0.12, 0.5, col[0], col[1], col[2], 0.7, 2, 1);
-        if (metal || R() < 0.3) for (let i = 0; i < (metal ? 6 : 2); i++) this.add.spawn(e.x, e.y, e.z, e.nx * 4 + (R() - 0.5) * 5, e.ny * 4 + R() * 3, e.nz * 4 + (R() - 0.5) * 5, 0.25, 0.05, 0, 1, 0.8, 0.4, 1, 1, 9);
+        // small dust puff + a few short sparks on metal: readable, but it mustn't swallow the target you're shooting at
+        for (let i = 0; i < 3; i++) this.smoke.spawn(e.x + e.nx * 0.05, e.y + e.ny * 0.05, e.z + e.nz * 0.05, e.nx * (1 + R()) + (R() - 0.5), e.ny * (1 + R()) + R() * 0.8, e.nz * (1 + R()) + (R() - 0.5), 0.35, 0.08, 0.3, col[0], col[1], col[2], 0.45, 2, 1);
+        if (metal) for (let i = 0; i < 3; i++) this.add.spawn(e.x, e.y, e.z, e.nx * 4 + (R() - 0.5) * 5, e.ny * 4 + R() * 3, e.nz * 4 + (R() - 0.5) * 5, 0.15, 0.03, 0, 1, 0.8, 0.4, 0.7, 1, 9);
         break;
       }
       case 'hit': {
@@ -181,6 +182,9 @@ export class Effects {
     const l = this.lights[i]; l.position.set(x, y, z); l.color.setHex(color); l.intensity = intensity; this.lightT[i] = 0.25;
   }
 
+  /** player whose eyes we're looking through: their own tracers aren't drawn (they'd streak straight across the crosshair) */
+  viewId = -1;
+
   update(dt: number, alpha: number, cam: THREE.Vector3, time: number, fovDeg = 80) {
     const sim = this.sim;
     const sc = innerHeight / (2 * Math.tan((fovDeg * Math.PI) / 360));
@@ -188,7 +192,7 @@ export class Effects {
     // tracers
     let n = 0;
     for (const b of sim.bullets) {
-      if (!b.tracer || n >= 1024) continue;
+      if (!b.tracer || n >= 1024 || b.owner === this.viewId) continue;
       const sp = Math.hypot(b.vx, b.vy, b.vz), l = Math.min(b.dist + 1, 12);
       if (b.dist < 4) continue;
       const i = n * 6;

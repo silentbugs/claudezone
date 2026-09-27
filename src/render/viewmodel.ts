@@ -168,9 +168,12 @@ export class ViewModel {
     if (this.glb) this.glb.visible = this.arms.visible;
     this.flashT -= dt;
     this.flash.visible = this.flashT > 0 && this.arms.visible;
+    // aiming: a smaller, dimmer flash so it doesn't sit over the sight picture
+    this.flash.scale.setScalar(1 - p.ads * 0.55);
+    (this.flash.material as THREE.MeshBasicMaterial).opacity = 0.9 - p.ads * 0.5;
     this.flash.position.set(0, 0.012, -this.muzzle - 0.05);
     this.flashLight.position.copy(this.flash.position);
-    this.flashLight.intensity = this.flashT > 0 ? 8 : 0;
+    this.flashLight.intensity = this.flashT > 0 ? 8 - p.ads * 5 : 0;
   }
   render(r: THREE.WebGLRenderer) {
     if (!this.root.visible && !this.air.visible) return;

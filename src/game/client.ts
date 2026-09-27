@@ -317,6 +317,7 @@ export class Match {
     this.soldiers.update(sim.players, a, cam.position, dt, sim.time);
     this.chars.skip = this.soldiers.ids;
     this.chars.update(sim.players, a, cam.position, dt, me.squad);
+    this.fx.viewId = this.viewId();
     this.fx.update(dt, a, cam.position, time, cam.fov);
     this.vehMeshes.update(sim.vehicles, a, dt, cam.position);
     { const t = me.phase === Phase.Alive ? sim.interactTarget(me) : null; this.loot.update(dt, cam.position, time, t?.kind === 'item' ? t.id : -1); }
