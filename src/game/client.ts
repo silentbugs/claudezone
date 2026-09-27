@@ -17,7 +17,7 @@ import { audio } from '../audio/audio';
 import type { WorldData } from '../world/mapgen';
 import { clamp, wrapAngle } from '../core/math';
 
-export interface Settings { sens: number; adsSens: number; volume: number; fov: number }
+export interface Settings { sens: number; adsSens: number; volume: number; fov: number; quality: string }
 
 export class Match {
   sim: Sim;
@@ -237,6 +237,7 @@ export class Match {
       audio.loop('wind', 0); audio.loop('engine', vehicleOf(sim, vp) ? 0.3 : 0, 0.8, 700); audio.loop('chute', 0);
     }
     audio.loop('gas', sim.inGas(vp) ? 0.45 : 0, 1, 900);
+    if (this.sm.grade) { const u = this.sm.grade.uniforms; u.uGas.value += ((sim.inGas(vp) ? 1 : 0) - u.uGas.value) * Math.min(1, dt * 3); u.uLow.value += ((vp.phase === Phase.Downed ? 0.6 : vp.health < 35 && vp.alive ? 0.35 : 0) - u.uLow.value) * Math.min(1, dt * 4); }
     if (Math.abs(cam.fov - fov) > 0.01) { cam.fov += (fov - cam.fov) * Math.min(1, dt * 18); cam.updateProjectionMatrix(); }
     // listener
     const fwd = new THREE.Vector3(); cam.getWorldDirection(fwd);

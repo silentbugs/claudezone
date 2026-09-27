@@ -155,6 +155,7 @@ interface Chunk { detail: THREE.Mesh | null; glass: THREE.Mesh | null; lod: THRE
 export class StructureMesh {
   group = new THREE.Group();
   chunks: Chunk[] = [];
+  detailDist = DETAIL_DIST;
 
   constructor(structures: Structure[], tex: THREE.DataArrayTexture, worldSize: number) {
     const opaque = structureMaterial(tex), glassM = structureMaterial(tex, true);
@@ -200,7 +201,7 @@ export class StructureMesh {
 
   update(cam: THREE.Vector3) {
     for (const c of this.chunks) {
-      const near = Math.hypot(c.cx - cam.x, c.cz - cam.z) < DETAIL_DIST;
+      const near = Math.hypot(c.cx - cam.x, c.cz - cam.z) < this.detailDist;
       if (near === c.near) continue;
       c.near = near;
       if (c.detail) c.detail.visible = near;
