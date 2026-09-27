@@ -1806,5 +1806,546 @@
   "clips": {},
   "forward": "n/a (Y up, base at y~0)",
   "notes": "Sandbag wall 2.3 m"
+ },
+ "ar_m4_hd": {
+  "file": "models/guns/ar_m4_hd.glb",
+  "source": "https://opengameart.org/content/m4a1-assault-rifle",
+  "author": "nisu",
+  "license": "CC0 1.0",
+  "kind": "gun",
+  "tris": 9256,
+  "bbox": [
+   0.062,
+   0.26,
+   0.84
+  ],
+  "bboxMin": [
+   -0.031,
+   -0.182,
+   -0.42
+  ],
+  "bones": 0,
+  "clips": {},
+  "originalTitle": "M4A1 Assault Rifle",
+  "gunClass": "ar",
+  "forward": "-Z (muzzle points -Z, stock toward +Z, up +Y); units metres, true-to-life scale",
+  "sockets": {
+   "Attach_Scope": [
+    0,
+    0.042,
+    0
+   ],
+   "Attach_Muzzle": [
+    0,
+    0.012,
+    -0.42
+   ]
+  },
+  "suits": "M4A1 (also M13/Grau/Kilo stand-in)",
+  "note": "M4A1 with quad-rail handguard, carry-handle-less flat top. PBR textures (base/normal/metal-rough) applied from the pack; single material. Originally from 3dmodelscc0.com (CC0). Normalized by .harness/gunsrc/build.mjs (origin: x/z centre of bbox, top of gun at 30% of height above origin). Sockets are plain positions (no socket bones).",
+  "sizeBytes": 489816
+ },
+ "ar_ak_hd": {
+  "file": "models/guns/ar_ak_hd.glb",
+  "source": "https://opengameart.org/content/ak",
+  "author": "loafbrr_1",
+  "license": "CC0 1.0",
+  "kind": "gun",
+  "tris": 1988,
+  "bbox": [
+   0.051,
+   0.27,
+   0.88
+  ],
+  "bboxMin": [
+   -0.025,
+   -0.189,
+   -0.44
+  ],
+  "bones": 0,
+  "clips": {},
+  "originalTitle": "AK",
+  "gunClass": "ar",
+  "forward": "-Z (muzzle points -Z, stock toward +Z, up +Y); units metres, true-to-life scale",
+  "sockets": {
+   "Attach_Scope": [
+    0,
+    0.031,
+    0
+   ],
+   "Attach_Muzzle": [
+    0,
+    0.018,
+    -0.44
+   ]
+  },
+  "suits": "AK-47 (AKM, wood furniture)",
+  "note": "Textured AKM, wood furniture. Loose ammo/box/spare magazine removed. Child nodes Bolt, Magazine.001, Trigger, Lock are separate rigid nodes. Normalized by .harness/gunsrc/build.mjs (origin: x/z centre of bbox, top of gun at 30% of height above origin). Sockets are plain positions (no socket bones).",
+  "sizeBytes": 388740
+ },
+ "ar_scar_hd": {
+  "file": "models/guns/ar_scar_hd.glb",
+  "source": "https://poly.pizza/m/9A4jh0k82NZ",
+  "author": "Kristian (Google Poly)",
+  "license": "CC-BY 3.0",
+  "kind": "gun",
+  "tris": 12036,
+  "bbox": [
+   0.052,
+   0.264,
+   0.97
+  ],
+  "bboxMin": [
+   -0.026,
+   -0.185,
+   -0.485
+  ],
+  "bones": 0,
+  "clips": {},
+  "originalTitle": "Scar-H",
+  "gunClass": "ar",
+  "forward": "-Z (muzzle points -Z, stock toward +Z, up +Y); units metres, true-to-life scale",
+  "sockets": {
+   "Attach_Scope": [
+    0,
+    0.033,
+    0
+   ],
+   "Attach_Muzzle": [
+    0,
+    -0.017,
+    -0.485
+   ]
+  },
+  "suits": "SCAR-H (MW2019 'FN Scar 17'), also FAL/battle-rifle stand-in",
+  "note": "Flat-colour materials (tan/black), no textures. Simplified from 24.4k to 12k tris. Normalized by .harness/gunsrc/build.mjs (origin: x/z centre of bbox, top of gun at 30% of height above origin). Sockets are plain positions (no socket bones).",
+  "sizeBytes": 477848
+ },
+ "dmr_ebr": {
+  "file": "models/guns/dmr_ebr.glb",
+  "source": "https://poly.pizza/m/lNGPW2NGPZ",
+  "author": "austincford",
+  "license": "CC-BY 3.0",
+  "kind": "gun",
+  "tris": 6626,
+  "bbox": [
+   0.076,
+   0.18,
+   0.89
+  ],
+  "bboxMin": [
+   -0.038,
+   -0.126,
+   -0.445
+  ],
+  "bones": 0,
+  "clips": {},
+  "originalTitle": "MK14",
+  "gunClass": "marksman",
+  "forward": "-Z (muzzle points -Z, stock toward +Z, up +Y); units metres, true-to-life scale",
+  "sockets": {
+   "Attach_Scope": [
+    0,
+    0.054,
+    0
+   ],
+   "Attach_Muzzle": [
+    0,
+    0.024,
+    -0.445
+   ]
+  },
+  "suits": "EBR-14 (Mk14 EBR chassis), marksman rifle",
+  "note": "Textured, separate named parts (Bolt, Charging_Handle, Magazine_Standard...). Normalized by .harness/gunsrc/build.mjs (origin: x/z centre of bbox, top of gun at 30% of height above origin). Sockets are plain positions (no socket bones).",
+  "sizeBytes": 632116
+ },
+ "ar_bullpup": {
+  "file": "models/guns/ar_bullpup.glb",
+  "source": "https://poly.pizza/m/DdK4yHu7fi",
+  "author": "austincford",
+  "license": "CC-BY 3.0",
+  "kind": "gun",
+  "tris": 7375,
+  "bbox": [
+   0.082,
+   0.323,
+   0.78
+  ],
+  "bboxMin": [
+   -0.041,
+   -0.226,
+   -0.39
+  ],
+  "bones": 0,
+  "clips": {},
+  "originalTitle": "MDR",
+  "gunClass": "ar",
+  "forward": "-Z (muzzle points -Z, stock toward +Z, up +Y); units metres, true-to-life scale",
+  "sockets": {
+   "Attach_Scope": [
+    0,
+    0.05,
+    0
+   ],
+   "Attach_Muzzle": [
+    0,
+    0.002,
+    -0.39
+   ]
+  },
+  "suits": "Bullpup AR: FR 5.56 / AUG / SA87 stand-in (it is a Desert Tech MDR)",
+  "note": "Textured, includes a sling and flip-up sights. No true AUG/L85 found under CC0/CC-BY. Normalized by .harness/gunsrc/build.mjs (origin: x/z centre of bbox, top of gun at 30% of height above origin). Sockets are plain positions (no socket bones).",
+  "sizeBytes": 671948
+ },
+ "sniper_bullpup": {
+  "file": "models/guns/sniper_bullpup.glb",
+  "source": "https://poly.pizza/m/4FyY7r5sjB",
+  "author": "austincford",
+  "license": "CC-BY 3.0",
+  "kind": "gun",
+  "tris": 6118,
+  "bbox": [
+   0.09,
+   0.211,
+   1.1
+  ],
+  "bboxMin": [
+   -0.045,
+   -0.148,
+   -0.55
+  ],
+  "bones": 0,
+  "clips": {},
+  "originalTitle": "SRSA1",
+  "gunClass": "sniper",
+  "forward": "-Z (muzzle points -Z, stock toward +Z, up +Y); units metres, true-to-life scale",
+  "sockets": {
+   "Attach_Scope": [
+    0,
+    0.05,
+    0
+   ],
+   "Attach_Muzzle": [
+    0,
+    0.018,
+    -0.55
+   ]
+  },
+  "suits": "HDR (Desert Tech SRS A1 is the HDR's real-world sibling)",
+  "note": "Bullpup bolt sniper, textured. The model's built-in scope (node Sniper_Scope) was removed so the game's att_scope can be mounted at Attach_Scope. Normalized by .harness/gunsrc/build.mjs (origin: x/z centre of bbox, top of gun at 30% of height above origin). Sockets are plain positions (no socket bones).",
+  "sizeBytes": 552884
+ },
+ "rifle_bolt_wood": {
+  "file": "models/guns/rifle_bolt_wood.glb",
+  "source": "https://opengameart.org/content/bolt-action-rifle-lee-enfield",
+  "author": "Lucian Pavel",
+  "license": "CC0 1.0",
+  "kind": "gun",
+  "tris": 5268,
+  "bbox": [
+   0.054,
+   0.197,
+   1.11
+  ],
+  "bboxMin": [
+   -0.027,
+   -0.138,
+   -0.555
+  ],
+  "bones": 0,
+  "clips": {},
+  "originalTitle": "Bolt action Rifle: Lee Enfield",
+  "gunClass": "sniper",
+  "forward": "-Z (muzzle points -Z, stock toward +Z, up +Y); units metres, true-to-life scale",
+  "sockets": {
+   "Attach_Scope": [
+    0,
+    0.044,
+    0.17
+   ],
+   "Attach_Muzzle": [
+    0,
+    0.029,
+    -0.555
+   ]
+  },
+  "suits": "Kar98k / Mk2 (wood bolt-action) stand-in",
+  "note": "Lee-Enfield No.4, single mesh, diffuse + normal texture (512 px). A loose cartridge floating under the stock was removed. Attach_Scope is over the receiver (z=+0.17). Normalized by .harness/gunsrc/build.mjs (origin: x/z centre of bbox, top of gun at 30% of height above origin). Sockets are plain positions (no socket bones).",
+  "sizeBytes": 257592
+ },
+ "smg_mp5sd": {
+  "file": "models/guns/smg_mp5sd.glb",
+  "source": "https://poly.pizza/m/Wj8MhwBVF5",
+  "author": "austincford",
+  "license": "CC-BY 3.0",
+  "kind": "gun",
+  "tris": 2996,
+  "bbox": [
+   0.055,
+   0.241,
+   0.66
+  ],
+  "bboxMin": [
+   -0.028,
+   -0.169,
+   -0.33
+  ],
+  "bones": 0,
+  "clips": {},
+  "originalTitle": "Mpsd",
+  "gunClass": "smg",
+  "forward": "-Z (muzzle points -Z, stock toward +Z, up +Y); units metres, true-to-life scale",
+  "sockets": {
+   "Attach_Scope": [
+    0,
+    0.058,
+    0
+   ],
+   "Attach_Muzzle": [
+    0,
+    0.019,
+    -0.33
+   ]
+  },
+  "suits": "MP5 (integrally suppressed MP5SD variant; also MP5 in general)",
+  "note": "Textured. Built-in red dot (node CCO_Micro_M1) removed. Has HK drum rear sight and top rail. Normalized by .harness/gunsrc/build.mjs (origin: x/z centre of bbox, top of gun at 30% of height above origin). Sockets are plain positions (no socket bones).",
+  "sizeBytes": 316860
+ },
+ "smg_mp7_hd": {
+  "file": "models/guns/smg_mp7_hd.glb",
+  "source": "https://poly.pizza/m/goyOzONDIr",
+  "author": "Dark",
+  "license": "CC-BY 3.0",
+  "kind": "gun",
+  "tris": 9293,
+  "bbox": [
+   0.051,
+   0.25,
+   0.55
+  ],
+  "bboxMin": [
+   -0.026,
+   -0.175,
+   -0.275
+  ],
+  "bones": 0,
+  "clips": {},
+  "originalTitle": "MP7",
+  "gunClass": "smg",
+  "forward": "-Z (muzzle points -Z, stock toward +Z, up +Y); units metres, true-to-life scale",
+  "sockets": {
+   "Attach_Scope": [
+    0,
+    0.056,
+    0
+   ],
+   "Attach_Muzzle": [
+    0,
+    0.033,
+    -0.275
+   ]
+  },
+  "suits": "MP7 (stock extended)",
+  "note": "Flat-colour materials, no textures. Normalized by .harness/gunsrc/build.mjs (origin: x/z centre of bbox, top of gun at 30% of height above origin). Sockets are plain positions (no socket bones).",
+  "sizeBytes": 363300
+ },
+ "smg_mpx": {
+  "file": "models/guns/smg_mpx.glb",
+  "source": "https://poly.pizza/m/p7sAqeuUWR",
+  "author": "austincford",
+  "license": "CC-BY 3.0",
+  "kind": "gun",
+  "tris": 6869,
+  "bbox": [
+   0.071,
+   0.279,
+   0.62
+  ],
+  "bboxMin": [
+   -0.035,
+   -0.195,
+   -0.31
+  ],
+  "bones": 0,
+  "clips": {},
+  "originalTitle": "MPX",
+  "gunClass": "smg",
+  "forward": "-Z (muzzle points -Z, stock toward +Z, up +Y); units metres, true-to-life scale",
+  "sockets": {
+   "Attach_Scope": [
+    0,
+    0.048,
+    0
+   ],
+   "Attach_Muzzle": [
+    0,
+    0.011,
+    -0.31
+   ]
+  },
+  "suits": "generic modern 9mm SMG (Sig MPX): ISO / Fennec / Striker / AUG-9mm stand-in",
+  "note": "Textured; flip-up ring sights; collapsible stock. Normalized by .harness/gunsrc/build.mjs (origin: x/z centre of bbox, top of gun at 30% of height above origin). Sockets are plain positions (no socket bones).",
+  "sizeBytes": 633416
+ },
+ "pistol_glock": {
+  "file": "models/guns/pistol_glock.glb",
+  "source": "https://poly.pizza/m/gDhOo5jkNX",
+  "author": "PuKkBuMXDD",
+  "license": "CC-BY 3.0",
+  "kind": "gun",
+  "tris": 4201,
+  "bbox": [
+   0.029,
+   0.129,
+   0.186
+  ],
+  "bboxMin": [
+   -0.015,
+   -0.09,
+   -0.093
+  ],
+  "bones": 0,
+  "clips": {
+   "glock_19|Shoot": 0.333
+  },
+  "originalTitle": "Rigged Glock 19",
+  "gunClass": "pistol",
+  "forward": "-Z (muzzle points -Z, stock toward +Z, up +Y); units metres, true-to-life scale",
+  "sockets": {
+   "Attach_Scope": [
+    0,
+    0.034,
+    0
+   ],
+   "Attach_Muzzle": [
+    0,
+    0.013,
+    -0.093
+   ]
+  },
+  "suits": "X16 (Glock) / Renetti stand-in",
+  "note": "Rigged as animated nodes (no skin); one clip 'glock_19|Shoot' (slide recoil). Flat materials (black slide, FDE frame). Normalized by .harness/gunsrc/build.mjs (origin: x/z centre of bbox, top of gun at 30% of height above origin). Sockets are plain positions (no socket bones).",
+  "sizeBytes": 233660
+ },
+ "pistol_deagle": {
+  "file": "models/guns/pistol_deagle.glb",
+  "source": "https://opengameart.org/content/desert-eagle-0",
+  "author": "SirDraco65",
+  "license": "CC0 1.0",
+  "kind": "gun",
+  "tris": 7862,
+  "bbox": [
+   0.035,
+   0.158,
+   0.27
+  ],
+  "bboxMin": [
+   -0.018,
+   -0.111,
+   -0.135
+  ],
+  "bones": 7,
+  "clips": {},
+  "originalTitle": "Desert Eagle",
+  "gunClass": "pistol",
+  "forward": "-Z (muzzle points -Z, stock toward +Z, up +Y); units metres, true-to-life scale",
+  "sockets": {
+   "Attach_Scope": [
+    0,
+    0.038,
+    0
+   ],
+   "Attach_Muzzle": [
+    0,
+    0.032,
+    -0.135
+   ]
+  },
+  "suits": ".50 GS (Desert Eagle)",
+  "note": "Skinned (Slide, Magazine, Hammer, Trigger bones), PBR textures downsized to 256 px, simplified from 27k to 7.9k tris. Normalized by .harness/gunsrc/build.mjs (origin: x/z centre of bbox, top of gun at 30% of height above origin). Sockets are plain positions (no socket bones).",
+  "sizeBytes": 885464
+ },
+ "revolver_357": {
+  "file": "models/guns/revolver_357.glb",
+  "source": "https://opengameart.org/content/revolver-game-asset",
+  "author": "loafbrr_1",
+  "license": "CC0 1.0",
+  "kind": "gun",
+  "tris": 1982,
+  "bbox": [
+   0.044,
+   0.154,
+   0.3
+  ],
+  "bboxMin": [
+   -0.022,
+   -0.108,
+   -0.15
+  ],
+  "bones": 11,
+  "clips": {
+   "CloseCyinder": 0.375,
+   "CylinderSpeen": 1,
+   "Default": 0,
+   "OpenCylinder": 0.375,
+   "Reload": 1.167,
+   "Shoot": 2.5
+  },
+  "originalTitle": "Revolver Game Asset",
+  "gunClass": "pistol",
+  "forward": "-Z (muzzle points -Z, stock toward +Z, up +Y); units metres, true-to-life scale",
+  "sockets": {
+   "Attach_Scope": [
+    0,
+    0.042,
+    0
+   ],
+   "Attach_Muzzle": [
+    0,
+    0.028,
+    -0.15
+   ]
+  },
+  "suits": ".357 Magnum (S&W 686-style 6-inch revolver)",
+  "note": "Skinned with clips OpenCylinder, CloseCyinder, CylinderSpeen, Reload, Shoot, Default. Loose rounds/ammo box removed. Normalized by .harness/gunsrc/build.mjs (origin: x/z centre of bbox, top of gun at 30% of height above origin). Sockets are plain positions (no socket bones).",
+  "sizeBytes": 382056
+ },
+ "launcher_rpg7": {
+  "file": "models/guns/launcher_rpg7.glb",
+  "source": "https://opengameart.org/content/low-poly-rpg7",
+  "author": "Lucian Pavel",
+  "license": "CC0 1.0",
+  "kind": "gun",
+  "tris": 1012,
+  "bbox": [
+   0.111,
+   0.201,
+   1.2
+  ],
+  "bboxMin": [
+   -0.055,
+   -0.141,
+   -0.6
+  ],
+  "bones": 0,
+  "clips": {},
+  "originalTitle": "Low poly RPG7",
+  "gunClass": "launcher",
+  "forward": "-Z (muzzle points -Z, stock toward +Z, up +Y); units metres, true-to-life scale",
+  "sockets": {
+   "Attach_Scope": [
+    0,
+    0.045,
+    0
+   ],
+   "Attach_Muzzle": [
+    0,
+    0.023,
+    -0.6
+   ]
+  },
+  "suits": "RPG-7",
+  "note": "Real scale (1.2 m including the loaded rocket, 0.95 m tube). Mesh 'RPG7 Rocket' is separate (hide it after firing). Unlike launcher_rpg this needs NO 0.31 scale. Normalized by .harness/gunsrc/build.mjs (origin: x/z centre of bbox, top of gun at 30% of height above origin). Sockets are plain positions (no socket bones).",
+  "sizeBytes": 71080
  }
 }

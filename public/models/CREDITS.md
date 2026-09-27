@@ -1,11 +1,31 @@
 # 3D model credits
 
-All models in this folder are **CC0 1.0 (public domain)**. Attribution isn't required, but we credit the authors anyway. None of them are ripped game assets.
+Most models in this folder are **CC0 1.0 (public domain)**; attribution isn't required for those, but we credit the authors anyway. Some newer gun models are **CC-BY 3.0** (https://creativecommons.org/licenses/by/3.0/) and **must** keep the attribution in the "CC-BY 3.0 attribution" section below. None of them are ripped game assets.
 
 ## Authors
 - **Quaternius** (https://quaternius.com, https://www.patreon.com/quaternius): SWAT character (Ultimate Modular Men pack), Universal Animation Library 1 & 2 (Standard) animations, and most props. CC0.
 - **Pichuliru** (https://poly.pizza/u/Pichuliru): the realistic low-poly firearms, attachments, grenades and ammo. CC0.
 - **CreativeTrio** (https://poly.pizza/u/CreativeTrio): RPG launcher ("Bazooka"). CC0.
+
+- **Lucian Pavel** (https://opengameart.org/users/lucian-pavel): Lee-Enfield rifle, RPG-7. CC0.
+- **loafbrr_1** (https://opengameart.org/users/loafbrr1): AK, .357 revolver. CC0.
+- **nisu** (https://opengameart.org/users/nisu): M4A1. CC0.
+- **SirDraco65** (https://opengameart.org/users/sirdraco65): Desert Eagle. CC0.
+- **austincford** (https://poly.pizza/u/austincford): MDR, SRS A1, MK14, MPSD, MPX. CC-BY 3.0.
+- **Kristian** (via Google Poly / poly.pizza): SCAR-H. CC-BY 3.0.
+- **Dark** (https://poly.pizza/u/Dark): MP7. CC-BY 3.0.
+- **PuKkBuMXDD** (https://poly.pizza/u/PuKkBuMXDD): Glock 19. CC-BY 3.0.
+
+## CC-BY 3.0 attribution (required)
+These files are licensed under Creative Commons Attribution 3.0 (https://creativecommons.org/licenses/by/3.0/). We changed them: re-oriented, rescaled to real size, re-centred, textures downsized, some parts removed, and some meshes simplified.
+- `guns/ar_bullpup.glb`: "MDR" by austincford, https://poly.pizza/m/DdK4yHu7fi
+- `guns/sniper_bullpup.glb`: "SRSA1" by austincford, https://poly.pizza/m/4FyY7r5sjB (built-in scope removed)
+- `guns/dmr_ebr.glb`: "MK14" by austincford, https://poly.pizza/m/lNGPW2NGPZ
+- `guns/smg_mp5sd.glb`: "Mpsd" by austincford, https://poly.pizza/m/Wj8MhwBVF5 (red dot removed)
+- `guns/smg_mpx.glb`: "MPX" by austincford, https://poly.pizza/m/p7sAqeuUWR
+- `guns/ar_scar_hd.glb`: "Scar-H" by Kristian, https://poly.pizza/m/9A4jh0k82NZ (simplified)
+- `guns/smg_mp7_hd.glb`: "MP7" by Dark, https://poly.pizza/m/goyOzONDIr
+- `guns/pistol_glock.glb`: "Rigged Glock 19" by PuKkBuMXDD, https://poly.pizza/m/gDhOo5jkNX
 
 ## Derived work
 `characters/soldier_swat.glb` combines Quaternius' "SWAT" mesh (https://poly.pizza/m/Btfn3G5Xv4) and its 24 native clips (prefixed `Swat_`) with 35 clips from Quaternius' **Universal Animation Library** (https://quaternius.itch.io/universal-animation-library) and **Universal Animation Library 2** (https://quaternius.itch.io/universal-animation-library-2). Both libraries are CC0, and we used the Standard, non-root-motion versions.
@@ -59,3 +79,17 @@ The clips were retargeted in three.js by applying world-space rotation deltas me
 | `pallet` | props/pallet.glb |  | Quaternius | CC0 1.0 | https://poly.pizza/m/MwOFAOgOhg |
 | `sandbags` | props/sandbags.glb |  | Quaternius | CC0 1.0 | https://poly.pizza/m/LW3jwpPfiN |
 | `sandbags_small` | props/sandbags_small.glb |  | Quaternius | CC0 1.0 | https://poly.pizza/m/iHyRewQQcN |
+| `ar_m4_hd` | guns/ar_m4_hd.glb | M4A1 Assault Rifle | nisu | CC0 1.0 | https://opengameart.org/content/m4a1-assault-rifle |
+| `ar_ak_hd` | guns/ar_ak_hd.glb | AK | loafbrr_1 | CC0 1.0 | https://opengameart.org/content/ak |
+| `ar_scar_hd` | guns/ar_scar_hd.glb | Scar-H | Kristian (Google Poly) | CC-BY 3.0 | https://poly.pizza/m/9A4jh0k82NZ |
+| `dmr_ebr` | guns/dmr_ebr.glb | MK14 | austincford | CC-BY 3.0 | https://poly.pizza/m/lNGPW2NGPZ |
+| `ar_bullpup` | guns/ar_bullpup.glb | MDR | austincford | CC-BY 3.0 | https://poly.pizza/m/DdK4yHu7fi |
+| `sniper_bullpup` | guns/sniper_bullpup.glb | SRSA1 | austincford | CC-BY 3.0 | https://poly.pizza/m/4FyY7r5sjB |
+| `rifle_bolt_wood` | guns/rifle_bolt_wood.glb | Bolt action Rifle: Lee Enfield | Lucian Pavel | CC0 1.0 | https://opengameart.org/content/bolt-action-rifle-lee-enfield |
+| `smg_mp5sd` | guns/smg_mp5sd.glb | Mpsd | austincford | CC-BY 3.0 | https://poly.pizza/m/Wj8MhwBVF5 |
+| `smg_mp7_hd` | guns/smg_mp7_hd.glb | MP7 | Dark | CC-BY 3.0 | https://poly.pizza/m/goyOzONDIr |
+| `smg_mpx` | guns/smg_mpx.glb | MPX | austincford | CC-BY 3.0 | https://poly.pizza/m/p7sAqeuUWR |
+| `pistol_glock` | guns/pistol_glock.glb | Rigged Glock 19 | PuKkBuMXDD | CC-BY 3.0 | https://poly.pizza/m/gDhOo5jkNX |
+| `pistol_deagle` | guns/pistol_deagle.glb | Desert Eagle | SirDraco65 | CC0 1.0 | https://opengameart.org/content/desert-eagle-0 |
+| `revolver_357` | guns/revolver_357.glb | Revolver Game Asset | loafbrr_1 | CC0 1.0 | https://opengameart.org/content/revolver-game-asset |
+| `launcher_rpg7` | guns/launcher_rpg7.glb | Low poly RPG7 | Lucian Pavel | CC0 1.0 | https://opengameart.org/content/low-poly-rpg7 |

@@ -181,8 +181,9 @@ export class Soldiers {
       const gm = models.gun(w!.id, w!.rarity);
       s.pistol = WEAPON[w!.id].cls === 'pistol';
       if (gm) s.gun.add(gm.obj);
-      s.grip.set(0, -0.045, s.pistol ? 0.045 : 0.1);
-      s.guard.set(s.pistol ? -0.025 : 0, s.pistol ? -0.05 : -0.035, s.pistol ? 0.05 : -0.16);
+      const gz = gm ? gm.gripZ : s.pistol ? 0.035 : 0.085, hz = gm ? gm.guardZ : -0.17;
+      s.grip.set(0, -0.045, gz + (s.pistol ? 0.01 : 0.015));
+      s.guard.set(s.pistol ? -0.025 : 0, s.pistol ? -0.05 : -0.035, s.pistol ? gz + 0.015 : hz + 0.01);
     }
     s.gun.visible = true;
     // gun pose in the soldier's facing frame (forward -Z, right +X)

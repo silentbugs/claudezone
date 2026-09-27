@@ -25,10 +25,10 @@ function limb(ax: number, ay: number, az: number, bx: number, by: number, bz: nu
   g.translate(ax, ay, az);
   return part(g, color, 0, 0, 0);
 }
-function armsGeometry(sleeve: number, pistol: boolean, glb = false): THREE.BufferGeometry {
+function armsGeometry(sleeve: number, pistol: boolean, glb = false, gz?: number, hz?: number): THREE.BufferGeometry {
   const glove = 0x2e2d2a;
-  // the CC0 gun models put their origin at the receiver: grip just behind it, handguard ~0.17 m ahead
-  const gripZ = glb ? (pistol ? 0.035 : 0.085) : pistol ? 0.05 : 0.1, guardZ = glb ? (pistol ? 0.03 : -0.17) : pistol ? 0.04 : -0.3;
+  // model guns: grip / support-hand positions come from the model (see models.ts HD_GRIP)
+  const gripZ = gz ?? (glb ? (pistol ? 0.035 : 0.085) : pistol ? 0.05 : 0.1), guardZ = hz ?? (glb ? (pistol ? 0.03 : -0.17) : pistol ? 0.04 : -0.3);
   if (glb) {
     // gloved fists wrapped around the model's grip and handguard
     const fist = (w: number, h: number, d: number) => new RoundedBoxGeometry(w, h, d, 2, 0.018);
@@ -61,8 +61,9 @@ export class ViewModel {
   private flashLight = new THREE.PointLight(0xffc070, 0, 6, 2);
   private key = '';
   private glb: THREE.Object3D | null = null;
-  private armsGlbRifle = armsGeometry(0x4d5140, false, true); private armsGlbPistol = armsGeometry(0x4d5140, true, true);
-  muzzle = 0.6; sight = 0.06; scope = false; optic = false;
+  private reticle: THREE.Object3D | null = null;
+  private armsCache = new Map<string, THREE.BufferGeometry>();
+  muzzle = 0.6; sight = 0.06; scope = false; optic = false; private opticZ = 0;
   private swayX = 0; swayY = 0; private bobT = 0; private kick = 0; private kickRot = 0; private flashT = 0;
   private swap = 0; private lastCur = -1; private lastId = '';
   constructor() {
@@ -88,13 +89,24 @@ export class ViewModel {
   private buildAir() {
     this.airBuilt = true;
     const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85 });
-    const arm = (side: number) => mergeGeometries([limb(0, 0, 0, 0, 0.32, -0.08, 0.032, 0x4d5140), part(new THREE.SphereGeometry(0.05, 10, 8).scale(0.9, 1.1, 0.8), 0x2e2d2a, 0, 0.37, -0.1), part(new THREE.BoxGeometry(0.035, 0.05, 0.05), 0x2e2d2a, side * -0.035, 0.39, -0.12), part(new THREE.CylinderGeometry(0.006, 0.006, 0.5, 5), 0xb8b0a0, side * 0.02, 0.62, -0.1)])!;
+    const arm = (side: number) => mergeGeometries([limb(0, 0, 0, 0, 0.32, -0.08, 0.032, 0x4d5140), part(new THREE.SphereGeometry(0.05, 10, 8).scale(0.9, 1.1, 0.8), 0x2e2d2a, 0, 0.37, -0.1), part(new THREE.BoxGeometry(0.035, 0.05, 0.05), 0x2e2d2a, side * -0.035, 0.39, -0.12)])!;
     this.airL = new THREE.Mesh(arm(-1), mat); this.airR = new THREE.Mesh(arm(1), mat);
     this.air.add(this.airL, this.airR); this.air.scale.setScalar(0.7); this.scene.add(this.air);
+    // open canopy: the front edge of the chute across the top of the view, with risers down to the toggles
+    const cm = new THREE.MeshStandardMaterial({ color: 0x5c6b4a, roughness: 0.95, side: THREE.DoubleSide });
+    const band = new THREE.CylinderGeometry(3.2, 3.2, 0.9, 40, 1, true, -0.7, 1.4).rotateY(Math.PI).translate(0, 0.45, 0);
+    const canopy = new THREE.Mesh(band, cm); canopy.position.set(0, 1.62, 0); this.canopyMesh = canopy;
+    const ribs = new THREE.Mesh(new THREE.CylinderGeometry(3.19, 3.19, 0.9, 12, 1, true, -0.7, 1.4).rotateY(Math.PI).translate(0, 0.45, 0), new THREE.MeshBasicMaterial({ color: 0x2c3326, wireframe: true }));
+    canopy.add(ribs);
+    this.risers = new THREE.LineSegments(new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(new Float32Array(8 * 3), 3)), new THREE.LineBasicMaterial({ color: 0xcfc6b0 }));
+    this.risers.frustumCulled = false;
+    this.canopy.add(canopy, this.risers); this.scene.add(this.canopy);
   }
+  private canopy = new THREE.Group(); private risers!: THREE.LineSegments; private canopyMesh!: THREE.Mesh;
   updateAir(p: Player | null, dt: number, show: boolean) {
     if (!this.airBuilt) this.buildAir();
     this.air.visible = !!p && show && (p.phase === Phase.Chute || p.phase === Phase.Freefall);
+    this.canopy.visible = this.air.visible && p!.phase === Phase.Chute;
     if (p && (p.phase === Phase.Plane || p.phase === Phase.Freefall || p.phase === Phase.Chute)) this.root.visible = false;
     if (!this.air.visible || !p) return;
     this.bobT += dt;
@@ -103,6 +115,20 @@ export class ViewModel {
       // hands up on the toggles; pulling one side steers
       this.airL.position.set(-0.34, -0.3 + (steer < 0 ? -0.07 : 0) - pull * 0.05, -0.42); this.airL.rotation.set(0.2, 0, 0.35);
       this.airR.position.set(0.34, -0.3 + (steer > 0 ? -0.07 : 0) - pull * 0.05, -0.42); this.airR.rotation.set(0.2, 0, -0.35);
+      // canopy sways a little and banks with steering; risers run from each fist up to the canopy edge
+      this.canopy.rotation.set(Math.sin(this.bobT * 0.9) * 0.02, 0, -steer * 0.06 + Math.sin(this.bobT * 0.6) * 0.015);
+      this.air.updateMatrixWorld(true); this.canopy.updateMatrixWorld(true);
+      const pos = this.risers.geometry.attributes.position as THREE.BufferAttribute, v = new THREE.Vector3();
+      let i = 0;
+      for (const [arm, sx] of [[this.airL, -1], [this.airR, 1]] as [THREE.Mesh, number][]) {
+        const hand = arm.localToWorld(new THREE.Vector3(sx * 0.02, 0.4, -0.12));
+        this.risers.worldToLocal(hand);
+        for (const a of [0.25, 0.6]) {
+          v.set(-Math.sin(a) * 3.2 * sx * -1, 0, -Math.cos(a) * 3.2); this.canopyMesh.localToWorld(v); this.risers.worldToLocal(v);
+          pos.setXYZ(i++, hand.x, hand.y, hand.z); pos.setXYZ(i++, v.x, v.y, v.z);
+        }
+      }
+      pos.needsUpdate = true;
     } else {
       // freefall: arms spread, fluttering in the wind
       const f = Math.sin(this.bobT * 17) * 0.02;
@@ -124,8 +150,11 @@ export class ViewModel {
       const m = models.gun(w!.id, w!.rarity);
       if (m) {
         this.glb = m.obj; this.root.add(m.obj); this.gun.visible = false;
-        this.muzzle = m.muzzle; this.sight = m.sight; this.scope = m.scope; this.optic = m.optic;
-        this.arms.geometry = pistolArms ? this.armsGlbPistol : this.armsGlbRifle;
+        this.reticle = null; m.obj.traverse((o) => { if (o.userData.reticle) this.reticle = o; });
+        this.muzzle = m.muzzle; this.sight = m.sight; this.scope = m.scope; this.optic = m.optic; this.opticZ = m.opticZ;
+        const ak = `${pistolArms}:${m.gripZ.toFixed(3)}:${m.guardZ.toFixed(3)}`;
+        let ag = this.armsCache.get(ak); if (!ag) { ag = armsGeometry(0x4d5140, pistolArms, true, m.gripZ, m.guardZ); this.armsCache.set(ak, ag); }
+        this.arms.geometry = ag;
       } else {
         const g = describeGun(WEAPON[w!.id], w!.rarity); this.gun.geometry.dispose(); this.gun.geometry = gunGeometry(g);
         this.muzzle = g.muzzle; this.sight = g.sight; this.scope = g.scope; this.optic = g.optic;
@@ -145,7 +174,7 @@ export class ViewModel {
     this.kick = Math.max(0, this.kick - dt * 14); this.kickRot = Math.max(0, this.kickRot - dt * 10);
     const S = 0.7, pistol = WEAPON[w!.id].cls === 'pistol';
     const g = !!this.glb;
-    const hip = pistol ? new THREE.Vector3(0.1, g ? -0.11 : -0.13, g ? -0.42 : -0.48) : new THREE.Vector3(g ? 0.13 : 0.12, g ? -0.15 : -0.14, g ? -0.4 : -0.36), aim = new THREE.Vector3(0, -this.sight * S, pistol ? (g ? -0.4 : -0.5) : g ? -0.3 : -0.36);
+    const hip = pistol ? new THREE.Vector3(0.1, g ? -0.11 : -0.13, g ? -0.42 : -0.48) : new THREE.Vector3(g ? 0.13 : 0.12, g ? -0.15 : -0.14, g ? -0.4 : -0.36), aim = new THREE.Vector3(0, -this.sight * S, pistol ? (g ? -0.4 : -0.5) : g && this.optic ? -0.14 - this.opticZ * S : g ? -0.3 : -0.36);
     const pos = hip.clone().lerp(aim, ads);
     let rx = 0, ry = 0, rz = 0;
     if (sprinting) { const s = p.tacSprint > 0 ? 1 : 0.7; pos.x -= 0.05 * s; pos.y -= 0.06 * s; rx -= 0.35 * s; ry += 0.75 * s; rz += 0.25 * s; if (p.tacSprint > 0) { rx = 0.9; ry = 0.2; pos.y += 0.02; } }
@@ -166,6 +195,11 @@ export class ViewModel {
     this.arms.visible = !(this.scope && ads > 0.92);
     this.gun.visible = this.arms.visible && !this.glb;
     if (this.glb) this.glb.visible = this.arms.visible;
+    if (this.reticle) this.reticle.visible = p.ads > 0.6 && this.arms.visible;
+    // aiming through an optic: clip everything between the eye and the optic (receiver, rear iron sight)
+    const near = this.glb && this.optic && !this.scope ? Math.max(0.01, (-this.root.position.z - this.opticZ * S) - 0.012) : 0.01;
+    const nearNow = 0.01 + (near - 0.01) * Math.max(0, (p.ads - 0.7) / 0.3);
+    if (Math.abs(this.camera.near - nearNow) > 1e-4) { this.camera.near = nearNow; this.camera.updateProjectionMatrix(); }
     this.flashT -= dt;
     this.flash.visible = this.flashT > 0 && this.arms.visible;
     // aiming: a smaller, dimmer flash so it doesn't sit over the sight picture

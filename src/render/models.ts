@@ -12,25 +12,36 @@ interface ManEntry { file: string; kind: string; sockets?: Record<string, [numbe
 
 /** weapon id → gun model key */
 const GUN_MODEL: Record<string, string> = {
-  m4: 'ar_m4', grau: 'ar_m4', m13: 'ar_m4', ram7: 'ar_m4', kilo: 'ar_m4', xm4: 'ar_m4', krig: 'ar_m4', qbz: 'ar_m4', ffar: 'ar_m4', m16: 'ar_m4', augcw: 'ar_m4', fr556: 'ar_m4',
-  fal: 'dmr_west', scar: 'dmr_west', oden: 'dmr_west', dmr14: 'dmr_west', ebr: 'dmr_west',
-  ak47: 'ar_ak', ak47cw: 'ar_ak', an94: 'ar_ak', amax: 'ar_ak', groza: 'ar_ak', type63: 'ar_ak',
-  asval: 'smg_east', aug: 'smg_east', striker: 'smg_east', milano: 'smg_east', ksp: 'smg_east', bullfrog: 'smg_east', bizon: 'smg_east',
-  mp5: 'smg_mp5', mp5cw: 'smg_mp5',
-  mp7: 'smg_compact_west', fennec: 'smg_compact_west', iso: 'smg_compact_west', mac10: 'smg_compact_west', p90: 'smg_compact_west',
-  uzi: 'smg_compact_east', ak74u: 'smg_compact_east',
-  pkm: 'lmg_rpk', sa87: 'lmg_rpk', m91: 'lmg_rpk', mg34: 'lmg_rpk', holger: 'lmg_rpk', bruen: 'lmg_rpk', finn: 'lmg_rpk', stoner: 'lmg_rpk', rpd: 'lmg_rpk', m60: 'lmg_rpk', turretgun: 'lmg_rpk',
-  mk2: 'sniper_east', kar98: 'sniper_east', sks: 'sniper_east', pelington: 'sniper_east', dragunov: 'sniper_east',
-  spr: 'sniper_west', hdr: 'sniper_west', ax50: 'sniper_west', tundra: 'sniper_west',
-  rytec: 'sniper_50cal_west', m82: 'sniper_50cal_west',
+  m4: 'ar_m4_hd', grau: 'ar_m4_hd', m13: 'ar_m4_hd', kilo: 'ar_m4_hd', xm4: 'ar_m4_hd', krig: 'ar_m4_hd', ffar: 'ar_m4_hd', m16: 'ar_m4_hd',
+  ram7: 'ar_bullpup', fr556: 'ar_bullpup', qbz: 'ar_bullpup', augcw: 'ar_bullpup', aug: 'ar_bullpup', sa87: 'ar_bullpup',
+  fal: 'ar_scar_hd', scar: 'ar_scar_hd', oden: 'ar_scar_hd', ebr: 'dmr_ebr', dmr14: 'dmr_ebr',
+  ak47: 'ar_ak_hd', ak47cw: 'ar_ak_hd', an94: 'ar_ak_hd', amax: 'ar_ak', groza: 'ar_ak', type63: 'ar_ak_hd', asval: 'smg_east',
+  mp5: 'smg_mp5sd', mp5cw: 'smg_mp5sd', mp7: 'smg_mp7_hd', iso: 'smg_mpx', fennec: 'smg_mpx', striker: 'smg_mpx', milano: 'smg_mpx', bullfrog: 'smg_east',
+  p90: 'smg_compact_west', mac10: 'smg_compact_west', uzi: 'smg_compact_east', ak74u: 'smg_compact_east', bizon: 'smg_east', ksp: 'smg_mpx',
+  pkm: 'lmg_rpk', m91: 'lmg_rpk', mg34: 'lmg_rpk', holger: 'ar_scar_hd', bruen: 'ar_m4_hd', finn: 'lmg_rpk', stoner: 'lmg_rpk', rpd: 'lmg_rpk', m60: 'lmg_rpk', turretgun: 'lmg_rpk',
+  mk2: 'rifle_bolt_wood', kar98: 'rifle_bolt_wood', pelington: 'rifle_bolt_wood', sks: 'sniper_east', spr: 'sniper_west', dragunov: 'sniper_east',
+  hdr: 'sniper_bullpup', ax50: 'sniper_west', tundra: 'sniper_west', rytec: 'sniper_50cal_west', m82: 'sniper_50cal_west',
   m680: 'shotgun_pump', r90: 'shotgun_pump', '725': 'shotgun_pump', hauer: 'shotgun_pump',
   origin: 'shotgun_auto', vlk: 'shotgun_auto', jak12: 'shotgun_auto', gallo: 'shotgun_auto', streetsweeper: 'shotgun_auto',
-  x16: 'pistol_west', m1911: 'pistol_west', m19: 'pistol_west', renetti: 'pistol_west', '1911cw': 'pistol_west', diamatti: 'pistol_west',
-  '357': 'pistol_east', magnum: 'pistol_east', deagle: 'pistol_east',
-  rpg: 'launcher_rpg', pila: 'launcher_rpg', strela: 'launcher_rpg', jokr: 'launcher_rpg', cigma: 'launcher_rpg', m79: 'launcher_rpg', mgl: 'launcher_rpg',
+  x16: 'pistol_glock', m1911: 'pistol_west', m19: 'pistol_glock', renetti: 'pistol_glock', '1911cw': 'pistol_west', diamatti: 'pistol_glock',
+  '357': 'revolver_357', magnum: 'revolver_357', deagle: 'pistol_deagle',
+  rpg: 'launcher_rpg7', pila: 'launcher_rpg', strela: 'launcher_rpg', jokr: 'launcher_rpg', cigma: 'launcher_rpg', m79: 'launcher_rpg', mgl: 'launcher_rpg',
 };
 
-export interface GunModel { obj: THREE.Object3D; muzzle: number; sight: number; scope: boolean; optic: boolean }
+export interface GunModel { obj: THREE.Object3D; muzzle: number; sight: number; scope: boolean; optic: boolean; gripZ: number; guardZ: number; /** gun-local z of the optic's rear lens (red dot / holo) */ opticZ: number }
+
+/**
+ * Detailed models (2nd batch) are centred on their length instead of the receiver. For each we note
+ * where the pistol grip and the support hand sit (fraction of the length from the muzzle) and re-anchor
+ * the model so the grip lands where the hands / arm IK expect it and the bore sits at the usual height.
+ */
+const HD_GRIP: Record<string, [number, number]> = {
+  ar_m4_hd: [0.59, 0.33], ar_ak_hd: [0.74, 0.4], ar_scar_hd: [0.66, 0.35], dmr_ebr: [0.71, 0.36], ar_bullpup: [0.52, 0.25],
+  sniper_bullpup: [0.64, 0.4], rifle_bolt_wood: [0.72, 0.45], smg_mp5sd: [0.62, 0.42], smg_mp7_hd: [0.36, 0.14], smg_mpx: [0.61, 0.36],
+  pistol_glock: [0.72, 0.72], pistol_deagle: [0.8, 0.8], revolver_357: [0.8, 0.8], launcher_rpg7: [0.47, 0.3],
+};
+/** guns whose model already has a suppressor built in */
+const BUILT_IN_SUPPRESSOR = new Set(['smg_mp5sd']);
 
 class Models {
   man: Record<string, ManEntry> = {};
@@ -63,18 +74,54 @@ class Models {
     const root = new THREE.Group();
     const body = skClone(g.scene); body.scale.copy(g.scene.scale); root.add(body);
     const sc = body.scale.x;
-    const sk = (n: string) => (sockets[n] ? new THREE.Vector3(...sockets[n]).multiplyScalar(sc) : null);
+    const pistolish = def.cls === 'pistol';
+    let gripZ = pistolish ? 0.035 : 0.085, guardZ = pistolish ? 0.03 : -0.17;
+    const off = new THREE.Vector3();
+    const hd = HD_GRIP[key];
+    if (hd) {
+      const e = this.man[key], L = e.bbox![2], z0 = e.bboxMin![2];
+      const bore = sockets.Attach_Muzzle?.[1] ?? 0.016;
+      off.set(0, 0.016 - bore, gripZ - (z0 + hd[0] * L));
+      body.position.add(off);
+      guardZ = pistolish ? gripZ - 0.005 : z0 + hd[1] * L + off.z;
+    }
+    const sk = (n: string) => (sockets[n] ? new THREE.Vector3(...sockets[n]).multiplyScalar(sc).add(off) : null);
     const top = sk('Attach_Scope') ?? new THREE.Vector3(0, 0.04, 0);
-    let sight = top.y + 0.014, optic = false, scope = !!def.scope;
-    const attach = (k: string, at: THREE.Vector3) => { const a = this.gltf.get(k); if (!a) return null; const o = skClone(a.scene); o.position.copy(at); root.add(o); return o; };
+    let sight = top.y + 0.014, optic = false, scope = !!def.scope, opticZ = 0;
+    const attach = (k: string, at: THREE.Vector3) => {
+      const a = this.gltf.get(k); if (!a) return null; const o = skClone(a.scene); o.position.copy(at); root.add(o);
+      // lenses: the pack's "glass" is an opaque grey; make it (and the blue lens coating) see-through
+      o.traverse((c) => {
+        const m = c as THREE.Mesh; if (!m.isMesh) return;
+        const fix = (mt: THREE.Material) => {
+          if (!/Glass|Cerulean/.test(mt.name)) return mt;
+          const g = (mt as THREE.MeshStandardMaterial).clone();
+          g.transparent = true; g.opacity = /Glass/.test(mt.name) ? 0.08 : 0.18; g.depthWrite = false; g.color.setHex(/Glass/.test(mt.name) ? 0xb8d4e0 : 0x3a6a9a); g.roughness = 0.05; g.metalness = 0;
+          g.userData.lens = true; return g;
+        };
+        m.material = Array.isArray(m.material) ? m.material.map(fix) : fix(m.material);
+      });
+      return o;
+    };
     const isSniper = def.cls === 'sniper' || (def.cls === 'marksman' && def.scope);
     if (scope || isSniper) { if (attach('att_scope', top)) { sight = top.y + 0.045; scope = true; } }
-    else if (rarity >= 1 && def.cls !== 'shotgun' && def.cls !== 'launcher' && def.cls !== 'pistol') { if (attach(rarity >= 3 ? 'att_holo' : 'att_red_dot', top)) { sight = top.y + (rarity >= 3 ? 0.034 : 0.03); optic = true; } }
+    else if (rarity >= 1 && def.cls !== 'shotgun' && def.cls !== 'launcher' && def.cls !== 'pistol') {
+      const holo = rarity >= 3;
+      const o = attach(holo ? 'att_holo' : 'att_red_dot', top);
+      if (o) {
+        o.scale.setScalar(1.3); // a touch larger than the pack's so the sight picture reads
+        sight = top.y + (holo ? 0.034 : 0.03) * 1.3; optic = true; opticZ = top.z + (holo ? 0.042 : 0.035) * 1.3;
+        // illuminated reticle projected "at infinity": drawn on top, only switched on by the first-person view
+        const r = new THREE.Mesh(new THREE.PlaneGeometry(holo ? 0.026 : 0.0065, holo ? 0.026 : 0.0065), new THREE.MeshBasicMaterial({ map: reticleTex(holo), transparent: true, depthTest: false, depthWrite: false, blending: THREE.AdditiveBlending }));
+        r.position.set(0, sight, top.z - 0.01); r.renderOrder = 20; r.visible = false; r.userData.reticle = true; r.userData.noBake = true;
+        root.add(r);
+      }
+    }
     const mz = sk('Attach_Muzzle');
     let muzzle = mz ? -mz.z : 0.4;
-    if (isSuppressed(id, rarity) && mz) { if (attach('att_suppressor', mz)) muzzle += 0.14 * 1; }
+    if (isSuppressed(id, rarity) && mz && !BUILT_IN_SUPPRESSOR.has(key)) { if (attach('att_suppressor', mz)) muzzle += 0.14 * 1; }
     root.traverse((o) => { const m = o as THREE.Mesh; if (m.isMesh) { m.castShadow = true; m.receiveShadow = true; m.frustumCulled = false; } });
-    return { obj: root, muzzle, sight, scope, optic };
+    return { obj: root, muzzle, sight, scope, optic, gripZ, guardZ, opticZ };
   }
 
   /** Whole gun (with attachments) merged into one vertex-coloured geometry, for instancing. */
@@ -105,7 +152,7 @@ export function bake(obj: THREE.Object3D): THREE.BufferGeometry {
   const parts: THREE.BufferGeometry[] = [];
   const v = new THREE.Vector3(), c = new THREE.Color();
   obj.traverse((o) => {
-    const m = o as THREE.Mesh; if (!m.isMesh) return;
+    const m = o as THREE.Mesh; if (!m.isMesh || m.userData.noBake) return;
     const sk = (m as any).isSkinnedMesh ? (m as THREE.SkinnedMesh) : null;
     if (sk) sk.skeleton.update();
     const mats = Array.isArray(m.material) ? m.material : [m.material];
@@ -142,6 +189,17 @@ export function bake(obj: THREE.Object3D): THREE.BufferGeometry {
     parts.push(out);
   });
   return mergeGeometries(parts)!;
+}
+
+/** Red dot, or the EOTech-style ring-and-dot for the holographic sight. */
+const retCache: THREE.Texture[] = [];
+function reticleTex(holo: boolean): THREE.Texture {
+  const k = +holo; if (retCache[k]) return retCache[k];
+  const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d')!;
+  g.shadowColor = '#ff2a1a'; g.shadowBlur = 6; g.fillStyle = g.strokeStyle = '#ff4a30';
+  if (holo) { g.lineWidth = 3; g.beginPath(); g.arc(32, 32, 24, 0, Math.PI * 2); g.stroke(); g.beginPath(); g.arc(32, 32, 3, 0, Math.PI * 2); g.fill(); }
+  else { g.beginPath(); g.arc(32, 32, 14, 0, Math.PI * 2); g.fill(); }
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; retCache[k] = t; return t;
 }
 
 export const models = new Models();

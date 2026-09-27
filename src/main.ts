@@ -71,7 +71,7 @@ async function boot() {
   showMenu();
   // "Play again" reloads the page for a clean slate and jumps straight back into the same mode
   try { if (sessionStorage.getItem('vd-autostart')) { sessionStorage.removeItem('vd-autostart'); addEventListener('click', () => { if (!match) start(); }, { once: true }); } } catch { /* */ }
-  (window as any).__vd = { sm, world, cam, start, get match() { return match; } };
+  (window as any).__vd = { sm, world, cam, start, models, THREE, get match() { return match; } };
 
   let last = performance.now();
   const loop = (now: number) => {
