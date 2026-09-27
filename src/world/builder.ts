@@ -196,10 +196,10 @@ export function apartment(rng: Rng, w: number, d: number, floors: number, st: St
   // roof: parapet + stair head house over the core
   const top = floors * H + 0.05;
   b.wall(0, -hw, hw, -hd + 0.15, top, 1.0, 0.3, st.wall, [], st.wallColor);
-  b.wall(0, -hw, hw, hd - 0.15, top, 1.0, 0.3, st.wall, [], st.wallColor);
+  b.wall(0, -hw, hw, hd - 0.15, top, 1.0, 0.3, st.wall, [{ u0: hw + cx0 - 0.2, u1: hw - cx0 + 0.2, v0: 0, v1: 1.0 }], st.wallColor); // open above the stair landing
   b.wall(1, -hd, hd, -hw + 0.15, top, 1.0, 0.3, st.wall, [], st.wallColor);
   b.wall(1, -hd, hd, hw - 0.15, top, 1.0, 0.3, st.wall, [], st.wallColor);
-  b.wall(0, cx0 - 0.2, -cx0 + 0.2, cz0 + 0.9, top, 2.6, 0.2, st.wall, [{ u0: 0.6, u1: coreW - 0.2, v0: 0, v1: 2.3 }], st.wallColor);
+  b.wall(0, cx0 - 0.2, -cx0 + 0.2, cz0 + 0.9, top, 2.6, 0.2, st.wall, [{ u0: coreW / 2 + 0.05, u1: coreW + 0.35, v0: 0, v1: 2.3 }], st.wallColor); // doorway over the up-flight
   b.wall(1, cz0 + 0.9, cz1, cx0 - 0.1, top, 2.6, 0.2, st.wall, [], st.wallColor);
   b.wall(1, cz0 + 0.9, cz1, -cx0 + 0.1, top, 2.6, 0.2, st.wall, [], st.wallColor);
   b.box(cx0 - 0.3, top + 2.6, cz0 + 0.8, -cx0 + 0.3, top + 2.85, cz1 + 0.1, Mat.Roof);

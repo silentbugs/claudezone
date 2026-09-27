@@ -10,7 +10,7 @@ export const MOVE = {
   tacSprintTime: 3.6, tacSprintCooldown: 4.5,
   slideSpeed: 10.5, slideTime: 0.8, slideCooldown: 1.2,
   height: 1.8, crouchH: 1.25, proneH: 0.6, radius: 0.34, step: 0.55,
-  mantleMax: 2.1,
+  mantleMax: 2.7,
   fallSafe: 5.5, fallLethal: 16,
 };
 
