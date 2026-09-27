@@ -84,6 +84,8 @@ export interface TerrainExtras {
   /** Marks samples that are river ice / river bed. 1 = ice, 2 = water bed */
   river: Uint8Array;
   rivers: RiverDef[];
+  /** Road/river crossings: centre, road direction (radians), span length, width, deck height. */
+  bridges: { x: number; z: number; a: number; len: number; w: number; y: number }[];
 }
 
 export function buildTerrain(masks: MapMasks): { hf: Heightfield; extra: TerrainExtras } {
@@ -181,6 +183,7 @@ export function buildTerrain(masks: MapMasks): { hf: Heightfield; extra: Terrain
     if (w > 0 && !sea[k]) h[k] = lerp(h[k], hb[k], w);
   }
   // --- rivers: carve channels after roads so bridges are needed over them
+  const preCarve = Float32Array.from(h);
   const rivers = riverDefs();
   const riverR = new Uint8Array(n * n);
   for (const rv of rivers) {
@@ -207,10 +210,33 @@ export function buildTerrain(masks: MapMasks): { hf: Heightfield; extra: Terrain
   const road = new Float32Array(n * n); for (let k = 0; k < n * n; k++) road[k] = clamp(roadSoft[k] * 1.6, 0, 1) * (riverR[k] ? 0 : 1);
   const snow = new Float32Array(n * n);
   for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) { const k = j * n + i; snow[k] = clamp((snowB[k] * 2.0 - 0.25) * smoothstep(1250, 900, j * sp) + smoothstep(150, 230, h[k]), 0, 1); }
+  // --- bridges: cluster road cells that fell into a river channel
+  const bridges: TerrainExtras['bridges'] = [];
+  {
+    const seen = new Uint8Array(n * n);
+    for (let k = 0; k < n * n; k++) {
+      if (seen[k] || !riverR[k] || !roadR[k]) continue;
+      const cells: number[] = [], st = [k]; seen[k] = 1;
+      while (st.length) { const q = st.pop()!; cells.push(q); const qi = q % n, qj = (q / n) | 0; for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1]]) { const i = qi + di, j = qj + dj; if (i < 0 || j < 0 || i >= n || j >= n) continue; const r = j * n + i; if (!seen[r] && riverR[r] && roadR[r]) { seen[r] = 1; st.push(r); } } }
+      if (cells.length < 4) continue;
+      let mx = 0, mz = 0, yy = 0; for (const q of cells) { mx += (q % n) * sp; mz += ((q / n) | 0) * sp; } mx /= cells.length; mz /= cells.length;
+      // road direction: perpendicular to the river at this point
+      let rv = rivers[0], best = Infinity; for (const r of rivers) { const q = riverQuery(r, mx, mz); if (q.d < best) { best = q.d; rv = r; } }
+      const e = 6, qa = riverQuery(rv, mx, mz);
+      let ra = 0; { let bi = 0, bd = Infinity; for (let i = 0; i < rv.pts.length - 1; i++) { const ax = rv.pts[i][0], az = rv.pts[i][1], bx = rv.pts[i + 1][0], bz = rv.pts[i + 1][1]; const vx = bx - ax, vz = bz - az, l2 = vx * vx + vz * vz; let tt = ((mx - ax) * vx + (mz - az) * vz) / l2; tt = clamp(tt, 0, 1); const d = Math.hypot(mx - ax - vx * tt, mz - az - vz * tt); if (d < bd) { bd = d; bi = i; } } ra = Math.atan2(rv.pts[bi + 1][1] - rv.pts[bi][1], rv.pts[bi + 1][0] - rv.pts[bi][0]); }
+      void e; void qa;
+      // deck height: the road height on the banks before carving
+      const cx = Math.cos(ra + Math.PI / 2), cz = Math.sin(ra + Math.PI / 2), span = rv.halfW * 2 + 26;
+      const bankA = preCarve[Math.round((mz + cz * span / 2) / sp) * n + Math.round((mx + cx * span / 2) / sp)] ?? 0, bankB = preCarve[Math.round((mz - cz * span / 2) / sp) * n + Math.round((mx - cx * span / 2) / sp)] ?? 0;
+      yy = Math.max(bankA, bankB, 1.5);
+      if (bridges.some((b) => Math.hypot(b.x - mx, b.z - mz) < 30)) continue;
+      bridges.push({ x: mx, z: mz, a: -(ra + Math.PI / 2), len: span, w: 12, y: yy }); // local x runs across the river
+    }
+  }
   const pb = blur(blur(builtR, n, 2), n, 2);
   const paved = new Float32Array(n * n);
   for (let k = 0; k < n * n; k++) paved[k] = riverR[k] || h[k] < 0.5 ? 0 : clamp((pb[k] - 0.18) * 2.2, 0, 1) * (1 - snow[k]);
-  return { hf, extra: { road, snow, paved, river: riverR, rivers } };
+  return { hf, extra: { road, snow, paved, river: riverR, rivers, bridges } };
 }
 
 /** Water surface height at a point (sea = 0, rivers use their profile), or -Infinity where dry. */

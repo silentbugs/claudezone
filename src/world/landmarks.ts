@@ -30,6 +30,24 @@ export function buildLandmarks(ctx: GenContext) {
   promenade(ctx);
   services(ctx);
   buildGulag(ctx);
+  bridges(ctx);
+}
+
+/** Road bridges over the Gora and Karst canals, with ramps down to the banks. */
+function bridges(ctx: GenContext) {
+  for (const br of ctx.extra.bridges) {
+    const b = new Builder(), L = br.len, W = br.w;
+    // local x runs along the road (across the river)
+    b.box(-L / 2, -0.8, -W / 2, L / 2, 0, W / 2, Mat.Concrete, { color: 0x9c988e });
+    b.box(-L / 2, 0, -W / 2, L / 2, 1.0, -W / 2 + 0.35, Mat.Concrete, { color: 0xb0aca2 });
+    b.box(-L / 2, 0, W / 2 - 0.35, L / 2, 1.0, W / 2, Mat.Concrete, { color: 0xb0aca2 });
+    for (const px of [-L / 4, 0, L / 4]) b.box(px - 1, -30, -W / 2 + 1, px + 1, -0.8, W / 2 - 1, Mat.Concrete, { color: 0x8a8680 });
+    // approach ramps so the deck meets the banks smoothly
+    const ga = ctx.hf.at(br.x + Math.cos(br.a) * (L / 2 + 6), br.z - Math.sin(br.a) * (L / 2 + 6)) - br.y, gb = ctx.hf.at(br.x - Math.cos(br.a) * (L / 2 + 6), br.z + Math.sin(br.a) * (L / 2 + 6)) - br.y;
+    if (ga < -0.3) b.ramp(L / 2, ga, -W / 2 + 0.4, L / 2 + 12, 0, W / 2 - 0.4, 0, -1);
+    if (gb < -0.3) b.ramp(-L / 2 - 12, gb, -W / 2 + 0.4, -L / 2, 0, W / 2 - 0.4, 0, 1);
+    ctx.place(b, 'bridge', br.x, br.z, br.a, { y: br.y, flatten: false, mark: false, lodColor: 0x9c988e });
+  }
 }
 
 /** Climbable tower with a switchback stair core; returns builder. */
