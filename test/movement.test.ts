@@ -3,7 +3,7 @@ import assert from 'node:assert';
 import { loadMasksNode } from './util';
 import { generateWorld } from '../src/world/mapgen';
 import { Sim } from '../src/sim/sim';
-import { toWorld } from '../src/world/collision';
+import { toWorld, toLocal } from '../src/world/collision';
 
 const world = generateWorld(loadMasksNode(), 1);
 
@@ -95,4 +95,60 @@ test('slide carries sprint momentum, slide-cancel pops back up', () => {
   assert.ok(p.slideT > 0, 'second slide started');
   p.intent.crouch = true; sim.tick(1 / 60); sim.events.length = 0;
   assert.equal(p.stance, 0, 'slide cancel stands up');
+});
+
+/** Find a ground-floor window on a house's front wall: wall above and below, open between (~0.95-2.25 m over the floor). */
+function inLocal0(s: any, q: any) { const [x, z] = toLocal(s, q.x, q.z); return { x, z }; }
+function findWindow(s: any) {
+  for (const zw of [s.bz0 + 0.35, s.bz0 + 0.4, s.bz0 + 0.45]) {
+    for (let lx = s.bx0 + 0.8; lx < s.bx1 - 0.8; lx += 0.1) {
+      if (Math.abs(lx) < 1.2) continue; // door
+      const [wx, wz] = toWorld(s, lx, zw), [fx, fz] = toWorld(s, lx, zw + 1.0);
+      const floor = world.col.groundAt(fx, fz, s.y + 1.5, 0.05);
+      const sill = world.col.groundAt(wx, wz, floor + 1.6, 0.05);
+      if (sill < floor + 0.7 || sill > floor + 1.2) continue;
+      if (!world.col.fits(wx, sill + 0.05, wz, 1.1, 0.1) || world.col.fits(wx, floor + 2.5, wz, 0.3, 0.05)) continue;
+      let hi = lx; for (;;) { const [hx, hz] = toWorld(s, hi + 0.05, zw); if (hi >= s.bx1 || !world.col.fits(hx, sill + 0.05, hz, 1.1, 0.1)) break; hi += 0.05; }
+      if (hi - lx > 0.8) return { lx: (lx + hi) / 2, sill, floor };
+    }
+  }
+  return null;
+}
+
+test('vault in and out through a house window; jump spam never reaches the roof', () => {
+  const sim = new Sim(world, 1, { humans: 1 });
+  const houses = world.col.structures.filter((q) => q.kind === 'house' && q.parts.length > 20);
+  let s: any = null, win: any = null;
+  for (const h of houses) { const w = findWindow(h); if (w) { s = h; win = w; break; } }
+  assert.ok(s && win, 'found a house window');
+  const p = freshPlayer(sim);
+  // outside, facing the window
+  const [ox, oz] = toWorld(s, win.lx, s.bz0 - 0.9), [ix, iz] = toWorld(s, win.lx, s.bz0 + 1.5);
+  p.x = ox; p.z = oz; p.y = world.col.groundAt(ox, oz, s.y + 1); p.fallStartY = p.y;
+  p.yaw = p.intent.yaw = Math.atan2(-(ix - ox), -(iz - oz));
+  p.intent.mz = 1; p.intent.jump = true;
+  for (let t = 0; t < 90; t++) { if (t === 45) p.intent.mz = 0; sim.tick(1 / 60); sim.events.length = 0; }
+  const inLocal = (q: any) => inLocal0(s, q);
+  const a = inLocal(p);
+  console.log('vault in: local z', a.z.toFixed(2), 'front wall', s.bz0.toFixed(2), 'y', (p.y - s.y).toFixed(2), 'floor', (world.col.groundAt(p.x, p.z, p.y + 0.5) - s.y).toFixed(2), 'sill', (win.sill - s.y).toFixed(2));
+  assert.ok(a.z > s.bz0 + 0.3, 'ended up inside');
+  assert.ok(Math.abs(p.y - win.floor) < 0.3, 'dropped to the floor inside, not standing on the sill');
+  // and back out
+  p.yaw = p.intent.yaw = Math.atan2(-(ox - p.x), -(oz - p.z));
+  for (let t = 0; t < 40; t++) { p.intent.mz = 1; sim.tick(1 / 60); sim.events.length = 0; }
+  p.intent.jump = true;
+  for (let t = 0; t < 90; t++) { p.intent.mz = 1; sim.tick(1 / 60); sim.events.length = 0; }
+  const b = inLocal(p);
+  console.log('vault out: local z', b.z.toFixed(2));
+  assert.ok(b.z < s.bz0 - 0.2, 'back outside');
+  // spam jump against the facade (window and solid wall) for a while: never above the eaves
+  let maxY = -1e9;
+  for (const lx of [win.lx, win.lx + 1.6, win.lx - 1.6]) {
+    const [qx, qz] = toWorld(s, lx, s.bz0 - 0.7);
+    p.x = qx; p.z = qz; p.y = world.col.groundAt(qx, qz, s.y + 1); p.fallStartY = p.y; p.vx = p.vz = p.vy = 0; p.stance = 0;
+    p.yaw = p.intent.yaw = Math.atan2(-(ix - ox), -(iz - oz));
+    for (let t = 0; t < 360; t++) { p.intent.mz = 1; if (t % 9 === 0) p.intent.jump = true; sim.tick(1 / 60); sim.events.length = 0; maxY = Math.max(maxY, p.y - s.y); }
+  }
+  console.log('jump spam max height', maxY.toFixed(2), 'eaves', s.by1.toFixed(1));
+  assert.ok(maxY < win.floor - s.y + 2.0, 'never climbed onto the upper floor / roof');
 });

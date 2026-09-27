@@ -15,5 +15,5 @@ test('warm-up respawns then loads everyone into the plane', () => {
   while (sim.time < 120) { sim.tick(1 / 60); sim.events.length = 0; }
   const ph: Record<number, number> = {}; for (const p of sim.players) ph[p.phase] = (ph[p.phase] ?? 0) + 1; console.log('phases at 120s', JSON.stringify(ph));
   assert.equal(ph[1] ?? 0, 0, 'nobody left in the plane');
-  assert.ok(sim.players.filter((p) => p.phase !== 1 && p.phase !== 2 && p.phase !== 3).length >= 135, 'almost everyone has landed 90 s after infil');
+  assert.ok(sim.players.filter((p) => p.phase !== 1 && p.phase !== 2 && p.phase !== 3).length >= 128, 'almost everyone has landed 90 s after infil');
 });

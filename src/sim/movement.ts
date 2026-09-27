@@ -91,7 +91,12 @@ function ground(sim: Sim, p: Player, dt: number) {
     p.mantleT -= dt;
     const k = Math.min(1, dt / Math.max(0.01, p.mantleT + dt));
     p.y += (p.mantleY - p.y) * k; p.x += p.vx * dt; p.z += p.vz * dt;
-    if (p.mantleT <= 0) { p.y = p.mantleY; p.vx *= 0.3; p.vz *= 0.3; p.onGround = true; p.fallStartY = p.y; }
+    if (p.mantleT <= 0) {
+      p.y = p.mantleY; p.fallStartY = p.y;
+      if ((p as any).vaulting) { p.vx *= 0.45; p.vz *= 0.45; p.onGround = false; (p as any).vaulting = false; }
+      else { p.vx *= 0.3; p.vz *= 0.3; p.onGround = true; }
+      if (p.stance === Stance.Stand && !sim.world.col.fits(p.x, p.y, p.z, MOVE.height, MOVE.radius * 0.9)) p.stance = Stance.Crouch;
+    }
     return;
   }
   // --- stance
@@ -168,16 +173,20 @@ function ground(sim: Sim, p: Player, dt: number) {
   const h = playerHeight(p);
   if (it.jump && !downed) {
     it.jump = false;
+    (p as any).jumpBuf = sim.time + 0.45; // a jump toward a ledge mantles when you reach it
     if (p.swimming) { p.vy = 3; }
     else if (p.onGround) {
       if (p.stance !== Stance.Stand) { p.stance = tryStand(sim, p); }
-      else if (!tryMantle(sim, p)) { p.vy = MOVE.jumpV; p.onGround = false; sim.emit({ t: 'jump', p: p.id }); }
-    } else if (!tryMantle(sim, p)) {
+      else if (tryMantle(sim, p)) return;
+      else { p.vy = MOVE.jumpV; p.onGround = false; sim.emit({ t: 'jump', p: p.id }); }
+    } else if (tryMantle(sim, p)) return;
+    else {
       // pop the parachute when falling from a height (rooftops, cliffs, helicopters)
       const agl = p.y - col.groundAt(p.x, p.z, p.y, 0.3);
       if (p.vy < -4 && agl > 14) { p.phase = Phase.Chute; p.vy = Math.max(p.vy, -12); sim.emit({ t: 'chute', p: p.id }); return; }
     }
   }
+  else if (!p.onGround && !p.swimming && !downed && it.mz > 0.3 && ((p as any).jumpBuf ?? 0) > sim.time && tryMantle(sim, p)) { (p as any).jumpBuf = 0; return; }
   // --- vertical
   if (p.swimming) {
     const target = wl - 1.35;
@@ -229,22 +238,47 @@ function tryStand(sim: Sim, p: Player): Stance {
   return sim.world.col.fits(p.x, p.y, p.z, MOVE.height, MOVE.radius * 0.9) ? Stance.Stand : p.stance === Stance.Prone ? Stance.Crouch : p.stance;
 }
 
+/**
+ * Mantle / vault. Reach is measured from the floor under your feet (not from the top of a jump), so
+ * spamming jump next to a wall can't chain you up a facade. Thin obstacles (window sills, low walls,
+ * railings) are vaulted: you go over them and drop on the far side, through window openings too.
+ * Deep surfaces (crates, containers, ledges, balconies) are climbed onto.
+ */
 function tryMantle(sim: Sim, p: Player): boolean {
+  if (((p as any).mantleCd ?? 0) > sim.time) return false;
   const col = sim.world.col;
   const fx = -Math.sin(p.yaw), fz = -Math.cos(p.yaw);
-  for (const d of [0.55, 0.85]) {
+  const foot = col.groundAt(p.x, p.z, p.y + 0.1, 0.2);
+  const base = p.y - foot < 1.6 ? foot : p.y;
+  const reach = base + MOVE.mantleMax;
+  for (const d of [0.45, 0.65, 0.85]) {
     const x = p.x + fx * d, z = p.z + fz * d;
-    const top = col.groundAt(x, z, p.y + MOVE.mantleMax, 0.15);
-    if (top > p.y + MOVE.step && top <= p.y + MOVE.mantleMax) {
-      const tx = p.x + fx * (d + 0.35), tz = p.z + fz * (d + 0.35);
-      const top2 = col.groundAt(tx, tz, top + 0.3, 0.2);
-      void top2;
-      if (col.fits(tx, top + 0.02, tz, MOVE.crouchH, MOVE.radius * 0.9)) { // climb onto a ledge or vault a thin wall/sill
-        p.mantleT = 0.25 + (top - p.y) * 0.18; p.mantleY = top + 0.02;
-        p.vx = (tx - p.x) / p.mantleT; p.vz = (tz - p.z) / p.mantleT; p.vy = 0;
-        p.onGround = false;
-        return true;
-      }
+    const top = col.groundAt(x, z, reach + 0.05, 0.12);
+    if (top <= p.y + 0.3 || top <= base + MOVE.step || top > reach) continue;
+    // what is behind the obstacle's top surface?
+    let drop = -1, deep = false;
+    for (const e of [0.3, 0.5, 0.75]) {
+      const g = col.groundAt(x + fx * e, z + fz * e, top + 0.25, 0.12);
+      if (g < top - 0.4) { drop = e; break; }
+      if (Math.abs(g - top) < 0.3 && e >= 0.5) { deep = true; break; }
+    }
+    const go = (tx: number, tz: number, y: number, t: number, vault: boolean) => {
+      p.mantleT = t; p.mantleY = y;
+      p.vx = (tx - p.x) / t; p.vz = (tz - p.z) / t; p.vy = 0;
+      p.onGround = false; p.slideT = 0; p.sprinting = false;
+      (p as any).vaulting = vault; (p as any).mantleCd = sim.time + t + 0.35;
+      sim.emit({ t: 'jump', p: p.id });
+      return true;
+    };
+    if (drop > 0) {
+      // vault: need crouched clearance over the top (window openings are ~1.35 m tall) and room on the far side
+      const lx = x + fx * (drop + 0.4), lz = z + fz * (drop + 0.4);
+      if (col.fits(x, top + 0.03, z, 0.85, 0.22) && col.fits(lx, top + 0.03, lz, 0.85, MOVE.radius * 0.8))
+        return go(lx, lz, top + 0.03, 0.32 + (top - p.y) * 0.12, true);
+    } else if (deep) {
+      const tx = p.x + fx * (d + 0.4), tz = p.z + fz * (d + 0.4);
+      if (col.fits(tx, top + 0.02, tz, MOVE.crouchH, MOVE.radius * 0.9))
+        return go(tx, tz, top + 0.02, 0.25 + (top - p.y) * 0.18, false);
     }
   }
   return false;
