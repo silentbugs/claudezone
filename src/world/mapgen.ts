@@ -99,7 +99,16 @@ export function generateWorld(masks: MapMasks, seed = 1): WorldData {
   const rng = new Rng(seed);
   const { hf, extra } = buildTerrain(masks);
   const col = new CollisionWorld(hf);
-  col.waterAt = (x, z) => waterSurfaceAt(extra.rivers, hf, x, z);
+  // water surface raster (sea + unfrozen rivers) at 4 m: O(1) lookups for every player every tick
+  const WR = 4, wn = Math.ceil(MAP_SIZE / WR), water = new Float32Array(wn * wn).fill(-1e9);
+  for (const rv of extra.rivers) {
+    let x0 = Infinity, x1 = -Infinity, z0 = Infinity, z1 = -Infinity;
+    for (const [px, pz] of rv.pts) { x0 = Math.min(x0, px); x1 = Math.max(x1, px); z0 = Math.min(z0, pz); z1 = Math.max(z1, pz); }
+    for (let j = Math.max(0, Math.floor((z0 - 40) / WR)); j <= Math.min(wn - 1, Math.ceil((z1 + 40) / WR)); j++) for (let i = Math.max(0, Math.floor((x0 - 40) / WR)); i <= Math.min(wn - 1, Math.ceil((x1 + 40) / WR)); i++) {
+      const w = waterSurfaceAt([rv], hf, (i + 0.5) * WR, (j + 0.5) * WR); if (w > water[j * wn + i]) water[j * wn + i] = w;
+    }
+  }
+  col.waterAt = (x, z) => { const i = Math.floor(x / WR), j = Math.floor(z / WR); const r = i >= 0 && j >= 0 && i < wn && j < wn ? water[j * wn + i] : -1e9; return r > -1e8 ? r : hf.at(x, z) < 0 ? 0 : -Infinity; };
   const occ = new Occupancy(MAP_SIZE);
   // rivers and roads are off-limits for buildings
   for (let j = 0; j < occ.res; j++) for (let i = 0; i < occ.res; i++) {

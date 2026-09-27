@@ -34,6 +34,7 @@ export class BotBrain {
   failed = new Map<number, number>();
   path: [number, number][] | null = null; pathI = 0; pathGX = 0; pathGZ = 0; replan = false; pathCd = 0;
   chestId = -1; chestT = 0;
+  lootScanAt = 0; gunScanAt = 0;
   constructor(public id: number, r: number) { this.skill = 0.35 + r * 0.55; this.wanderA = r * 6.28; }
 }
 
@@ -400,18 +401,28 @@ function decide(sim: Sim, b: BotBrain, p: Player, inGulag: boolean) {
   // loot: nearest useful item nearby
   // unarmed: go a long way for a gun or a supply box before anything else
   if (!armed && b.itemId < 0) {
-    let best: any = null, bd = 130;
-    for (const itm of sim.itemsNear(p.x, p.z, 130)) { if (itm.kind !== ItemKind.Weapon || WEAPON[itm.weapon!].cls === 'pistol' || (b.failed.get(itm.id) ?? 0) > sim.time) continue; const d = Math.hypot(itm.x - p.x, itm.z - p.z); if (d < bd) { bd = d; best = itm; } }
-    if (best) { b.itemId = best.id; b.itemT = 0; b.tx = best.x; b.tz = best.z; b.goal = 'loot'; return; }
-    let ch: any = null; bd = 160;
-    for (const c2 of sim.chests) { if (c2.opened || Math.abs(c2.x - p.x) > bd || Math.abs(c2.z - p.z) > bd || (b.failed.get(-c2.id) ?? 0) > sim.time) continue; const d = Math.hypot(c2.x - p.x, c2.z - p.z); if (d < bd) { bd = d; ch = c2; } }
-    if (ch) {
-      if (bd < 2.6 || (b.chestT > 6 && bd < 22)) { ch.opened = true; for (const i2 of chestContentsLazy(sim, ch)) sim.addItem(i2); b.chestT = 0; }
-      else { if (b.chestId !== ch.id) { b.chestId = ch.id; b.chestT = 0; } b.chestT += 0.1; if (b.chestT > 14) b.failed.set(-ch.id, sim.time + 120); b.tx = ch.x; b.tz = ch.z; b.goal = 'loot'; return; }
+    // a supply box we're already heading for
+    const cur = b.chestId >= 0 ? sim.chests.find((c2) => c2.id === b.chestId && !c2.opened) : undefined;
+    if (cur) {
+      const d = Math.hypot(cur.x - p.x, cur.z - p.z);
+      b.chestT += 0.1;
+      if (d < 2.6 || (b.chestT > 6 && d < 22)) { cur.opened = true; for (const i2 of chestContentsLazy(sim, cur)) sim.addItem(i2); b.chestId = -1; }
+      else if (b.chestT > 14) { b.failed.set(-cur.id, sim.time + 120); b.chestId = -1; }
+      else { b.tx = cur.x; b.tz = cur.z; b.goal = 'loot'; return; }
+    } else b.chestId = -1;
+    if (sim.time >= b.gunScanAt) {
+      b.gunScanAt = sim.time + 1 + sim.rng.next();
+      let best: any = null, bd = 130;
+      for (const itm of sim.itemsNear(p.x, p.z, 130)) { if (itm.kind !== ItemKind.Weapon || WEAPON[itm.weapon!].cls === 'pistol' || (b.failed.get(itm.id) ?? 0) > sim.time) continue; const d = Math.hypot(itm.x - p.x, itm.z - p.z); if (d < bd) { bd = d; best = itm; } }
+      if (best) { b.itemId = best.id; b.itemT = 0; b.tx = best.x; b.tz = best.z; b.goal = 'loot'; return; }
+      let ch: any = null; bd = 160;
+      for (const c2 of sim.chests) { if (c2.opened || Math.abs(c2.x - p.x) > bd || Math.abs(c2.z - p.z) > bd || (b.failed.get(-c2.id) ?? 0) > sim.time) continue; const d = Math.hypot(c2.x - p.x, c2.z - p.z); if (d < bd) { bd = d; ch = c2; } }
+      if (ch) { b.chestId = ch.id; b.chestT = 0; b.tx = ch.x; b.tz = ch.z; b.goal = 'loot'; return; }
     }
   }
   const needy = !armed || p.plates < 2 || p.armor < 100;
-  if (b.itemId < 0 && (needy || sim.rng.chance(0.5))) {
+  if (b.itemId < 0 && sim.time >= b.lootScanAt && (needy || sim.rng.chance(0.5))) {
+    b.lootScanAt = sim.time + 0.8 + sim.rng.next() * 0.6;
     const R = needy ? 70 : 45;
     let best = null, bd = R;
     for (const itm of sim.itemsNear(p.x, p.z, R)) {
