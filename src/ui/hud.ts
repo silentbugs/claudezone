@@ -143,7 +143,7 @@ export class Hud {
     } else this.set('weap', this.weap, `<div class="cash">$${view.cash.toLocaleString()}</div><div class="eq"><span>Plates ${view.plates}/${view.maxPlates}</span></div>`);
     // crosshair (hidden while aiming)
     const spread = w ? (WEAPON[w.id].spreadHip * (1 - opts.ads) * 900 + 8 + Math.hypot(view.vx, view.vz) * 2 + view.bloom * 6) : 10;
-    const showXh = opts.ads < 0.5 && (view.phase === Phase.Alive || view.phase === Phase.Gulag);
+    const showXh = opts.ads < 0.5 && (view.phase === Phase.Alive || view.phase === Phase.Gulag) && !(vehicleOf(sim, view) && (view as any).seat === 0);
     this.xh.style.display = showXh ? '' : 'none';
     if (showXh) {
       const xs = this.xh.children as HTMLCollectionOf<HTMLElement>;
@@ -199,6 +199,7 @@ export class Hud {
     for (const cr of sim.crates) if (cr.squad === me.squad) addMk(cr.x, cr.y + 2, cr.z, 'mk', `LOADOUT ${Math.round(Math.hypot(cr.x - view.x, cr.z - view.z))}m`);
     this.set('mk', this.markers, mk);
     // minimap
+    (this.mm.parentElement as HTMLElement).style.display = view.phase === Phase.Gulag || view.phase === Phase.GulagWait ? 'none' : '';
     this.drawMinimap(view, camYaw);
     if (opts.mapOpen) this.drawFullMap(view);
     this.fullmap.style.display = opts.mapOpen ? 'flex' : 'none';

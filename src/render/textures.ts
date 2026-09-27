@@ -30,7 +30,7 @@ export function materialArray(size = 256): THREE.DataArrayTexture {
     // 0 concrete: board-formed panels, stains
     (u, v) => { const n = tfbm(u, v, 8, 4, 1); const seam = (v * 4) % 1 < 0.015 || (u * 2) % 1 < 0.01 ? -25 : 0; const stain = tfbm(u, v, 3, 3, 9) > 0.62 ? -18 : 0; const c = g(200, n) + seam + stain; return [c, c * 0.99, c * 0.96]; },
     // 1 brick
-    (u, v) => { const row = Math.floor(v * 16), off = row % 2 ? 0.5 / 6 : 0; const bu = (u + off) * 6, mortar = (v * 16) % 1 < 0.14 || bu % 1 < 0.05; const n = tfbm(u, v, 16, 3, 2) * 40 + cell(u + off, v, 6, 3) * 30; return mortar ? [185, 178, 165] : [200 + n - 40, 150 + n * 0.5 - 30, 125 + n * 0.3 - 30]; },
+    (u, v) => { const row = Math.floor(v * 16), off = row % 2 ? 0.5 / 6 : 0; const bu = (u + off) * 6, mortar = (v * 16) % 1 < 0.14 || bu % 1 < 0.05; const n = tfbm(u, v, 16, 3, 2) * 40 + cell(u + off, v, 6, 3) * 30; return mortar ? [215, 210, 200] : [150 + n * 0.8, 140 + n * 0.6, 132 + n * 0.5]; },
     // 2 plaster
     (u, v) => { const n = tfbm(u, v, 10, 4, 3); const c = g(225, n); return [c, c * 0.98, c * 0.94]; },
     // 3 metal (corrugated)

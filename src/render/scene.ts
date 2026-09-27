@@ -44,6 +44,8 @@ export class SceneMgr {
     this.structures = new StructureMesh(w.col.structures, mats, w.hf.size);
     this.scene.add(this.structures.group);
     this.scene.add(makeTrees(w.trees));
+    const wg = new THREE.BufferGeometry(); wg.setAttribute('position', new THREE.BufferAttribute(w.wires, 3));
+    this.scene.add(new THREE.LineSegments(wg, new THREE.LineBasicMaterial({ color: 0x1e1e1e })));
     this.scene.add(makeSky());
     const pm = new THREE.PMREMGenerator(this.renderer);
     this.scene.environment = pm.fromScene(new RoomEnvironment(), 0.04).texture;

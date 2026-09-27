@@ -37,7 +37,7 @@ const tmpC = new THREE.Color();
 class Emitter {
   s!: Structure;
   b!: GeoBuf;
-  layer = 0; r = 1; g = 1; bl = 1; scale = 3;
+  layer = 0; r = 1; g = 1; bl = 1; scale = 3; aoBase = false; aoY = 0;
   setPart(s: Structure, b: GeoBuf, mat: Mat, color: number | undefined) {
     this.s = s; this.b = b; this.layer = mat; this.scale = SCALE[mat] ?? 3;
     tmpC.setHex(color ?? DEFAULT_TINT[mat] ?? 0xffffff).convertSRGBToLinear();
@@ -57,7 +57,8 @@ class Emitter {
       let u: number, v: number;
       if (ay >= ax && ay >= az) { u = q[0]; v = q[2]; } else if (ax >= az) { u = q[2]; v = q[1]; } else { u = q[0]; v = q[1]; }
       b.uv.push(u / this.scale, v / this.scale);
-      b.col.push(this.r * shade, this.g * shade, this.bl * shade); b.lay.push(this.layer);
+      const ao = this.aoBase && ay < 0.5 ? 0.62 + 0.38 * Math.min(1, Math.max(0, (q[1] - this.aoY) / 1.6)) : 1;
+      b.col.push(this.r * shade * ao, this.g * shade * ao, this.bl * shade * ao); b.lay.push(this.layer);
     }
     if (p.length === 4) b.idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
     else b.idx.push(base, base + 1, base + 2);
@@ -167,10 +168,12 @@ export class StructureMesh {
       for (const p of s.parts) {
         const target = p.mat === Mat.Glass ? B.g : B.d;
         em.setPart(s, target, p.mat, p.color);
+        em.aoBase = p.y0 < 0.3 && p.y1 > 1 && p.mat !== Mat.Glass; em.aoY = Math.max(0, p.y0);
         if (p.shape === 'gable') em.gable(p);
         else if (p.shape === 'cyl') em.cyl(p);
         else em.box(p.x0, p.y0, p.z0, p.x1, p.y1, p.z1, p.y0 > 0.2);
       }
+      em.aoBase = false;
       for (const r of s.ramps) { em.setPart(s, B.d, r.mat ?? Mat.Concrete, r.mat === Mat.Roof ? undefined : 0x9a968e); if (r.mat === Mat.Roof) continue; em.ramp(r); }
       // LOD shell
       const big = s.by1 > 5 && (s.bx1 - s.bx0) * (s.bz1 - s.bz0) > 40;

@@ -61,6 +61,7 @@ export interface WorldData {
   contracts: { x: number; y: number; z: number }[];
   groundLoot: { x: number; y: number; z: number; poi: string | null }[];
   vehicleSpawns: { x: number; y: number; z: number; a: number }[];
+  wires: Float32Array;
 }
 
 /** Occupancy raster at 1.5 m so buildings, landmarks and props don't overlap. */
@@ -77,7 +78,8 @@ class Occupancy {
     }
     return true;
   }
-  free(cx: number, cz: number, a: number, w: number, d: number, pad = 0, allow = 0) { return this.forRect(cx, cz, a, w, d, pad, (i) => this.g[i] <= allow); }
+  /** Codes: 0 free, 1 building, 2 road, 3 river/sea/road splat, 4 prop, 5 tree. `roadOk` lets props sit on roads. */
+  free(cx: number, cz: number, a: number, w: number, d: number, pad = 0, roadOk = false) { return this.forRect(cx, cz, a, w, d, pad, (i) => this.g[i] === 0 || (roadOk && (this.g[i] === 2 || this.g[i] === 3))); }
   mark(cx: number, cz: number, a: number, w: number, d: number, pad = 0, v = 1) { this.forRect(cx, cz, a, w, d, pad, (i) => { this.g[i] = Math.max(this.g[i], v); }); }
   markCircle(cx: number, cz: number, r: number, v = 1) { for (let z = cz - r; z <= cz + r; z += this.cell) for (let x = cx - r; x <= cx + r; x += this.cell) { if ((x - cx) ** 2 + (z - cz) ** 2 > r * r) continue; const i = Math.floor(x / this.cell), j = Math.floor(z / this.cell); if (i >= 0 && j >= 0 && i < this.res && j < this.res) this.g[j * this.res + i] = Math.max(this.g[j * this.res + i], v); } }
   at(x: number, z: number) { const i = Math.floor(x / this.cell), j = Math.floor(z / this.cell); return i < 0 || j < 0 || i >= this.res || j >= this.res ? 255 : this.g[j * this.res + i]; }
@@ -90,6 +92,7 @@ export interface GenContext {
   flatten(x: number, z: number, angle: number, w: number, d: number, y: number, skirt: number): void;
   footprintHeights(x: number, z: number, angle: number, w: number, d: number): { min: number; max: number; avg: number };
   buyStations: WorldData['buyStations']; chests: WorldData['chests']; contracts: WorldData['contracts']; vehicleSpawns: WorldData['vehicleSpawns'];
+  wires: number[];
 }
 
 export function generateWorld(masks: MapMasks, seed = 1): WorldData {
@@ -107,7 +110,7 @@ export function generateWorld(masks: MapMasks, seed = 1): WorldData {
   }
   const ctx: GenContext = {
     rng, hf, extra, masks, col, occ,
-    buyStations: [], chests: [], contracts: [], vehicleSpawns: [],
+    buyStations: [], chests: [], contracts: [], vehicleSpawns: [], wires: [],
     footprintHeights(x, z, a, w, d) {
       const c = Math.cos(a), s = Math.sin(a);
       let mn = Infinity, mx = -Infinity, sum = 0, n = 0;
@@ -199,6 +202,9 @@ export function generateWorld(masks: MapMasks, seed = 1): WorldData {
   // 4) street props: burnt cars along roads, barriers, containers
   const props = placeProps(ctx, roadField);
 
+  // 4b) street lamps on urban road edges, power lines along the highways
+  placeStreetFurniture(ctx);
+
   // 5) trees
   const trees = placeTrees(ctx);
 
@@ -214,7 +220,7 @@ export function generateWorld(masks: MapMasks, seed = 1): WorldData {
   for (const g of groundLoot) if (rng.chance(0.16)) ctx.chests.push({ x: g.x, y: g.y, z: g.z });
   col.finalize();
   void placed; void props;
-  return { hf, extra, col, trees, masks, buyStations: ctx.buyStations, chests: ctx.chests, contracts: ctx.contracts, groundLoot: groundLoot.filter((g) => !ctx.chests.includes(g as any)), vehicleSpawns: ctx.vehicleSpawns };
+  return { hf, extra, col, trees, masks, buyStations: ctx.buyStations, chests: ctx.chests, contracts: ctx.contracts, groundLoot: groundLoot.filter((g) => !ctx.chests.includes(g as any)), vehicleSpawns: ctx.vehicleSpawns, wires: Float32Array.from(ctx.wires) };
 }
 
 import { VERDANSK } from '../data/verdansk';
@@ -283,7 +289,7 @@ function roadDirectionField(masks: MapMasks) {
 function placeProps(ctx: GenContext, roadField: (x: number, z: number) => number | null) {
   const { rng, masks, hf, occ, col } = ctx;
   let n = 0;
-  for (let i = 0; i < 2600; i++) {
+  for (let i = 0; i < 9000; i++) {
     const x = rng.range(100, MAP_SIZE - 100), z = rng.range(100, MAP_SIZE - 150);
     if (!masks.has(x, z, M_ROAD) || !inPlayable(x, z)) continue;
     // cars sit at road edge: step away from road centre
@@ -306,7 +312,7 @@ function placeProps(ctx: GenContext, roadField: (x: number, z: number) => number
       b.box(-3, 0, -1.25, 3, 2.6, 1.25, Mat.Container, { color: c });
     }
     const ang = (a ?? 0) + Math.PI / 2 + (rng.next() - 0.5) * 0.5;
-    if (!occ.free(x, z, ang, 5, 3, 0, 3)) continue;
+    if (!occ.free(x, z, ang, 5, 3, 0, true)) continue;
     const st = makeStructure(0, 'prop', x, y - 0.05, z, ang, b.parts);
     col.add(st); occ.mark(x, z, ang, 5, 3, 0.5, 4); n++;
   }
@@ -348,3 +354,59 @@ function placeTrees(ctx: GenContext): Tree[] {
 
 export { riverQuery };
 export type { Part };
+
+function placeStreetFurniture(ctx: GenContext) {
+  const { rng, masks, hf, occ, col } = ctx;
+  // lamps: sample road-edge points in built-up districts
+  let lamps = 0;
+  for (let i = 0; i < 30000 && lamps < 900; i++) {
+    const x = rng.range(100, MAP_SIZE - 100), z = rng.range(100, MAP_SIZE - 150);
+    if (masks.has(x, z, M_ROAD)) continue;
+    const dens = masks.density(x, z, 4, M_ROAD);
+    if (dens < 0.25 || dens > 0.6) continue;
+    const { d } = districtAt(x, z);
+    if (d === 'rural' || d === 'military') continue;
+    if ((occ.at(x, z) !== 0 && occ.at(x, z) !== 3) || !inPlayable(x, z)) continue;
+    const y = hf.at(x, z); if (y < 1) continue;
+    const b = new Builder();
+    b.box(-0.09, 0, -0.09, 0.09, 7.5, 0.09, Mat.Metal, { color: 0x5a5e62 });
+    b.box(-0.06, 7.3, -0.06, 1.6, 7.45, 0.06, Mat.Metal, { color: 0x5a5e62, noCollide: true });
+    b.box(1.2, 7.1, -0.15, 1.8, 7.3, 0.15, Mat.Trim, { color: 0xe8e4d0, noCollide: true });
+    const ang = rng.range(0, Math.PI * 2);
+    col.add(makeStructure(0, 'lamp', x, y, z, ang, b.parts));
+    occ.mark(x, z, 0, 1, 1, 1, 4); lamps++;
+  }
+  // power poles along the main roads (rural stretches)
+  for (const r of VERDANSK.roads) {
+    let carry = 0, prev: [number, number, number] | null = null;
+    for (let s = 0; s < r.pts.length - 1; s++) {
+      const [ax, az] = r.pts[s], [bx, bz] = r.pts[s + 1];
+      const L = Math.hypot(bx - ax, bz - az), nx = -(bz - az) / L, nz = (bx - ax) / L;
+      for (let t = carry; t < L; t += 55) {
+        const x = ax + ((bx - ax) * t) / L + nx * 11, z = az + ((bz - az) * t) / L + nz * 11;
+        const { d } = districtAt(x, z);
+        if (d !== 'rural' && d !== 'suburb' || !inPlayable(x, z) || occ.at(x, z) !== 0 && occ.at(x, z) < 4) { prev = null; continue; }
+        const y = hf.at(x, z); if (y < 1) { prev = null; continue; }
+        const b = new Builder();
+        b.box(-0.14, 0, -0.14, 0.14, 9, 0.14, Mat.Wood, { color: 0x5a4632 });
+        b.box(-1.2, 8.2, -0.08, 1.2, 8.4, 0.08, Mat.Wood, { color: 0x5a4632, noCollide: true });
+        const ang = Math.atan2(-(bz - az), bx - ax) + Math.PI / 2;
+        if (prev) {
+          // sagging wires to the previous pole (rendered as line segments)
+          const [px, py, pz] = prev, c = Math.cos(ang), sn = Math.sin(ang);
+          for (const off of [-1, 1]) {
+            const ax2 = x + off * c, az2 = z - off * sn, bx2 = px + off * c, bz2 = pz - off * sn;
+            const segs = 8;
+            for (let k = 0; k < segs; k++) {
+              const t0 = k / segs, t1 = (k + 1) / segs, sag = (tt: number) => -Math.sin(Math.PI * tt) * 1.3;
+              ctx.wires.push(ax2 + (bx2 - ax2) * t0, y + 8.35 + (py - y) * t0 + sag(t0), az2 + (bz2 - az2) * t0, ax2 + (bx2 - ax2) * t1, y + 8.35 + (py - y) * t1 + sag(t1), az2 + (bz2 - az2) * t1);
+            }
+          }
+        }
+        col.add(makeStructure(0, 'pole', x, y, z, ang, b.parts));
+        prev = [x, y, z];
+      }
+      carry = 0;
+    }
+  }
+}

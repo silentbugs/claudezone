@@ -28,8 +28,19 @@ export class Builder {
    * Wall along an axis. axis 0: runs along x from a to b at z = c. axis 1: along z at x = c.
    * Openings are in wall space (u along the wall from a, v up from y0).
    */
-  wall(axis: 0 | 1, a: number, b: number, c: number, y0: number, h: number, t: number, mat: Mat, openings: Opening[] = [], color?: number) {
+  wall(axis: 0 | 1, a: number, b: number, c: number, y0: number, h: number, t: number, mat: Mat, openings: Opening[] = [], color?: number, out: 0 | 1 | -1 = 0, trim = 0xd8d4ca) {
     const len = b - a;
+    if (out) for (const o of openings) {
+      // decorative trims on the outside face: sill + head for windows, jambs + head for doors
+      const u0 = Math.max(0, o.u0), u1 = Math.min(len, o.u1), f = c + out * (t / 2), e = 0.12 * out;
+      const add = (uu0: number, uu1: number, vv0: number, vv1: number, depth: number) => {
+        if (axis === 0) this.box(a + uu0, y0 + vv0, f, a + uu1, y0 + vv1, f + depth * out, Mat.Trim, { color: trim, noCollide: true });
+        else this.box(f, y0 + vv0, a + uu0, f + depth * out, y0 + vv1, a + uu1, Mat.Trim, { color: trim, noCollide: true });
+      };
+      if (o.v0 > 0.2) { add(u0 - 0.1, u1 + 0.1, o.v0 - 0.08, o.v0, 0.16); add(u0 - 0.06, u1 + 0.06, o.v1, o.v1 + 0.12, 0.06); }
+      else { add(u0 - 0.1, u0, 0, o.v1 + 0.1, 0.06); add(u1, u1 + 0.1, 0, o.v1 + 0.1, 0.06); add(u0 - 0.1, u1 + 0.1, o.v1, o.v1 + 0.12, 0.06); }
+      void e;
+    }
     const ops = openings.filter((o) => o.u1 > 0 && o.u0 < len).sort((p, q) => p.u0 - q.u0);
     const seg = (u0: number, u1: number, v0: number, v1: number, m: Mat) => {
       if (u1 - u0 < 0.02 || v1 - v0 < 0.02) return;
@@ -95,10 +106,10 @@ export function house(rng: Rng, w: number, d: number, floors: number, st: Style)
     const frontOps = [...windows(w, 3.2, 1.3, 0.95, 2.25, f === 0 ? [[door.u0, door.u1]] : []), ...(f === 0 ? [door] : [])];
     const backDoor: Opening = { u0: w * 0.3 - 0.55, u1: w * 0.3 + 0.55, v0: 0, v1: 2.3 };
     const backOps = [...windows(w, 3.2, 1.3, 0.95, 2.25, f === 0 ? [[backDoor.u0, backDoor.u1]] : []), ...(f === 0 ? [backDoor] : [])];
-    b.wall(0, -hw, hw, -hd, y, wh, WALL_T, st.wall, frontOps, st.wallColor);
-    b.wall(0, -hw, hw, hd, y, wh, WALL_T, st.wall, backOps, st.wallColor);
-    b.wall(1, -hd + WALL_T / 2, hd - WALL_T / 2, -hw, y, wh, WALL_T, st.wall, windows(d, 3.4, 1.2, 0.95, 2.25), st.wallColor);
-    b.wall(1, -hd + WALL_T / 2, hd - WALL_T / 2, hw, y, wh, WALL_T, st.wall, windows(d, 3.4, 1.2, 0.95, 2.25), st.wallColor);
+    b.wall(0, -hw, hw, -hd, y, wh, WALL_T, st.wall, frontOps, st.wallColor, -1, st.trim);
+    b.wall(0, -hw, hw, hd, y, wh, WALL_T, st.wall, backOps, st.wallColor, 1, st.trim);
+    b.wall(1, -hd + WALL_T / 2, hd - WALL_T / 2, -hw, y, wh, WALL_T, st.wall, windows(d, 3.4, 1.2, 0.95, 2.25), st.wallColor, -1, st.trim);
+    b.wall(1, -hd + WALL_T / 2, hd - WALL_T / 2, hw, y, wh, WALL_T, st.wall, windows(d, 3.4, 1.2, 0.95, 2.25), st.wallColor, 1, st.trim);
     // interior partition across the depth with a doorway
     const px = rng.range(-hw * 0.3, hw * 0.3);
     if (w > 7) b.wall(1, -hd + WALL_T, hd - WALL_T, px, y, wh, 0.14, Mat.Plaster, [{ u0: d * 0.5 - 0.5, u1: d * 0.5 + 0.5, v0: 0, v1: 2.2 }], 0xd8d0c0);
@@ -121,6 +132,8 @@ export function house(rng: Rng, w: number, d: number, floors: number, st: Style)
   b.ramp(-hw - 0.4, top, -hd - 0.4, hw + 0.4, top + ridge, 0, 1, 1, st.roof);
   b.ramp(-hw - 0.4, top, 0, hw + 0.4, top + ridge, hd + 0.4, 1, -1, st.roof);
   b.box(-hw, top, -hd * 0.3, hw, top + ridge * 0.6, hd * 0.3, st.roof, { noCollide: true, mat: Mat.Wood } as any); // bullet blocker inside the gable
+  if (rng.chance(0.6)) { const cx = rng.range(-hw * 0.6, hw * 0.6); b.box(cx - 0.35, top + ridge * 0.4, -0.35 + d * 0.12, cx + 0.35, top + ridge + 0.9, 0.35 + d * 0.12, Mat.Brick, { color: 0x8a6a5a }); }
+  b.box(-hw - 0.1, -0.3, -hd - 0.1, hw + 0.1, 0.35, hd + 0.1, Mat.Concrete, { color: 0x8a8580, noCollide: true }); // plinth band
   return b;
 }
 
@@ -144,8 +157,18 @@ export function apartment(rng: Rng, w: number, d: number, floors: number, st: St
     const frontOps: Opening[] = gf && opts.groundShop ? [{ u0: 1, u1: w - 1, v0: 0.3, v1: 2.7, glass: true }, ...doors.map(([a, c]) => ({ u0: a, u1: c, v0: 0, v1: 2.4 }))] : [...(glass && gf ? [] : winF), ...(gf ? doors.map(([a, c]) => ({ u0: a, u1: c, v0: 0, v1: 2.4 })) : [])];
     if (glass && gf) { let u = 0.8; for (const [a, c] of doors) { if (a - u > 1) frontOps.push({ u0: u, u1: a - 0.2, v0: 0.9, v1: 2.8, glass: true }); u = c + 0.2; } if (w - 0.8 - u > 1) frontOps.push({ u0: u, u1: w - 0.8, v0: 0.9, v1: 2.8, glass: true }); }
     const backOps: Opening[] = [...(glass ? [{ u0: 0.8, u1: w / 2 - coreW / 2 - 0.4, v0: 0.9, v1: 2.8, glass: true }, { u0: w / 2 + coreW / 2 + 0.4, u1: w - 0.8, v0: 0.9, v1: 2.8, glass: true }] : windows(w, 3.0, 1.4, 0.9, 2.3, [[w / 2 - coreW / 2 - 0.2, w / 2 + coreW / 2 + 0.2]])), ...(gf ? [{ u0: w / 2 + coreW / 2 + 0.6, u1: w / 2 + coreW / 2 + 1.8, v0: 0, v1: 2.4 }] : [])];
-    b.wall(0, -hw, hw, -hd, y, wh, 0.3, st.wall, frontOps, st.wallColor);
-    b.wall(0, -hw, hw, hd, y, wh, 0.3, st.wall, backOps, st.wallColor);
+    b.wall(0, -hw, hw, -hd, y, wh, 0.3, st.wall, frontOps, st.wallColor, glass ? 0 : -1, 0xc8c4ba);
+    b.wall(0, -hw, hw, hd, y, wh, 0.3, st.wall, backOps, st.wallColor, glass ? 0 : 1, 0xc8c4ba);
+    if (!glass && f > 0 && !opts.groundShop) {
+      // Soviet-block balconies on the front, every other window bay
+      for (const [k, o] of winF.entries()) if (k % 2 === (f % 2) && o.v0 > 0) {
+        const x0 = -hw + o.u0 - 0.3, x1 = -hw + o.u1 + 0.3;
+        b.box(x0, y - 0.05, -hd - 1.1, x1, y + 0.1, -hd - 0.15, Mat.Concrete, { color: 0xa8a49c });
+        b.box(x0, y + 0.1, -hd - 1.12, x1, y + 1.0, -hd - 1.02, Mat.Concrete, { color: st.wallColor });
+        b.box(x0, y + 0.1, -hd - 1.1, x0 + 0.08, y + 1.0, -hd - 0.15, Mat.Metal, { color: 0x555555, noCollide: true });
+        b.box(x1 - 0.08, y + 0.1, -hd - 1.1, x1, y + 1.0, -hd - 0.15, Mat.Metal, { color: 0x555555, noCollide: true });
+      }
+    }
     const sideOps = glass ? [{ u0: 0.8, u1: d - 0.8, v0: 0.9, v1: 2.8, glass: true }] : windows(d, 3.2, 1.3, 0.9, 2.3);
     b.wall(1, -hd + 0.15, hd - 0.15, -hw, y, wh, 0.3, st.wall, sideOps, st.wallColor);
     b.wall(1, -hd + 0.15, hd - 0.15, hw, y, wh, 0.3, st.wall, sideOps, st.wallColor);
@@ -181,7 +204,17 @@ export function apartment(rng: Rng, w: number, d: number, floors: number, st: St
   b.wall(1, cz0 + 0.9, cz1, -cx0 + 0.1, top, 2.6, 0.2, st.wall, [], st.wallColor);
   b.box(cx0 - 0.3, top + 2.6, cz0 + 0.8, -cx0 + 0.3, top + 2.85, cz1 + 0.1, Mat.Roof);
   b.addLoot(hw - 2, top, -hd + 2);
-  if (rng.chance(0.4)) { b.block(-hw + 3, -hd + 3, 2, 1.4, top, top + 1.3, Mat.Metal, { color: 0x9aa0a4 }); } // AC unit
+  // roof clutter: AC units, vents, antennas, water tanks
+  const nClutter = Math.floor(w / 10) + 1;
+  for (let i = 0; i < nClutter; i++) {
+    const cx = rng.range(-hw + 2, hw - 2), cz = rng.range(-hd + 1.5, hd - 1.5);
+    if (Math.abs(cx) < coreW && cz > cz0) continue;
+    const k = rng.next();
+    if (k < 0.45) b.block(cx, cz, 1.8, 1.2, top, top + 1.2, Mat.Metal, { color: 0xa0a6aa });
+    else if (k < 0.7) b.block(cx, cz, 0.6, 0.6, top, top + 0.9, Mat.Metal, { color: 0x8a9096 });
+    else if (k < 0.85) b.block(cx, cz, 0.12, 0.12, top, top + 4 + rng.next() * 3, Mat.Metal, { color: 0x6a6e72, noCollide: true });
+    else b.box(cx - 1.2, top, cz - 1.2, cx + 1.2, top + 2.2, cz + 1.2, Mat.Metal, { color: 0x8a8f94, shape: 'cyl' });
+  }
   return b;
 }
 
