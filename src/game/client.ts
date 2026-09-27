@@ -17,7 +17,9 @@ import { audio } from '../audio/audio';
 import type { WorldData } from '../world/mapgen';
 import { clamp, wrapAngle } from '../core/math';
 
-export interface Settings { sens: number; adsSens: number; volume: number; fov: number; quality: string }
+import type { Settings } from '../core/settings';
+import { Controls } from './controls';
+import { SettingsMenu } from '../ui/settingsMenu';
 
 export class Match {
   sim: Sim;
@@ -27,6 +29,10 @@ export class Match {
   fx: Effects;
   vehMeshes = new VehicleMeshes();
   clock = new FixedStep(1 / 60);
+  controls: Controls;
+  private settingsEl: SettingsMenu | null = null;
+  onSettingChange: (k: keyof Settings) => void = () => {};
+  private fpsEl = document.createElement('div'); private fpsAcc = 0; private fpsN = 0;
   camYaw = 0; camPitch = 0;
   mapOpen = false; paused = false;
   spectate = -1;
@@ -41,6 +47,9 @@ export class Match {
 
   constructor(public sm: SceneMgr, private world: WorldData, private input: Input, tac: HTMLCanvasElement, private ui: HTMLElement, public settings: Settings, seed: number) {
     this.sim = new Sim(world, seed, { humans: 1, warmup: 45 });
+    this.controls = new Controls(input, settings);
+    input.onUnlock = () => { if (!this.paused && !this.hud.panel && !this.done) this.togglePause(); };
+    this.fpsEl.className = 'fps'; ui.appendChild(this.fpsEl);
     this.hud = new Hud(this.sim, tac, 0);
     ui.appendChild(this.hud.root);
     this.fx = new Effects(this.sim, sm.scene);
@@ -57,39 +66,16 @@ export class Match {
 
   dispose() {
     this.sm.scene.remove(this.chars.group); this.sm.scene.remove(this.fx.group); this.sm.scene.remove(this.vehMeshes.group);
-    this.hud.root.remove(); this.pauseEl?.remove();
+    this.hud.root.remove(); this.pauseEl?.remove(); this.fpsEl.remove(); this.closeSettings(); this.input.onUnlock = () => {};
     audio.loop('engine', 0); audio.loop('wind', 0); audio.loop('gas', 0); audio.loop('chute', 0);
   }
 
   get me() { return this.sim.players[0]; }
 
   private fillIntent() {
-    const p = this.me, it = p.intent, inp = this.input;
     const blocked = !!this.hud.panel || this.paused;
-    if (blocked) { it.mx = it.mz = 0; it.fire = it.ads = it.sprint = it.interact = it.plate = false; inp.clearPresses(); return; }
-    it.mx = (inp.down('KeyD') ? 1 : 0) - (inp.down('KeyA') ? 1 : 0);
-    it.mz = (inp.down('KeyW') ? 1 : 0) - (inp.down('KeyS') ? 1 : 0);
-    const shiftPress = inp.press('ShiftLeft');
-    it.sprint = inp.down('ShiftLeft') || (p.sprinting && it.mz > 0);
-    if (shiftPress && p.sprinting) (it as any).tac = true;
-    if (inp.press('Space')) it.jump = true;
-    if (inp.press('KeyC')) it.crouch = true;
-    if (inp.press('KeyZ') || inp.press('ControlLeft')) it.prone = true;
-    it.fire = inp.mouseDown[0] && !this.mapOpen;
-    it.ads = inp.mouseDown[2] && !this.mapOpen;
-    if (inp.press('KeyR')) it.reload = true; else it.reload = false;
-    it.interact = inp.down('KeyF');
-    it.selfRevive = p.phase === Phase.Downed && inp.down('KeyF');
-    it.plate = inp.down('Digit4');
-    if (inp.press('Digit1')) it.slot = 1; if (inp.press('Digit2')) it.slot = 2;
-    const wh = inp.consumeWheel(); if (wh !== 0 || inp.press('KeyX')) it.swap = true;
-    if (inp.press('KeyG')) it.lethal = true;
-    if (inp.press('KeyQ')) it.tactical = true;
-    if (inp.press('Digit5')) it.killstreak = true;
-    if (inp.press('KeyM')) this.mapOpen = !this.mapOpen;
-    if (inp.mousePress(1)) { const [x, , z] = this.sim.aimPoint(p, 800); this.hud.pings = [{ x, z, t: 999 }]; (p as any).ping = { x, z }; audio.play('beep', { vol: 0.3 }); }
-    (it as any).up = inp.down('Space'); (it as any).down = inp.down('ControlLeft') || inp.down('KeyC');
-    it.yaw = this.camYaw; it.pitch = this.camPitch;
+    this.controls.apply(this.me, this.camYaw, this.camPitch, blocked);
+    if (this.mapOpen) { this.me.intent.fire = false; this.me.intent.ads = false; }
   }
 
   private look() {
@@ -98,23 +84,30 @@ export class Match {
     if (this.hud.panel || this.paused) return;
     const p = this.me, w = p.weapons[p.cur];
     const zoom = w ? 1 + (WEAPON[w.id].zoom * (rarityMods(w.rarity).scope && !WEAPON[w.id].scope ? 1.3 : 1) - 1) * p.ads : 1;
-    const s = this.settings.sens * 0.0022 * (1 + (1 / zoom - 1) * (this.settings.adsSens > 0 ? 1 : 0)) * (p.stunT > 0 ? 0.35 : 1);
+    // ADS: sensitivity follows the zoom (MW "relative" behaviour) times the ADS multiplier
+    const adsMul = 1 + (this.settings.adsSens / zoom - 1) * Math.min(1, p.ads * 1.2);
+    const s = this.settings.sens * 0.0022 * adsMul * (p.stunT > 0 ? 0.35 : 1);
     this.camYaw -= dx * s;
-    this.camPitch = clamp(this.camPitch - dy * s, -1.45, 1.45);
+    this.camPitch = clamp(this.camPitch - dy * s * (this.settings.invertY ? -1 : 1), -1.45, 1.45);
   }
 
   frame(dt: number, time: number) {
     const inp = this.input;
-    if (inp.press('Escape')) { if (this.hud.panel) this.hud.closePanel(); else if (this.mapOpen) this.mapOpen = false; else this.togglePause(); }
+    if (inp.wasPressed('Escape')) { if (this.settingsEl) this.closeSettings(); else if (this.hud.panel) this.hud.closePanel(); else if (this.mapOpen) this.mapOpen = false; else this.togglePause(); }
     this.look();
+    if (!this.paused && !this.hud.panel) {
+      this.controls.poll(this.me, time);
+      const ui = this.controls.takeUi();
+      if (ui.map) this.mapOpen = !this.mapOpen;
+      if (ui.ping) { const [x, , z] = this.sim.aimPoint(this.me, 800); this.hud.pings = [{ x, z, t: 999 }]; (this.me as any).ping = { x, z }; audio.play('beep', { vol: 0.3 }); }
+    } else inp.endFrame();
+    this.fpsAcc += dt; this.fpsN++; if (this.fpsAcc > 0.5) { this.fpsEl.textContent = this.settings.showFps ? `${Math.round(this.fpsN / this.fpsAcc)} FPS` : ''; this.fpsAcc = 0; this.fpsN = 0; }
     if (!this.paused) {
       this.clock.advance(dt, (step) => {
         this.fillIntent();
         this.sim.tick(step);
         for (const e of this.sim.events) this.handleEvent(e);
         this.sim.events.length = 0;
-        // one-shot intents are consumed by the tick
-        const it = this.me.intent; it.jump = false; it.crouch = false; it.prone = false; it.lethal = false; it.tactical = false; it.killstreak = false; it.swap = false; it.slot = 0; (it as any).tac = false;
       });
     }
     this.render(dt, time);
@@ -129,14 +122,19 @@ export class Match {
     this.paused = !this.paused;
     if (this.paused) {
       document.exitPointerLock?.();
-      const p = document.createElement('div'); p.className = 'menu';
-      p.innerHTML = `<h1>PAUSED</h1><h2>VERDANSK</h2><button data-a="resume">Resume</button><div class="row">Mouse sensitivity <input type="range" min="0.2" max="3" step="0.05" value="${this.settings.sens}" data-s="sens"></div><div class="row">Volume <input type="range" min="0" max="1" step="0.05" value="${this.settings.volume}" data-s="volume"></div><button data-a="quit">Leave match</button>`;
-      p.querySelector('[data-a=resume]')!.addEventListener('click', () => this.togglePause());
-      p.querySelector('[data-a=quit]')!.addEventListener('click', () => { this.paused = false; this.onEnd(false, this.placement(), this.me); });
-      p.querySelectorAll('input').forEach((i) => i.addEventListener('input', () => { (this.settings as any)[i.dataset.s!] = +i.value; if (i.dataset.s === 'volume') audio.setVolume(+i.value); localStorage.setItem('vd-settings', JSON.stringify(this.settings)); }));
+      const p = document.createElement('div'); p.className = 'menu pause';
+      p.innerHTML = `<h1>PAUSED</h1><h2>VERDANSK • BATTLE ROYALE</h2><button data-a="resume">Resume</button><button data-a="settings">Settings</button><button data-a="quit">Leave match</button><div class="sub">The match is paused while this menu is open.</div>`;
+      p.querySelector<HTMLElement>('[data-a=resume]')!.onclick = () => this.togglePause();
+      p.querySelector<HTMLElement>('[data-a=settings]')!.onclick = () => this.openSettings();
+      p.querySelector<HTMLElement>('[data-a=quit]')!.onclick = () => { this.paused = false; this.pauseEl?.remove(); this.done = true; this.onEnd(false, this.placement(), this.me); };
       this.ui.appendChild(p); this.pauseEl = p;
-    } else { this.pauseEl?.remove(); this.pauseEl = null; (document.getElementById('game') as HTMLElement).requestPointerLock?.(); }
+    } else { this.closeSettings(); this.pauseEl?.remove(); this.pauseEl = null; this.input.lock(); }
   }
+  private openSettings() {
+    this.settingsEl = new SettingsMenu(this.settings, this.input, (k) => this.onSettingChange(k), () => this.closeSettings());
+    this.ui.appendChild(this.settingsEl.el);
+  }
+  private closeSettings() { this.settingsEl?.el.remove(); this.settingsEl = null; }
 
   private handleEvent(e: SimEvent) {
     const me = this.me, sim = this.sim;
@@ -234,7 +232,7 @@ export class Match {
       const eh = eyeHeight(vp) - this.landDip * 0.4;
       cam.position.set(x, y + eh, z);
       cam.rotation.set(pitch, yaw, 0, 'YXZ');
-      if (def && me.ads > 0) fov = fov / (1 + (def.zoom - 1) * me.ads);
+      if (def && me.ads > 0 && (this.settings.adsFovAffected || def.scope)) fov = fov / (1 + (def.zoom - 1) * me.ads);
       if (me.tacSprint > 0) fov += 6;
       audio.loop('wind', 0); audio.loop('engine', vehicleOf(sim, vp) ? 0.3 : 0, 0.8, 700); audio.loop('chute', 0);
     }

@@ -84,10 +84,14 @@ export class SceneMgr {
     this.scene.add(makeWater(w.extra.rivers, this.water));
   }
 
+  renderScale = 1;
+  setRenderScale(s: number) { this.renderScale = s; this.setQuality(this.quality); }
+  foliage = 1;
+  setFoliage(f: number) { this.foliage = f; }
   setQuality(q: Quality) {
     this.quality = q;
     const r = this.renderer;
-    r.setPixelRatio(q === 'low' ? 1 : Math.min(devicePixelRatio, q === 'medium' ? 1.25 : 1.5));
+    r.setPixelRatio((q === 'low' ? 1 : Math.min(devicePixelRatio, q === 'medium' ? 1.25 : 1.5)) * this.renderScale);
     r.shadowMap.enabled = q !== 'low';
     if (this.sun) { this.sun.castShadow = q !== 'low'; this.sun.shadow.mapSize.set(q === 'medium' ? 1024 : 2048, q === 'medium' ? 1024 : 2048); this.sun.shadow.map?.dispose(); (this.sun.shadow as any).map = null; }
     if (this.structures) this.structures.detailDist = q === 'low' ? 260 : q === 'medium' ? 360 : 460;

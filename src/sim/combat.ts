@@ -30,7 +30,7 @@ export function weaponTick(sim: Sim, p: Player, dt: number) {
   const def = w ? WEAPON[w.id] : null;
   const wantAds = it.ads && canShoot(p) && p.reloadT <= 0.0 + (def ? def.reload : 0) && p.plateT <= 0;
   const adsT = def ? def.adsTime * rarityMods(w!.rarity).ads : 0.2;
-  p.ads = clamp(p.ads + (wantAds && !p.sprinting ? dt / adsT : -dt / (adsT * 0.8)), 0, 1);
+  p.ads = clamp(p.ads + (wantAds ? dt / (adsT * (p.sprintOut > 0 ? 1.25 : 1)) : -dt / (adsT * 0.8)), 0, 1); // aiming out of a sprint is slightly slower (sprint-to-fire)
   // recoil recovery
   const firing = it.fire && p.fireCd > -0.1;
   p.recoil -= p.recoil * Math.min(1, dt * (firing ? 1.2 : 5));
@@ -73,7 +73,7 @@ export function weaponTick(sim: Sim, p: Player, dt: number) {
   }
   if (it.reload && w.mag < magSize && p.ammo[def.ammo] > 0) { startReload(sim, p); return; }
   // firing
-  if (it.fire && canShoot(p)) {
+  if (it.fire && canShoot(p) && p.stanceT <= 0.05) {
     if (w.mag <= 0) {
       if (p.ammo[def.ammo] > 0) startReload(sim, p);
       else if (!p.triggerHeld) sim.emit({ t: 'dryfire', p: p.id });
@@ -82,7 +82,8 @@ export function weaponTick(sim: Sim, p: Player, dt: number) {
     }
     if (p.fireCd > 0 || p.boltT > 0) { p.triggerHeld = true; return; }
     if (!def.auto && p.triggerHeld) return;
-    if (p.sprinting) { p.sprinting = false; p.tacSprint = 0; p.fireCd = 0.12; return; } // sprint-to-fire delay
+    if (p.sprinting) { p.sprinting = false; p.sprintOut = p.tacSprint > 0 ? 0.3 : 0.18; p.tacSprint = 0; return; } // sprint-to-fire delay
+    if (p.sprintOut > 0) return;
     fire(sim, p, w, def, mods);
     p.triggerHeld = true;
   } else p.triggerHeld = false;

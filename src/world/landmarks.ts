@@ -129,7 +129,7 @@ function airport(ctx: GenContext) {
   r.box(-rl / 2, -0.6, -rw / 2, rl / 2, 0.08, rw / 2, Mat.Asphalt, { color: 0x3a3b3d });
   r.box(-rl / 2, -0.6, rw / 2 + 12, rl / 2 - 60, 0.06, rw / 2 + 32, Mat.Asphalt, { color: 0x44454a }); // taxiway
   for (let x = -rl / 2 + 20; x < rl / 2 - 20; x += 30) r.box(x, 0.08, -0.6, x + 14, 0.1, 0.6, Mat.Trim, { color: 0xe8e8e0, noCollide: true });
-  ctx.place(r, 'runway', rx, rz, 0, { y: ry, flatten: false, mark: false, lodColor: 0x3a3b3d });
+  ctx.place(r, 'runway', rx, rz, 0, { y: ry, flatten: false, pad: 4, lodColor: 0x3a3b3d });
   // crashed plane on the runway edge
   plane(ctx, rx + 150, rz - 10, 0.35, 1.0);
   // terminal: long 2-storey hall with glass front facing the runway (north)

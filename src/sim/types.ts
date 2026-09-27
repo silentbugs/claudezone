@@ -49,6 +49,8 @@ export interface Player {
   placement: number;
   gulagSlot: number;
   triggerHeld: boolean;
+  stanceT: number;
+  sprintOut: number;
   prevSprint: boolean;
   loadoutUsed: boolean;
   spectating: number;

@@ -98,18 +98,28 @@ function ground(sim: Sim, p: Player, dt: number) {
   if (!downed) {
     if (it.crouch) {
       it.crouch = false;
-      if (p.sprinting && p.onGround && p.slideCd <= 0 && p.stance === Stance.Stand) {
-        // slide
+      if (p.slideT > 0) {
+        // slide cancel: pop back up and keep running (the 2020 slide-cancel)
+        p.slideT = 0; p.stance = tryStand(sim, p); p.slideCd = 0.35;
+        if (p.stance === Stance.Stand && it.sprint) p.sprinting = true;
+      } else if (p.sprinting && p.onGround && p.slideCd <= 0 && p.stance === Stance.Stand && Math.hypot(p.vx, p.vz) > MOVE.walk * 0.9) {
+        // slide: carry sprint momentum with a boost (tactical sprint slides further)
+        const cur = Math.hypot(p.vx, p.vz) || 1;
+        const sp = Math.max(MOVE.slideSpeed * (p.tacSprint > 0 ? 1.12 : 1), cur * 1.2);
+        p.slideDx = (p.vx / cur) * sp; p.slideDz = (p.vz / cur) * sp;
         p.slideT = MOVE.slideTime; p.slideCd = MOVE.slideCooldown; p.stance = Stance.Crouch;
-        const sp = Math.max(MOVE.slideSpeed, Math.hypot(p.vx, p.vz) * 1.15);
-        const hl = Math.hypot(p.vx, p.vz) || 1;
-        p.slideDx = p.vx / hl * sp; p.slideDz = p.vz / hl * sp; p.sprinting = false; p.tacSprint = 0;
+        p.sprinting = false; p.tacSprint = 0; p.stanceT = 0;
         sim.emit({ t: 'slide', p: p.id });
-      } else p.stance = p.stance === Stance.Crouch ? tryStand(sim, p) : Stance.Crouch;
+      } else { const ns = p.stance === Stance.Crouch ? tryStand(sim, p) : Stance.Crouch; if (ns !== p.stance) { p.stanceT = p.stance === Stance.Prone ? 0.4 : 0.12; p.stance = ns; } }
     }
-    if (it.prone) { it.prone = false; p.stance = p.stance === Stance.Prone ? tryStand(sim, p) : Stance.Prone; p.slideT = 0; }
+    if (it.prone) {
+      it.prone = false;
+      const ns = p.stance === Stance.Prone ? tryStand(sim, p) : Stance.Prone;
+      if (ns !== p.stance) { p.stanceT = 0.45; p.stance = ns; p.slideT = 0; p.sprinting = false; }
+    }
   }
   if (p.slideCd > 0) p.slideCd -= dt;
+  if (p.stanceT > 0) p.stanceT -= dt;
   // --- water
   const wl = col.waterAt(p.x, p.z);
   p.swimming = !downed && wl > p.y + 1.25;
@@ -117,9 +127,10 @@ function ground(sim: Sim, p: Player, dt: number) {
   const fx = -Math.sin(p.yaw), fz = -Math.cos(p.yaw), rx = Math.cos(p.yaw), rz = -Math.sin(p.yaw);
   let mx = it.mx, mz = it.mz; const ml = Math.hypot(mx, mz); if (ml > 1) { mx /= ml; mz /= ml; }
   const mob = def?.mobility ?? 1;
-  const wantSprint = it.sprint && mz > 0.3 && !downed && p.stance !== Stance.Prone && p.ads < 0.3 && p.plateT <= 0 && !p.swimming && p.reloadT <= 0;
+  const wantSprint = p.slideT <= 0 && it.sprint && !it.ads && mz > 0.3 && !downed && p.stance !== Stance.Prone && p.plateT <= 0 && !p.swimming && p.reloadT <= 0;
   if (wantSprint && !p.sprinting) { p.sprinting = true; if (p.stance === Stance.Crouch) p.stance = tryStand(sim, p); }
-  if (!wantSprint) { p.sprinting = false; p.tacSprint = 0; }
+  if (!wantSprint) { if (p.sprinting) p.sprintOut = p.tacSprint > 0 ? 0.3 : 0.18; p.sprinting = false; p.tacSprint = 0; }
+  if (p.sprintOut > 0) p.sprintOut -= dt;
   // tac sprint: second sprint press while sprinting (flagged by the input layer as sprint pulses)
   if (p.sprinting && (it as any).tac && p.tacCooldown <= 0 && p.tacSprint <= 0) { p.tacSprint = MOVE.tacSprintTime; (it as any).tac = false; }
   if (p.tacSprint > 0) { p.tacSprint -= dt; if (p.tacSprint <= 0) p.tacCooldown = MOVE.tacSprintCooldown; }
@@ -129,17 +140,26 @@ function ground(sim: Sim, p: Player, dt: number) {
   speed *= mob;
   if (p.plateT > 0) speed *= 0.7;
   if (p.stunT > 0) speed *= 0.45;
+  if (p.stanceT > 0) speed *= 0.35; // getting up / going prone
   if (!p.sprinting) { // backwards/strafe slower
     if (mz < 0) mz *= 0.8;
   }
   let tx = (fx * mz + rx * mx) * speed, tz = (fz * mz + rz * mx) * speed;
   if (p.slideT > 0) {
     p.slideT -= dt;
-    const k = Math.max(0, p.slideT / MOVE.slideTime);
-    tx = p.slideDx * (0.35 + 0.65 * k); tz = p.slideDz * (0.35 + 0.65 * k);
-    if (it.jump) { p.slideT = 0; } // slide-cancel into a jump
+    // friction, plus gravity along the slope (downhill slides carry)
+    const n = col.terrain.normal(p.x, p.z);
+    const fr = Math.exp(-dt * 1.1);
+    p.slideDx = p.slideDx * fr + n[0] * 9 * dt; p.slideDz = p.slideDz * fr + n[2] * 9 * dt;
+    // a little steering from strafe input
+    const sp0 = Math.hypot(p.slideDx, p.slideDz);
+    if (mx && sp0 > 0.1) { p.slideDx += rx * mx * sp0 * 1.1 * dt; p.slideDz += rz * mx * sp0 * 1.1 * dt; const k2 = sp0 / Math.hypot(p.slideDx, p.slideDz); p.slideDx *= k2; p.slideDz *= k2; }
+    tx = p.slideDx; tz = p.slideDz;
+    const ss = Math.hypot(p.slideDx, p.slideDz);
+    if (ss < MOVE.crouch * 1.1 || p.slideT <= 0) p.slideT = 0;
+    if (it.jump) { p.slideT = 0; p.stance = tryStand(sim, p); p.vx = p.slideDx; p.vz = p.slideDz; } // slide into a jump keeps the speed
   }
-  const acc = p.onGround || p.swimming ? MOVE.accel : MOVE.airAccel;
+  const acc = p.slideT > 0 ? 80 : p.onGround || p.swimming ? MOVE.accel : MOVE.airAccel;
   const dvx = tx - p.vx, dvz = tz - p.vz, dl = Math.hypot(dvx, dvz), step = acc * dt;
   if (dl <= step) { p.vx = tx; p.vz = tz; } else { p.vx += (dvx / dl) * step; p.vz += (dvz / dl) * step; }
   // --- jump / mantle

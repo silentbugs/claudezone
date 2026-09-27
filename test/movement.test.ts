@@ -72,3 +72,27 @@ test('mantle onto a crate-height ledge', () => {
   console.log('mantle y', (p.y - s.y).toFixed(2));
   assert.ok(p.y - s.y > 2.2, 'on top of the container');
 });
+
+test('slide carries sprint momentum, slide-cancel pops back up', () => {
+  const sim = new Sim(world, 1, { humans: 1 });
+  const p = freshPlayer(sim);
+  // flat open ground: the airport runway
+  p.x = 900; p.z = 1302; p.y = world.col.groundAt(p.x, p.z, 200); p.fallStartY = p.y;
+  p.intent.yaw = Math.PI / 2; p.intent.mz = 1; p.intent.sprint = true;
+  for (let i = 0; i < 90; i++) { sim.tick(1 / 60); sim.events.length = 0; }
+  const x0 = p.x, sprintV = Math.hypot(p.vx, p.vz);
+  p.intent.crouch = true;
+  let peak = 0, t = 0;
+  while (t < 1.5) { sim.tick(1 / 60); sim.events.length = 0; t += 1 / 60; peak = Math.max(peak, Math.hypot(p.vx, p.vz)); if (p.slideT <= 0 && t > 0.1) break; }
+  const slideDist = Math.abs(p.x - x0);
+  console.log('sprint', sprintV.toFixed(2), 'slide peak', peak.toFixed(2), 'slide time', t.toFixed(2), 'distance', slideDist.toFixed(1), 'stance', p.stance);
+  assert.ok(peak > sprintV * 1.1, 'slide boosts speed');
+  assert.ok(slideDist > 5 && slideDist < 12, 'slide covers ~5-12 m');
+  // slide cancel
+  for (let i = 0; i < 90; i++) { p.intent.crouch = false; sim.tick(1 / 60); sim.events.length = 0; }
+  p.intent.crouch = true; sim.tick(1 / 60); sim.events.length = 0; // slide again
+  for (let i = 0; i < 12; i++) { sim.tick(1 / 60); sim.events.length = 0; }
+  assert.ok(p.slideT > 0, 'second slide started');
+  p.intent.crouch = true; sim.tick(1 / 60); sim.events.length = 0;
+  assert.equal(p.stance, 0, 'slide cancel stands up');
+});

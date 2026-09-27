@@ -1,40 +1,59 @@
-/** Keyboard + mouse state with pointer lock. Edge-triggered presses are consumed once per sim tick. */
+/**
+ * Raw input: keyboard codes, mouse buttons ('Mouse0'..'Mouse4') and wheel ('WheelUp'/'WheelDown')
+ * all become codes, so every action is rebindable. Edge presses are consumed once.
+ */
 export class Input {
-  keys = new Set<string>();
+  private held = new Set<string>();
   private pressed = new Set<string>();
-  mouseDown = [false, false, false];
-  private mousePressed = [false, false, false];
-  dx = 0; dy = 0; wheel = 0;
+  private released = new Set<string>();
+  dx = 0; dy = 0;
   locked = false;
-  sensitivity = 0.0022;
-  adsSensMul = 0.6;
   enabled = true;
+  /** When set, the next code pressed is delivered here instead (key rebinding). */
+  capture: ((code: string) => void) | null = null;
+  onUnlock: () => void = () => {};
 
   constructor(private el: HTMLElement) {
     addEventListener('keydown', (e) => {
+      if (this.capture) { e.preventDefault(); const c = this.capture; this.capture = null; c(e.code); return; }
       if (!this.enabled) return;
-      if (e.code === 'Tab' || e.code === 'Space' || (e.ctrlKey && e.code === 'KeyW')) e.preventDefault();
-      if (!this.keys.has(e.code)) this.pressed.add(e.code);
-      this.keys.add(e.code);
+      if (e.code === 'Tab' || e.code === 'Space' || e.code.startsWith('Arrow') || (e.ctrlKey && e.code === 'KeyW')) e.preventDefault();
+      this.down(e.code);
     });
-    addEventListener('keyup', (e) => this.keys.delete(e.code));
-    addEventListener('blur', () => { this.keys.clear(); this.mouseDown = [false, false, false]; });
-    el.addEventListener('mousedown', (e) => {
+    addEventListener('keyup', (e) => this.up(e.code));
+    addEventListener('blur', () => { for (const c of this.held) this.released.add(c); this.held.clear(); });
+    const mouseDown = (e: MouseEvent) => {
+      const code = 'Mouse' + e.button;
+      if (this.capture) { e.preventDefault(); const c = this.capture; this.capture = null; c(code); return; }
       if (!this.enabled) return;
-      if (!this.locked) { el.requestPointerLock?.(); }
-      this.mouseDown[e.button] = true; this.mousePressed[e.button] = true;
-    });
-    addEventListener('mouseup', (e) => { this.mouseDown[e.button] = false; });
+      if (e.target === el && !this.locked) el.requestPointerLock?.();
+      if (this.locked || e.target === el) this.down(code);
+    };
+    addEventListener('mousedown', mouseDown);
+    addEventListener('mouseup', (e) => this.up('Mouse' + e.button));
     addEventListener('mousemove', (e) => { if (this.locked) { this.dx += e.movementX; this.dy += e.movementY; } });
-    addEventListener('wheel', (e) => { this.wheel += Math.sign(e.deltaY); }, { passive: true });
+    addEventListener('wheel', (e) => {
+      const code = e.deltaY < 0 ? 'WheelUp' : 'WheelDown';
+      if (this.capture) { const c = this.capture; this.capture = null; c(code); return; }
+      if (this.locked) { this.pressed.add(code); }
+    }, { passive: true });
     addEventListener('contextmenu', (e) => e.preventDefault());
-    document.addEventListener('pointerlockchange', () => { this.locked = document.pointerLockElement === el; });
+    document.addEventListener('pointerlockchange', () => {
+      const was = this.locked;
+      this.locked = document.pointerLockElement === el;
+      if (was && !this.locked) { for (const c of this.held) this.released.add(c); this.held.clear(); this.onUnlock(); }
+    });
   }
-  down(code: string) { return this.keys.has(code); }
+  private down(code: string) { if (!this.held.has(code)) this.pressed.add(code); this.held.add(code); }
+  private up(code: string) { if (this.held.has(code)) this.released.add(code); this.held.delete(code); }
+  isDown(code: string) { return !!code && this.held.has(code); }
   /** True once per physical press. */
-  press(code: string) { if (this.pressed.has(code)) { this.pressed.delete(code); return true; } return false; }
-  mousePress(b: number) { if (this.mousePressed[b]) { this.mousePressed[b] = false; return true; } return false; }
+  wasPressed(code: string) { if (code && this.pressed.has(code)) { this.pressed.delete(code); return true; } return false; }
+  wasReleased(code: string) { if (code && this.released.has(code)) { this.released.delete(code); return true; } return false; }
+  peekPressed(code: string) { return !!code && this.pressed.has(code); }
   consumeMouse() { const r = { dx: this.dx, dy: this.dy }; this.dx = 0; this.dy = 0; return r; }
-  consumeWheel() { const w = this.wheel; this.wheel = 0; return w; }
-  clearPresses() { this.pressed.clear(); this.mousePressed = [false, false, false]; }
+  /** Drop edges nobody consumed this frame. */
+  endFrame() { this.pressed.clear(); this.released.clear(); }
+  clearAll() { this.pressed.clear(); this.released.clear(); this.held.clear(); }
+  lock() { this.el.requestPointerLock?.(); }
 }

@@ -163,7 +163,7 @@ export class Sim {
       gulagUsed: false, deadAt: -1, killedBy: -1,
       interactT: 0, interactTarget: -1,
       intent: emptyIntent(), lastShot: -99, lastStep: 0, uavUntil: 0, bountyOn: 0, contractId: -1,
-      alive: true, placement: 0, gulagSlot: -1, triggerHeld: false, prevSprint: false, loadoutUsed: false, spectating: -1,
+      alive: true, placement: 0, gulagSlot: -1, triggerHeld: false, stanceT: 0, sprintOut: 0, prevSprint: false, loadoutUsed: false, spectating: -1,
     };
   }
 

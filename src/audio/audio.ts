@@ -24,11 +24,14 @@ export class Audio {
     this.master = ctx.createGain(); this.master.gain.value = this.volume;
     const comp = ctx.createDynamicsCompressor(); comp.threshold.value = -14; comp.ratio.value = 6; comp.attack.value = 0.002; comp.release.value = 0.15;
     this.master.connect(comp); comp.connect(ctx.destination);
-    this.sfx = ctx.createGain(); this.sfx.connect(this.master);
+    this.sfx = ctx.createGain(); this.sfx.connect(this.master); this.sfx.gain.value = this.sfxVol;
+    this.uiBus = ctx.createGain(); this.uiBus.connect(this.master); this.uiBus.gain.value = this.uiVol;
     this.generate();
   }
 
-  setVolume(v: number) { this.volume = v; if (this.master) this.master.gain.value = v; }
+  private uiBus!: GainNode;
+  sfxVol = 1; uiVol = 0.8;
+  setVolume(v: number, sfx = this.sfxVol, ui = this.uiVol) { this.volume = v; this.sfxVol = sfx; this.uiVol = ui; if (this.master) { this.master.gain.value = v; this.sfx.gain.value = sfx; this.uiBus.gain.value = ui; } }
 
   setListener(x: number, y: number, z: number, fx: number, fy: number, fz: number) {
     const ctx = this.ctx; if (!ctx) return;
