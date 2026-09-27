@@ -51,6 +51,10 @@ export class Characters {
   private max: number;
   private phase = new Float32Array(200);
   hidden = -1; // local player id (first person)
+  canopyOnly = false;
+  private smooth: number[][] = [];
+  private smoothAir: number[] = [];
+  private dt = 0.016; // first-person parachute: still draw your own canopy
   private col = new THREE.Color();
 
   constructor(max = 160) {
@@ -73,9 +77,13 @@ export class Characters {
   }
 
   update(players: Player[], alpha: number, cam: THREE.Vector3, dt: number, localSquad: number) {
+    this.dt = dt;
     let n = 0, nc = 0;
     for (const p of players) {
-      if (p.id === this.hidden) continue;
+      if (p.id === this.hidden) {
+        if (this.canopyOnly && p.phase === Phase.Chute) { const yaw0 = p.pyaw + (p.yaw - p.pyaw) * alpha; const m = new THREE.Matrix4().compose(tmpV.set(p.px + (p.x - p.px) * alpha, p.py + (p.y - p.py) * alpha, p.pz + (p.z - p.pz) * alpha), tmpQ.setFromEuler(tmpE.set(0, yaw0, 0)), one); this.put('canopy', nc, m, 0x3a78c8); nc++; }
+        continue;
+      }
       if (p.phase === Phase.Plane || p.phase === Phase.Dead || p.phase === Phase.Spectate) continue;
       const x = p.px + (p.x - p.px) * alpha, y = p.py + (p.y - p.py) * alpha, z = p.pz + (p.z - p.pz) * alpha;
       const d2 = (x - cam.x) ** 2 + (z - cam.z) ** 2;
@@ -142,6 +150,17 @@ export class Characters {
       else if (p.ads > 0.5) { uarmR = -1.45; farmR = -1.15; uarmL = -1.35; farmL = -0.35; armOutL = 0.55; }
       if (p.reloadT > 0) { farmL = -1.6 + Math.sin(ph * 3 + y) * 0.2; uarmL = -0.7; }
       if (p.plateT > 0) { uarmL = -1.0; farmL = -1.9; uarmR = -1.0; farmR = -1.9; armOutR = -0.3; }
+      if (p.slideT > 0) { hipY = 0.42; bodyPitch = -0.45; thighL = 1.45; thighR = 1.15; shinL = 0.15; shinR = 1.1; legSpreadL = 0.1; legSpreadR = -0.1; spine = 0.35; }
+    }
+    // ease every joint toward its target so stance changes (stand/crouch/prone/downed) animate instead of popping
+    {
+      const tgt = [hipY, bodyPitch, spine, thighL, thighR, shinL, shinR, legSpreadL, legSpreadR, uarmL, uarmR, farmL, farmR, armOutL, armOutR];
+      let cur = this.smooth[p.id];
+      const air = p.phase === Phase.Freefall || p.phase === Phase.Chute;
+      if (!cur || this.smoothAir[p.id] !== +air) { cur = this.smooth[p.id] = tgt.slice(); this.smoothAir[p.id] = +air; }
+      const k = 1 - Math.exp(-this.dt * (p.stance === Stance.Prone || downed ? 7 : 13));
+      for (let i = 0; i < tgt.length; i++) cur[i] += (tgt[i] - cur[i]) * k;
+      [hipY, bodyPitch, spine, thighL, thighR, shinL, shinR, legSpreadL, legSpreadR, uarmL, uarmR, farmL, farmR, armOutL, armOutR] = cur;
     }
     // sign conventions: +angle swings a limb forward; knees flex backward; arms were authored negated
     uarmL = -uarmL; uarmR = -uarmR; farmL = -farmL; farmR = -farmR; shinL = -shinL; shinR = -shinR;

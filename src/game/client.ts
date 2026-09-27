@@ -42,6 +42,7 @@ export class Match {
   onEnd: (won: boolean, placement: number, me: Player) => void = () => {};
   private pauseEl: HTMLElement | null = null;
   private tpDist = 0;
+  private tpBlend = 0; private eye = 1.62; private eyeFor = -1; private roll = 0;
   /** Dev/test: pin the camera (position + look target) regardless of phase. */
   debugCam: { pos: [number, number, number]; target: [number, number, number] } | null = null;
 
@@ -195,7 +196,7 @@ export class Match {
     const w = me.weapons[me.cur];
     const def = w ? WEAPON[w.id] : null;
     let fov = this.settings.fov;
-    this.chars.hidden = 0;
+    this.chars.hidden = 0; this.chars.canopyOnly = false;
     this.landDip = Math.max(0, this.landDip - dt * 1.5);
     const phase = vp.phase;
     const yaw = this.spectate >= 0 ? vp.yaw : this.camYaw + me.recoilYaw, pitch = this.spectate >= 0 ? vp.pitch : this.camPitch + me.recoil;
@@ -206,11 +207,18 @@ export class Match {
       cam.lookAt(pl.x, pl.y, pl.z);
       audio.loop('engine', 0.5, 1, 1200); audio.loop('wind', 0.15, 1, 900);
     } else if (phase === Phase.Freefall || phase === Phase.Chute) {
-      this.chars.hidden = -1;
+      // first person by default; hold the third-person key to look at yourself
+      const tp = this.controls.thirdPersonHeld && this.spectate < 0;
+      this.tpBlend += ((tp ? 1 : 0) - this.tpBlend) * Math.min(1, dt * 8);
+      this.chars.hidden = this.tpBlend > 0.35 ? -1 : vp.id; this.chars.canopyOnly = this.tpBlend <= 0.35;
       this.tpDist += ((phase === Phase.Chute ? 9 : 6) - this.tpDist) * Math.min(1, dt * 3);
       const cp = Math.max(-1.2, Math.min(0.6, this.camPitch));
-      cam.position.set(x + Math.sin(this.camYaw) * Math.cos(cp) * this.tpDist, y + 1.6 - Math.sin(cp) * this.tpDist + 1.5, z + Math.cos(this.camYaw) * Math.cos(cp) * this.tpDist);
-      cam.lookAt(x, y + 1.4, z);
+      const fx = x, fy = y + 1.62, fz = z;
+      const tx = x + Math.sin(this.camYaw) * Math.cos(cp) * this.tpDist, ty = y + 1.6 - Math.sin(cp) * this.tpDist + 1.5, tz = z + Math.cos(this.camYaw) * Math.cos(cp) * this.tpDist;
+      const k = this.tpBlend;
+      cam.position.set(fx + (tx - fx) * k, fy + (ty - fy) * k, fz + (tz - fz) * k);
+      cam.rotation.set(this.camPitch, this.camYaw, (phase === Phase.Chute ? -vp.intent.mx * 0.08 : 0) * (1 - k), 'YXZ');
+      if (k > 0.01) { const q0 = cam.quaternion.clone(); cam.lookAt(x, y + 1.4, z); cam.quaternion.copy(q0.slerp(cam.quaternion, k)); }
       const sp = Math.hypot(vp.vx, vp.vy, vp.vz);
       audio.loop('engine', Math.max(0, 0.4 - Math.hypot(sim.plane.x - x, sim.plane.z - z) / 800), 1, 800);
       audio.loop('wind', phase === Phase.Freefall ? clamp(sp / 70, 0.2, 0.9) : 0.25, phase === Phase.Freefall ? 1 : 0.7, phase === Phase.Freefall ? 6000 : 2500);
@@ -228,10 +236,15 @@ export class Match {
       cam.lookAt(x, y + 1.5, z);
       audio.loop('wind', 0); audio.loop('engine', 0);
     } else {
-      // first person
-      const eh = eyeHeight(vp) - this.landDip * 0.4;
-      cam.position.set(x, y + eh, z);
-      cam.rotation.set(pitch, yaw, 0, 'YXZ');
+      // first person: eye height eases between stances (prone is slower), slides tilt the view
+      const target = eyeHeight(vp) - (vp.slideT > 0 ? 0.15 : 0);
+      if (this.eyeFor !== vp.id || Math.abs(target - this.eye) > 2) { this.eye = target; this.eyeFor = vp.id; }
+      const rate = vp.stance === Stance.Prone || this.eye < 0.9 ? 5.5 : 11;
+      this.eye += (target - this.eye) * (1 - Math.exp(-dt * rate));
+      this.roll += ((vp.slideT > 0 ? 0.055 : 0) - this.roll) * (1 - Math.exp(-dt * 10));
+      cam.position.set(x, y + this.eye - this.landDip * 0.4, z);
+      cam.rotation.set(pitch, yaw, this.roll, 'YXZ');
+      if (vp.slideT > 0) fov += 4;
       if (def && me.ads > 0 && (this.settings.adsFovAffected || def.scope)) fov = fov / (1 + (def.zoom - 1) * me.ads);
       if (me.tacSprint > 0) fov += 6;
       audio.loop('wind', 0); audio.loop('engine', vehicleOf(sim, vp) ? 0.3 : 0, 0.8, 700); audio.loop('chute', 0);
