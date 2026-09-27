@@ -1,0 +1,224 @@
+/** Player locomotion for every phase: C-130, freefall, parachute, ground, downed, swimming. */
+import { MOVE, DEPLOY } from './config';
+import { Phase, Player, Stance } from './types';
+import type { Sim } from './sim';
+import { WEAPON } from '../data/weapons';
+import { clamp } from '../core/math';
+
+const push = { x: 0, z: 0, hit: false, nx: 0, nz: 0 };
+
+export function playerHeight(p: Player): number {
+  if (p.phase === Phase.Downed) return MOVE.proneH;
+  return p.stance === Stance.Prone ? MOVE.proneH : p.stance === Stance.Crouch ? MOVE.crouchH : MOVE.height;
+}
+export function eyeHeight(p: Player): number {
+  if (p.phase === Phase.Downed) return 0.45;
+  return p.stance === Stance.Prone ? 0.42 : p.stance === Stance.Crouch ? 1.12 : 1.62;
+}
+
+export function movePlayer(sim: Sim, p: Player, dt: number) {
+  const it = p.intent;
+  p.yaw = it.yaw; p.pitch = clamp(it.pitch, -1.5, 1.5);
+  switch (p.phase) {
+    case Phase.Plane: {
+      const pl = sim.plane;
+      p.x = pl.x; p.y = pl.y - 3; p.z = pl.z; p.vx = pl.dx * DEPLOY.planeSpeed; p.vz = pl.dz * DEPLOY.planeSpeed; p.vy = 0;
+      if ((it.jump && sim.plane.canJump) || pl.t >= pl.dur - 0.5) {
+        p.phase = Phase.Freefall; p.vx *= 0.4; p.vz *= 0.4;
+        sim.emit({ t: 'jump', p: p.id });
+      }
+      return;
+    }
+    case Phase.Freefall: return air(sim, p, dt, false);
+    case Phase.Chute: return air(sim, p, dt, true);
+    case Phase.Dead: case Phase.Spectate: return;
+  }
+  ground(sim, p, dt);
+}
+
+function air(sim: Sim, p: Player, dt: number, chute: boolean) {
+  const it = p.intent, col = sim.world.col;
+  const fx = -Math.sin(p.yaw), fz = -Math.cos(p.yaw), rx = Math.cos(p.yaw), rz = -Math.sin(p.yaw);
+  const g = col.groundAt(p.x, p.z, p.y + 0.5);
+  const agl = p.y - g;
+  if (!chute) {
+    // looking down dives: faster fall, less glide
+    const dive = clamp(-p.pitch / 1.2, 0, 1);
+    const hs = DEPLOY.freefallH * (1 - dive * 0.35) * Math.max(0.25, it.mz * 0.8 + 0.2 + Math.abs(it.mx) * 0.4);
+    const tx = (fx * Math.max(0, it.mz) + rx * it.mx) * hs, tz = (fz * Math.max(0, it.mz) + rz * it.mx) * hs;
+    p.vx += (tx - p.vx) * Math.min(1, dt * 1.6); p.vz += (tz - p.vz) * Math.min(1, dt * 1.6);
+    const tv = -(DEPLOY.freefallFall + dive * (DEPLOY.diveFall - DEPLOY.freefallFall));
+    p.vy += (tv - p.vy) * Math.min(1, dt * 1.2);
+    if ((it.jump && agl > DEPLOY.minChuteAGL) || agl < DEPLOY.autoChuteAGL) { p.phase = Phase.Chute; p.vy = Math.max(p.vy, -18); sim.emit({ t: 'chute', p: p.id }); p.intent.jump = false; }
+  } else {
+    const fwd = clamp(it.mz, -0.5, 1);
+    const hs = DEPLOY.chuteH * (0.55 + 0.45 * Math.max(0, fwd));
+    const tx = fx * hs * (fwd >= 0 ? 1 : 0.3) + rx * it.mx * 6, tz = fz * hs * (fwd >= 0 ? 1 : 0.3) + rz * it.mx * 6;
+    p.vx += (tx - p.vx) * Math.min(1, dt * 1.2); p.vz += (tz - p.vz) * Math.min(1, dt * 1.2);
+    const tv = -(DEPLOY.chuteFall + Math.max(0, fwd) * 2.5);
+    p.vy += (tv - p.vy) * Math.min(1, dt * 2.2);
+    // cut the chute (unlimited redeploy in 2020 Warzone)
+    if (it.jump && agl > 25) { p.phase = Phase.Freefall; sim.emit({ t: 'chute', p: p.id }); p.intent.jump = false; }
+  }
+  p.x += p.vx * dt; p.y += p.vy * dt; p.z += p.vz * dt;
+  clampToWorld(sim, p);
+  // hit something on the way down
+  col.pushOut(p.x, p.y, p.z, MOVE.height, MOVE.radius, MOVE.step, push);
+  p.x = push.x; p.z = push.z;
+  const g2 = col.groundAt(p.x, p.z, p.y + 0.6);
+  const w = col.waterAt(p.x, p.z);
+  if (p.y <= Math.max(g2, w - 1.0)) {
+    p.y = Math.max(g2, w - 1.0);
+    const hard = !chute && p.vy < -25;
+    p.phase = Phase.Alive; p.onGround = true; p.vy = 0; p.vx *= 0.3; p.vz *= 0.3; p.fallStartY = p.y;
+    sim.emit({ t: 'land', p: p.id, hard });
+    if (hard) sim.damage(p, 999, -1, 'fall', false, true);
+  }
+}
+
+function clampToWorld(sim: Sim, p: Player) {
+  const s = sim.world.hf.size;
+  p.x = clamp(p.x, 5, s - 5); p.z = clamp(p.z, 5, s - 5);
+}
+
+function ground(sim: Sim, p: Player, dt: number) {
+  const it = p.intent, col = sim.world.col;
+  const downed = p.phase === Phase.Downed;
+  const def = p.weapons[p.cur] ? WEAPON[p.weapons[p.cur]!.id] : null;
+  // --- mantle in progress
+  if (p.mantleT > 0) {
+    p.mantleT -= dt;
+    const k = Math.min(1, dt / Math.max(0.01, p.mantleT + dt));
+    p.y += (p.mantleY - p.y) * k; p.x += p.vx * dt; p.z += p.vz * dt;
+    if (p.mantleT <= 0) { p.y = p.mantleY; p.vx *= 0.3; p.vz *= 0.3; p.onGround = true; p.fallStartY = p.y; }
+    return;
+  }
+  // --- stance
+  if (!downed) {
+    if (it.crouch) {
+      it.crouch = false;
+      if (p.sprinting && p.onGround && p.slideCd <= 0 && p.stance === Stance.Stand) {
+        // slide
+        p.slideT = MOVE.slideTime; p.slideCd = MOVE.slideCooldown; p.stance = Stance.Crouch;
+        const sp = Math.max(MOVE.slideSpeed, Math.hypot(p.vx, p.vz) * 1.15);
+        const hl = Math.hypot(p.vx, p.vz) || 1;
+        p.slideDx = p.vx / hl * sp; p.slideDz = p.vz / hl * sp; p.sprinting = false; p.tacSprint = 0;
+        sim.emit({ t: 'slide', p: p.id });
+      } else p.stance = p.stance === Stance.Crouch ? tryStand(sim, p) : Stance.Crouch;
+    }
+    if (it.prone) { it.prone = false; p.stance = p.stance === Stance.Prone ? tryStand(sim, p) : Stance.Prone; p.slideT = 0; }
+  }
+  if (p.slideCd > 0) p.slideCd -= dt;
+  // --- water
+  const wl = col.waterAt(p.x, p.z);
+  p.swimming = !downed && wl > p.y + 1.25;
+  // --- target speed
+  const fx = -Math.sin(p.yaw), fz = -Math.cos(p.yaw), rx = Math.cos(p.yaw), rz = -Math.sin(p.yaw);
+  let mx = it.mx, mz = it.mz; const ml = Math.hypot(mx, mz); if (ml > 1) { mx /= ml; mz /= ml; }
+  const mob = def?.mobility ?? 1;
+  const wantSprint = it.sprint && mz > 0.3 && !downed && p.stance !== Stance.Prone && p.ads < 0.3 && p.plateT <= 0 && !p.swimming && p.reloadT <= 0;
+  if (wantSprint && !p.sprinting) { p.sprinting = true; if (p.stance === Stance.Crouch) p.stance = tryStand(sim, p); }
+  if (!wantSprint) { p.sprinting = false; p.tacSprint = 0; }
+  // tac sprint: second sprint press while sprinting (flagged by the input layer as sprint pulses)
+  if (p.sprinting && (it as any).tac && p.tacCooldown <= 0 && p.tacSprint <= 0) { p.tacSprint = MOVE.tacSprintTime; (it as any).tac = false; }
+  if (p.tacSprint > 0) { p.tacSprint -= dt; if (p.tacSprint <= 0) p.tacCooldown = MOVE.tacSprintCooldown; }
+  else if (p.tacCooldown > 0) p.tacCooldown -= dt * (p.sprinting ? 0.5 : 1);
+  let speed = downed ? MOVE.downed : p.swimming ? MOVE.swim : p.stance === Stance.Prone ? MOVE.prone : p.stance === Stance.Crouch ? MOVE.crouch : p.sprinting ? (p.tacSprint > 0 ? MOVE.tacSprint : MOVE.sprint) : MOVE.walk;
+  if (!downed && p.stance === Stance.Stand && p.ads > 0.5) speed = Math.min(speed, MOVE.ads);
+  speed *= mob;
+  if (p.plateT > 0) speed *= 0.7;
+  if (p.stunT > 0) speed *= 0.45;
+  if (!p.sprinting) { // backwards/strafe slower
+    if (mz < 0) mz *= 0.8;
+  }
+  let tx = (fx * mz + rx * mx) * speed, tz = (fz * mz + rz * mx) * speed;
+  if (p.slideT > 0) {
+    p.slideT -= dt;
+    const k = Math.max(0, p.slideT / MOVE.slideTime);
+    tx = p.slideDx * (0.35 + 0.65 * k); tz = p.slideDz * (0.35 + 0.65 * k);
+    if (it.jump) { p.slideT = 0; } // slide-cancel into a jump
+  }
+  const acc = p.onGround || p.swimming ? MOVE.accel : MOVE.airAccel;
+  const dvx = tx - p.vx, dvz = tz - p.vz, dl = Math.hypot(dvx, dvz), step = acc * dt;
+  if (dl <= step) { p.vx = tx; p.vz = tz; } else { p.vx += (dvx / dl) * step; p.vz += (dvz / dl) * step; }
+  // --- jump / mantle
+  const h = playerHeight(p);
+  if (it.jump && !downed) {
+    it.jump = false;
+    if (p.swimming) { p.vy = 3; }
+    else if (p.onGround) {
+      if (p.stance !== Stance.Stand) { p.stance = tryStand(sim, p); }
+      else if (!tryMantle(sim, p)) { p.vy = MOVE.jumpV; p.onGround = false; sim.emit({ t: 'jump', p: p.id }); }
+    } else tryMantle(sim, p);
+  }
+  // --- vertical
+  if (p.swimming) {
+    const target = wl - 1.35;
+    p.vy += (Math.sign(target - p.y) * 2 - p.vy) * Math.min(1, dt * 3);
+  } else if (!p.onGround) p.vy -= MOVE.gravity * dt;
+  // --- integrate horizontal with collision
+  const ox = p.x, oz = p.z;
+  p.x += p.vx * dt; p.z += p.vz * dt;
+  clampToWorld(sim, p);
+  col.pushOut(p.x, p.y, p.z, h, MOVE.radius, MOVE.step, push);
+  p.x = push.x; p.z = push.z;
+  if (push.hit) {
+    // remove velocity into the wall
+    const vn = p.vx * push.nx + p.vz * push.nz; if (vn < 0) { p.vx -= vn * push.nx; p.vz -= vn * push.nz; }
+    if (p.slideT > 0) { p.slideT = 0; }
+  }
+  // --- vertical integrate + ground
+  p.y += p.vy * dt;
+  const ceil = col.ceilingAt(p.x, p.z, p.y + 0.3, MOVE.radius * 0.7);
+  if (p.y + h > ceil && p.vy > 0) { p.vy = 0; p.y = Math.min(p.y, ceil - h); }
+  const gnd = col.groundAt(p.x, p.z, p.y + MOVE.step, MOVE.radius * 0.6);
+  if (p.swimming) { if (p.y < gnd) p.y = gnd; p.onGround = false; p.fallStartY = p.y; }
+  else if (p.y <= gnd) {
+    if (!p.onGround) {
+      const fall = p.fallStartY - gnd;
+      if (fall > MOVE.fallSafe) {
+        const dmg = ((fall - MOVE.fallSafe) / (MOVE.fallLethal - MOVE.fallSafe)) * 110;
+        sim.damage(p, dmg, -1, 'fall', false, true);
+      }
+      if (fall > 1.2) sim.emit({ t: 'land', p: p.id, hard: fall > MOVE.fallSafe });
+    }
+    p.y = gnd; p.vy = 0; p.onGround = true; p.fallStartY = p.y;
+  } else if (p.onGround && p.vy <= 0 && p.y - gnd < 0.7) {
+    p.y = gnd; // walking down stairs/slopes
+  } else {
+    if (p.onGround) { p.onGround = false; p.fallStartY = p.y; }
+    if (p.y > p.fallStartY) p.fallStartY = p.y;
+  }
+  // --- footsteps
+  const moved = Math.hypot(p.x - ox, p.z - oz);
+  if (p.onGround && moved > 0.001) {
+    p.lastStep += moved;
+    const stride = p.sprinting ? 2.0 : p.stance !== Stance.Stand ? 1.2 : 1.5;
+    if (p.lastStep > stride) { p.lastStep = 0; if (p.stance === Stance.Stand) sim.emit({ t: 'step', p: p.id, x: p.x, y: p.y, z: p.z, metal: false }); }
+  }
+}
+
+function tryStand(sim: Sim, p: Player): Stance {
+  return sim.world.col.fits(p.x, p.y, p.z, MOVE.height, MOVE.radius * 0.9) ? Stance.Stand : p.stance === Stance.Prone ? Stance.Crouch : p.stance;
+}
+
+function tryMantle(sim: Sim, p: Player): boolean {
+  const col = sim.world.col;
+  const fx = -Math.sin(p.yaw), fz = -Math.cos(p.yaw);
+  for (const d of [0.55, 0.85]) {
+    const x = p.x + fx * d, z = p.z + fz * d;
+    const top = col.groundAt(x, z, p.y + MOVE.mantleMax, 0.15);
+    if (top > p.y + MOVE.step && top <= p.y + MOVE.mantleMax) {
+      const tx = p.x + fx * (d + 0.35), tz = p.z + fz * (d + 0.35);
+      const top2 = col.groundAt(tx, tz, top + 0.3, 0.2);
+      void top2;
+      if (col.fits(tx, top + 0.02, tz, MOVE.crouchH, MOVE.radius * 0.9)) { // climb onto a ledge or vault a thin wall/sill
+        p.mantleT = 0.25 + (top - p.y) * 0.18; p.mantleY = top + 0.02;
+        p.vx = (tx - p.x) / p.mantleT; p.vz = (tz - p.z) / p.mantleT; p.vy = 0;
+        p.onGround = false;
+        return true;
+      }
+    }
+  }
+  return false;
+}
