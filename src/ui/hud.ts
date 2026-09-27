@@ -7,6 +7,7 @@ import { LETHAL_NAMES, TACTICAL_NAMES, KILLSTREAK_NAMES } from '../sim/loot';
 import { CIRCLES, PRICES } from '../sim/config';
 import { POIS, MAP_SIZE } from '../world/mapdata';
 import { eyeHeight } from '../sim/movement';
+import { vehicleOf, VEHICLES } from '../sim/vehicles';
 
 const el = (tag: string, cls = '', html = '') => { const e = document.createElement(tag); if (cls) e.className = cls; if (html) e.innerHTML = html; return e; };
 const fmtT = (s: number) => { s = Math.max(0, Math.ceil(s)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
@@ -173,6 +174,8 @@ export class Hud {
       if (rv) progV = rv.reviveT / 5;
       if (me.plateT > 0) progV = 1 - me.plateT / 1.25;
     }
+    const veh = vehicleOf(sim, me);
+    if (veh) { promptTxt = `${VEHICLES[veh.type].name} ${Math.round(veh.speed * 3.6)} km/h — <kbd>F</kbd>Exit${veh.type === 'heli' ? ' • SPACE up • CTRL down' : ' • SPACE brake'}`; progV = veh.health / VEHICLES[veh.type].health; }
     if (me.phase === Phase.Plane) promptTxt = sim.plane.canJump ? '<kbd>SPACE</kbd>Jump' : 'Waiting for the jump light...';
     if (me.phase === Phase.Freefall) promptTxt = `<kbd>SPACE</kbd>Deploy parachute &nbsp; ${Math.round(me.y - sim.world.hf.at(me.x, me.z))}m`;
     if (me.phase === Phase.Chute) promptTxt = `<kbd>SPACE</kbd>Cut parachute &nbsp; ${Math.round(me.y - sim.world.hf.at(me.x, me.z))}m`;

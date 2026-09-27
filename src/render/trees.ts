@@ -33,8 +33,11 @@ export function makeTrees(trees: Tree[]): THREE.Group {
   const g = new THREE.Group();
   const mat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.9, flatShading: true });
   const geos = [pine(), leafy(), bush()];
-  for (let k = 0; k < 3; k++) {
-    const list = trees.filter((t) => t.kind === k);
+  const CH = 540;
+  const buckets = new Map<string, Tree[]>();
+  for (const t of trees) { const key = `${t.kind}:${Math.floor(t.x / CH)}:${Math.floor(t.z / CH)}`; let b = buckets.get(key); if (!b) buckets.set(key, (b = [])); b.push(t); }
+  for (const [key, list] of buckets) {
+    const k = +key.split(':')[0];
     const im = new THREE.InstancedMesh(geos[k], mat, list.length);
     const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3(), e = new THREE.Euler();
     list.forEach((t, i) => { e.set(0, (t.x * 13.1 + t.z * 7.7) % 6.28, 0); q.setFromEuler(e); s.setScalar(t.s); p.set(t.x, t.y - 0.2, t.z); m.compose(p, q, s); im.setMatrixAt(i, m); });

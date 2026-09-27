@@ -82,15 +82,24 @@ function gunGeometry(def: WeaponDef, rarity: number): { geo: THREE.BufferGeometr
   return { geo: mergeGeometries(p)!, muzzle, sight, scope, optic };
 }
 
-function armsGeometry(sleeve: number): THREE.BufferGeometry {
-  const glove = 0x2a2a28;
+/** Cylinder from a to b (gun-local space). */
+function limb(ax: number, ay: number, az: number, bx: number, by: number, bz: number, r: number, color: number) {
+  const A = new THREE.Vector3(ax, ay, az), B2 = new THREE.Vector3(bx, by, bz), d = B2.clone().sub(A), len = d.length();
+  const g = new THREE.CylinderGeometry(r * 0.9, r, len, 8).translate(0, len / 2, 0);
+  g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize()));
+  g.translate(ax, ay, az);
+  return part(g, color, 0, 0, 0);
+}
+function armsGeometry(sleeve: number, pistol: boolean): THREE.BufferGeometry {
+  const glove = 0x2e2d2a;
+  const gripZ = pistol ? 0.05 : 0.1, guardZ = pistol ? 0.04 : -0.3;
   return mergeGeometries([
-    // right arm: from behind the camera to the grip
-    part(C(0.045, 0.35, 8), sleeve, 0.1, -0.13, 0.33, 0.25, 0.25),
-    part(B(0.07, 0.09, 0.1), glove, 0.02, -0.08, 0.12, -0.2),
-    // left arm to the handguard
-    part(C(0.045, 0.45, 8), sleeve, -0.16, -0.12, 0.05, 0.1, -0.55),
-    part(B(0.08, 0.06, 0.11), glove, -0.02, -0.05, -0.25, 0, 0.3),
+    // right hand on the grip, forearm running back and down out of frame
+    part(B(0.06, 0.08, 0.1), glove, 0.005, -0.075, gripZ),
+    limb(0.01, -0.09, gripZ + 0.04, 0.09, -0.26, gripZ + 0.34, 0.036, sleeve),
+    // left hand under the handguard (or cupping the pistol grip)
+    part(B(0.07, 0.05, 0.1), glove, pistol ? -0.02 : -0.005, pistol ? -0.1 : -0.04, guardZ),
+    limb(pistol ? -0.02 : -0.01, pistol ? -0.11 : -0.06, guardZ + 0.04, pistol ? -0.1 : -0.16, -0.26, guardZ + 0.36, 0.036, sleeve),
   ])!;
 }
 
@@ -99,7 +108,8 @@ export class ViewModel {
   camera = new THREE.PerspectiveCamera(58, 1, 0.01, 10);
   private root = new THREE.Group();
   private gun = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, metalness: 0.15 }));
-  private arms = new THREE.Mesh(armsGeometry(0x4d5140), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85 }));
+  private arms = new THREE.Mesh(armsGeometry(0x4d5140, false), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85 }));
+  private armsRifle = armsGeometry(0x4d5140, false); private armsPistol = armsGeometry(0x4d5140, true);
   private plate = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.28, 0.03), new THREE.MeshStandardMaterial({ color: 0x3a3c38, roughness: 0.6 }));
   private flash: THREE.Mesh;
   private flashLight = new THREE.PointLight(0xffc070, 0, 6, 2);
@@ -129,7 +139,7 @@ export class ViewModel {
     this.root.visible = !hidden;
     if (hidden) return;
     const k = `${w!.id}:${w!.rarity}`;
-    if (k !== this.key) { this.key = k; const g = gunGeometry(WEAPON[w!.id], w!.rarity); this.gun.geometry.dispose(); this.gun.geometry = g.geo; this.muzzle = g.muzzle; this.sight = g.sight; this.scope = g.scope; this.optic = g.optic; }
+    if (k !== this.key) { this.key = k; const g = gunGeometry(WEAPON[w!.id], w!.rarity); this.gun.geometry.dispose(); this.gun.geometry = g.geo; this.muzzle = g.muzzle; this.sight = g.sight; this.scope = g.scope; this.optic = g.optic; this.arms.geometry = WEAPON[w!.id].cls === 'pistol' ? this.armsPistol : this.armsRifle; }
     if (p.cur !== this.lastCur || w!.id !== this.lastId) { this.swap = 1; this.lastCur = p.cur; this.lastId = w!.id; }
     this.swap = Math.max(0, this.swap - dt * 2.2);
     const ads = p.ads;
@@ -141,7 +151,8 @@ export class ViewModel {
     const bobA = (speed > 0.5 ? 0.012 + speed * 0.0022 : 0.003) * (1 - ads * 0.9);
     const bx = Math.sin(this.bobT) * bobA, by = -Math.abs(Math.cos(this.bobT)) * bobA;
     this.kick = Math.max(0, this.kick - dt * 14); this.kickRot = Math.max(0, this.kickRot - dt * 10);
-    const S = 0.7, hip = new THREE.Vector3(0.12, -0.14, -0.36), aim = new THREE.Vector3(0, -this.sight * S, -0.36);
+    const S = 0.7, pistol = WEAPON[w!.id].cls === 'pistol';
+    const hip = pistol ? new THREE.Vector3(0.1, -0.13, -0.48) : new THREE.Vector3(0.12, -0.14, -0.36), aim = new THREE.Vector3(0, -this.sight * S, pistol ? -0.5 : -0.36);
     const pos = hip.clone().lerp(aim, ads);
     let rx = 0, ry = 0, rz = 0;
     if (sprinting) { const s = p.tacSprint > 0 ? 1 : 0.7; pos.x -= 0.05 * s; pos.y -= 0.06 * s; rx -= 0.35 * s; ry += 0.75 * s; rz += 0.25 * s; if (p.tacSprint > 0) { rx = 0.9; ry = 0.2; pos.y += 0.02; } }

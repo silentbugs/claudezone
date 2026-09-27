@@ -4,6 +4,7 @@ import { Mat, PENETRATION, RayHit } from '../world/collision';
 import { Bullet, Phase, Player, Stance, Throwable } from './types';
 import type { Sim } from './sim';
 import { eyeHeight } from './movement';
+import { segHitVehicle } from './vehicles';
 import { clamp } from '../core/math';
 
 const hit: RayHit = { t: 0, nx: 0, ny: 0, nz: 0, structure: -1, part: -1, mat: Mat.Rock, terrain: false, water: false };
@@ -200,6 +201,15 @@ export function updateBullets(sim: Sim, dt: number) {
       if (!p.alive || p.phase === Phase.Plane || p.phase === Phase.Dead || p.phase === Phase.Spectate || p.phase === Phase.GulagWait) continue;
       const r = segHitPlayer(p, b.x, b.y, b.z, dx, dy, dz, Math.min(len, tw));
       if (r && r.t < tp) { tp = r.t; victim = p; zone = r.zone; }
+    }
+    // vehicles in the way
+    let tv = Infinity, vhit: any = null;
+    for (const v of sim.vehicles) { if (!v.alive || Math.abs(v.x - b.x) > len + 10 || Math.abs(v.z - b.z) > len + 10) continue; const t = segHitVehicle(v, b.x, b.y, b.z, dx, dy, dz, Math.min(len, tw)); if (t >= 0 && t < tv && (sim.players[b.owner] as any)?.vehicle !== v.id) { tv = t; vhit = v; } }
+    if (vhit && tv < tp && tv < tw) {
+      const def = WEAPON[b.weapon];
+      if (b.rocket) sim.explode(b.x + dx * tv, b.y + dy * tv, b.z + dz * tv, def.splash!.radius, def.splash!.damage, b.owner, 'rocket');
+      else { vhit.health -= damageAt(def, b.dist + tv) * b.dmgMul * (def.cls === 'sniper' ? 2 : 1); sim.emit({ t: 'impact', x: b.x + dx * tv, y: b.y + dy * tv, z: b.z + dz * tv, nx: -dx, ny: -dy, nz: -dz, mat: Mat.Metal, water: false }); if (b.owner === sim.localId) sim.emit({ t: 'hit', attacker: b.owner, victim: -1, dmg: 0, head: false, armorBroke: false, armorHit: true, kill: false, down: false, x: b.x, y: b.y, z: b.z }); }
+      continue;
     }
     // near-miss whiz for the listener
     if (tp < tw && victim) {

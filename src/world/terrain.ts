@@ -5,7 +5,7 @@
  */
 import { VERDANSK } from '../data/verdansk';
 import { Heightfield } from './collision';
-import { MapMasks, MAP_SIZE, MASK_RES, MASK_PX, M_ROAD, M_SEA, M_SNOW } from './mapdata';
+import { MapMasks, MAP_SIZE, MASK_RES, MASK_PX, M_ROAD, M_SEA, M_SNOW, M_BUILT } from './mapdata';
 import { clamp, fbm, pointInPoly, smoothstep, lerp } from '../core/math';
 
 export const TERRAIN_RES = 1081; // 3 m spacing
@@ -79,6 +79,8 @@ export interface TerrainExtras {
   road: Float32Array;
   /** 0..1 snow coverage. */
   snow: Float32Array;
+  /** 0..1 paved ground (plazas, lots, sidewalks) from the tac map's built-up areas. */
+  paved: Float32Array;
   /** Marks samples that are river ice / river bed. 1 = ice, 2 = water bed */
   river: Uint8Array;
   rivers: RiverDef[];
@@ -89,6 +91,7 @@ export function buildTerrain(masks: MapMasks): { hf: Heightfield; extra: Terrain
   const hf = new Heightfield(MAP_SIZE, n);
   const h = hf.h;
   // --- rasters sampled from masks onto the terrain grid
+  const builtR = new Float32Array(n * n);
   const sea = new Uint8Array(n * n), inPlay = new Uint8Array(n * n), roadR = new Uint8Array(n * n), snowR = new Float32Array(n * n);
   const playable = VERDANSK.playable as unknown as [number, number][];
   const land = VERDANSK.land as unknown as [number, number][];
@@ -100,6 +103,7 @@ export function buildTerrain(masks: MapMasks): { hf: Heightfield; extra: Terrain
     inPlay[k] = pointInPoly(x, z, playable) ? 1 : 0;
     roadR[k] = m & M_ROAD ? 1 : 0;
     snowR[k] = m & M_SNOW ? 1 : 0;
+    builtR[k] = m & M_BUILT ? 1 : 0;
   }
   { // tac-map roads are drawn wide: erode once so carriageways are ~9-12 m
     const er = new Uint8Array(n * n);
@@ -203,7 +207,10 @@ export function buildTerrain(masks: MapMasks): { hf: Heightfield; extra: Terrain
   const road = new Float32Array(n * n); for (let k = 0; k < n * n; k++) road[k] = clamp(roadSoft[k] * 1.6, 0, 1) * (riverR[k] ? 0 : 1);
   const snow = new Float32Array(n * n);
   for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) { const k = j * n + i; snow[k] = clamp(snowB[k] * 1.6 * smoothstep(1500, 900, j * sp) + smoothstep(90, 180, h[k]) , 0, 1); }
-  return { hf, extra: { road, snow, river: riverR, rivers } };
+  const pb = blur(blur(builtR, n, 2), n, 2);
+  const paved = new Float32Array(n * n);
+  for (let k = 0; k < n * n; k++) paved[k] = riverR[k] || h[k] < 0.5 ? 0 : clamp((pb[k] - 0.18) * 2.2, 0, 1) * (1 - snow[k]);
+  return { hf, extra: { road, snow, paved, river: riverR, rivers } };
 }
 
 /** Water surface height at a point (sea = 0, rivers use their profile), or -Infinity where dry. */

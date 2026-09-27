@@ -10,6 +10,8 @@ import { SceneMgr } from '../render/scene';
 import { Characters } from '../render/characters';
 import { ViewModel } from '../render/viewmodel';
 import { Effects } from '../render/effects';
+import { VehicleMeshes } from '../render/vehicles';
+import { vehicleOf, VEHICLES } from '../sim/vehicles';
 import { Hud } from '../ui/hud';
 import { audio } from '../audio/audio';
 import type { WorldData } from '../world/mapgen';
@@ -23,6 +25,7 @@ export class Match {
   chars = new Characters();
   vm = new ViewModel();
   fx: Effects;
+  vehMeshes = new VehicleMeshes();
   clock = new FixedStep(1 / 60);
   camYaw = 0; camPitch = 0;
   mapOpen = false; paused = false;
@@ -40,6 +43,7 @@ export class Match {
     ui.appendChild(this.hud.root);
     this.fx = new Effects(this.sim, sm.scene);
     sm.scene.add(this.chars.group);
+    sm.scene.add(this.vehMeshes.group);
     this.chars.hidden = 0;
     this.camYaw = Math.atan2(-this.sim.plane.dx, -this.sim.plane.dz);
     this.vm.setAspect(innerWidth / innerHeight);
@@ -49,7 +53,7 @@ export class Match {
   }
 
   dispose() {
-    this.sm.scene.remove(this.chars.group); this.sm.scene.remove(this.fx.group);
+    this.sm.scene.remove(this.chars.group); this.sm.scene.remove(this.fx.group); this.sm.scene.remove(this.vehMeshes.group);
     this.hud.root.remove(); this.pauseEl?.remove();
     audio.loop('engine', 0); audio.loop('wind', 0); audio.loop('gas', 0); audio.loop('chute', 0);
   }
@@ -80,6 +84,7 @@ export class Match {
     if (inp.press('KeyQ')) it.tactical = true;
     if (inp.press('Digit5')) it.killstreak = true;
     if (inp.press('KeyM')) this.mapOpen = !this.mapOpen;
+    (it as any).up = inp.down('Space'); (it as any).down = inp.down('ControlLeft') || inp.down('KeyC');
     it.yaw = this.camYaw; it.pitch = this.camPitch;
   }
 
@@ -206,6 +211,14 @@ export class Match {
       const sp = Math.hypot(vp.vx, vp.vy, vp.vz);
       audio.loop('engine', Math.max(0, 0.4 - Math.hypot(sim.plane.x - x, sim.plane.z - z) / 800), 1, 800);
       audio.loop('wind', phase === Phase.Freefall ? clamp(sp / 70, 0.2, 0.9) : 0.25, phase === Phase.Freefall ? 1 : 0.7, phase === Phase.Freefall ? 6000 : 2500);
+    } else if (vehicleOf(sim, vp) && (vp as any).seat === 0) {
+      const v = vehicleOf(sim, vp)!, d = VEHICLES[v.type];
+      const dist = d.len * 1.4 + 5, cp = Math.max(-0.6, Math.min(0.9, this.camPitch));
+      const vx = v.px + (v.x - v.px) * a, vy = v.py + (v.y - v.py) * a, vz = v.pz + (v.z - v.pz) * a;
+      cam.position.set(vx + Math.sin(this.camYaw) * Math.cos(cp) * dist, vy + d.hgt + 1.5 - Math.sin(cp) * dist, vz + Math.cos(this.camYaw) * Math.cos(cp) * dist);
+      cam.lookAt(vx, vy + d.hgt * 0.8, vz);
+      this.chars.hidden = -1;
+      audio.loop('engine', 0.25 + Math.min(0.35, v.speed / 60), 0.7 + v.speed / 40, d.air ? 1500 : 700);
     } else if (this.spectate >= 0 && phase !== Phase.Gulag) {
       this.chars.hidden = -1;
       cam.position.set(x + Math.sin(yaw) * 4, y + 2.6, z + Math.cos(yaw) * 4);
@@ -218,7 +231,7 @@ export class Match {
       cam.rotation.set(pitch, yaw, 0, 'YXZ');
       if (def && me.ads > 0) fov = fov / (1 + (def.zoom - 1) * me.ads);
       if (me.tacSprint > 0) fov += 6;
-      audio.loop('wind', 0); audio.loop('engine', 0); audio.loop('chute', 0);
+      audio.loop('wind', 0); audio.loop('engine', vehicleOf(sim, vp) ? 0.3 : 0, 0.8, 700); audio.loop('chute', 0);
     }
     audio.loop('gas', sim.inGas(vp) ? 0.45 : 0, 1, 900);
     if (Math.abs(cam.fov - fov) > 0.01) { cam.fov += (fov - cam.fov) * Math.min(1, dt * 18); cam.updateProjectionMatrix(); }
@@ -228,10 +241,11 @@ export class Match {
     // world
     this.chars.update(sim.players, a, cam.position, dt, me.squad);
     this.fx.update(dt, a, cam.position, time, cam.fov);
+    this.vehMeshes.update(sim.vehicles, a, dt, cam.position);
     // hide the local body in first person, show it otherwise
     this.sm.render();
     // viewmodel
-    const fp = phase === Phase.Alive || phase === Phase.Gulag || phase === Phase.GulagWait;
+    const fp = (phase === Phase.Alive || phase === Phase.Gulag || phase === Phase.GulagWait) && !(vehicleOf(sim, vp) && (vp as any).seat === 0);
     if (fp && this.spectate < 0) {
       this.vm.update(me, dt, this.lastMouse.dx, this.lastMouse.dy, Math.hypot(me.vx, me.vz), me.sprinting);
       this.vm.render(this.sm.renderer);

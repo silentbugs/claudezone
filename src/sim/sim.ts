@@ -17,6 +17,8 @@ import { weaponTick, updateBullets, updateThrowables, throwItem, aimDir } from '
 import { randomItem, chestContents, tryPickup, dropBag, magSize } from './loot';
 import { BotBrain, botThink } from './bots';
 import { Mat, RayHit } from '../world/collision';
+import { Vehicle, VehicleType, VEHICLES, makeVehicle, updateVehicles, enterVehicle, exitVehicle, vehicleOf } from './vehicles';
+import { M_ROAD } from '../world/mapdata';
 
 export interface CircleState { phase: number; closing: boolean; t: number; cx: number; cz: number; r: number; nx: number; nz: number; nr: number; sx: number; sz: number; sr: number; done: boolean }
 export interface Contract { id: number; kind: 'bounty' | 'scavenger' | 'recon'; x: number; y: number; z: number; taken: boolean }
@@ -49,6 +51,7 @@ export class Sim {
   active: ActiveContract[] = [];
   crates: LoadoutCrate[] = [];
   brains: BotBrain[] = [];
+  vehicles: Vehicle[] = [];
   aliveCount = PLAYERS;
   over = false; winner = -1;
   squadUav = new Map<number, { until: number; x: number; z: number }>();
@@ -76,9 +79,37 @@ export class Sim {
     for (const ch of world.chests) this.chests.push({ id: this.nextId++, x: ch.x, y: ch.y, z: ch.z, opened: false, legendary: this.rng.chance(0.06) });
     for (const b of world.buyStations) { const p = this.snapToFree(b.x, b.z); if (p) this.buyStations.push({ id: this.nextId++, ...p }); }
     for (const c2 of world.contracts) { const p = this.snapToFree(c2.x, c2.z); if (p) this.contracts.push({ id: this.nextId++, kind: this.rng.pick(['bounty', 'scavenger', 'recon'] as const), ...p, taken: false }); }
+    this.spawnVehicles();
     // circle 0 = whole map; the first "next" circle is revealed immediately
     this.circle = { phase: 0, closing: false, t: CIRCLES[0].wait, cx: 1640, cz: 1780, r: INITIAL_RADIUS, nx: 0, nz: 0, nr: 0, sx: 0, sz: 0, sr: 0, done: false };
     this.pickNextCircle();
+  }
+
+  private spawnVehicles() {
+    const kinds: VehicleType[] = [];
+    for (let i = 0; i < 22; i++) kinds.push('atv');
+    for (let i = 0; i < 12; i++) kinds.push('suv');
+    for (let i = 0; i < 10; i++) kinds.push('rover');
+    for (let i = 0; i < 6; i++) kinds.push('truck');
+    const hf = this.world.hf, masks = this.world.masks;
+    let tries = 0;
+    for (const k of kinds) {
+      while (tries++ < 20000) {
+        const x = this.rng.range(250, MAP_SIZE - 250), z = this.rng.range(300, MAP_SIZE - 300);
+        if (!masks.has(x, z, M_ROAD) || !inPlayable(x, z)) continue;
+        const d = VEHICLES[k];
+        if (!this.world.col.fits(x, hf.at(x, z) + 0.3, z, d.hgt, d.len * 0.55)) continue;
+        if (this.vehicles.some((v) => Math.hypot(v.x - x, v.z - z) < 60)) continue;
+        this.vehicles.push(makeVehicle(this.nextId++, k, x, hf.at(x, z), z, this.rng.range(0, Math.PI * 2)));
+        break;
+      }
+    }
+    // helicopters on open ground at a few POIs (airport apron, military base, stadium lot, TV station, port, farmland)
+    for (const [x, z] of [[1060, 1335], [1620, 640], [2010, 1740], [1720, 1500], [2440, 2560], [2600, 2240], [700, 2320]] as [number, number][]) {
+      const p = this.snapToFree(x, z); if (!p) continue;
+      if (!this.world.col.fits(p.x, p.y + 0.3, p.z, 3, 5)) continue;
+      this.vehicles.push(makeVehicle(this.nextId++, 'heli', p.x, p.y, p.z, this.rng.range(0, 6.28)));
+    }
   }
 
   private makePlayer(id: number, squad: number, bot: boolean): Player {
@@ -168,11 +199,13 @@ export class Sim {
     for (const p of this.players) {
       p.px = p.x; p.py = p.y; p.pz = p.z; p.pyaw = p.yaw;
       if (p.phase === Phase.Dead || p.phase === Phase.Spectate) continue;
-      movePlayer(this, p, dt);
-      if (p.phase === Phase.Alive || p.phase === Phase.Gulag) weaponTick(this, p, dt);
+      const veh = (p as any).vehicle !== undefined ? vehicleOf(this, p) : null;
+      if (veh) { p.yaw = p.intent.yaw; p.pitch = clamp(p.intent.pitch, -1.5, 1.5); } else movePlayer(this, p, dt);
+      if ((p.phase === Phase.Alive || p.phase === Phase.Gulag) && (!veh || (p as any).seat > 0)) weaponTick(this, p, dt);
       else { p.ads = 0; p.reloadT = 0; }
       this.playerUpkeep(p, dt);
     }
+    updateVehicles(this, dt);
     updateBullets(this, dt);
     updateThrowables(this, dt);
     this.updateExplosions(dt);
@@ -242,22 +275,24 @@ export class Sim {
   }
 
   /** What the player is looking at to interact with (for prompts and for the action). */
-  interactTarget(p: Player): { kind: 'revive' | 'chest' | 'item' | 'buy' | 'contract' | 'crate'; id: number; label: string } | null {
+  interactTarget(p: Player): { kind: 'revive' | 'chest' | 'item' | 'buy' | 'contract' | 'crate' | 'vehicle' | 'exit'; id: number; label: string } | null {
+    if ((p as any).vehicle !== undefined) return { kind: 'exit', id: (p as any).vehicle, label: 'Exit vehicle' };
     for (const q of this.playersNear(p.x, p.z, 2.5)) if (q.squad === p.squad && q.id !== p.id && q.phase === Phase.Downed) return { kind: 'revive', id: q.id, label: `Revive ${q.name}` };
     const d = aimDir(p, [0, 0, 0]);
     let best: { kind: any; id: number; label: string; s: number } | null = null;
     const ey = p.y + eyeHeight(p);
-    const consider = (kind: string, id: number, label: string, x: number, y: number, z: number, r: number) => {
+    const consider = (kind: string, id: number, label: string, x: number, y: number, z: number, r: number, minDot = 0.6) => {
       const dx = x - p.x, dy = y - ey, dz = z - p.z, dist = Math.hypot(dx, dy, dz);
       if (dist > r) return;
       const dot = (dx * d[0] + dy * d[1] + dz * d[2]) / Math.max(0.01, dist);
       const s = dot * 2 - dist * 0.3;
-      if (dot > 0.6 && (!best || s > best.s)) best = { kind, id, label, s };
+      if (dot > minDot && (!best || s > best.s)) best = { kind, id, label, s };
     };
     for (const c of this.chests) if (!c.opened && Math.abs(c.x - p.x) < 3 && Math.abs(c.z - p.z) < 3) consider('chest', c.id, 'Open Supply Box', c.x, c.y + 0.4, c.z, 2.8);
     for (const itm of this.itemsNear(p.x, p.z, 2.6)) consider('item', itm.id, `Pick up ${(itemLabelLazy)(itm)}`, itm.x, itm.y + 0.2, itm.z, 2.8);
     for (const b of this.buyStations) if (Math.abs(b.x - p.x) < 4 && Math.abs(b.z - p.z) < 4) consider('buy', b.id, 'Use Buy Station', b.x, b.y + 1.2, b.z, 3.5);
     for (const c of this.contracts) if (!c.taken && Math.abs(c.x - p.x) < 3 && Math.abs(c.z - p.z) < 3) consider('contract', c.id, `Accept ${c.kind[0].toUpperCase() + c.kind.slice(1)} Contract`, c.x, c.y + 0.7, c.z, 2.8);
+    if ((p as any).vehicle === undefined) for (const v of this.vehicles) if (v.alive && Math.abs(v.x - p.x) < 6 && Math.abs(v.z - p.z) < 6 && v.seats.some((q) => q < 0)) consider('vehicle', v.id, `Enter ${VEHICLES[v.type].name}`, v.x, v.y + 1, v.z, VEHICLES[v.type].len / 2 + 2.5, -0.2);
     for (const cr of this.crates) if (cr.squad === p.squad && this.time >= cr.land && !cr.taken.has(p.id) && Math.abs(cr.x - p.x) < 3 && Math.abs(cr.z - p.z) < 3) consider('crate', cr.id, 'Open Loadout Drop', cr.x, cr.y + 0.6, cr.z, 3);
     return best ? { kind: (best as any).kind, id: (best as any).id, label: (best as any).label } : null;
   }
@@ -271,6 +306,8 @@ export class Sim {
     else if (t.kind === 'item') { const itm = this.itemById.get(t.id); if (itm) tryPickup(this, p, itm, true); }
     else if (t.kind === 'buy') { if (!p.bot) this.emit({ t: 'announce', text: '__buy__', squad: p.squad }); else (p as any).atBuy = t.id; }
     else if (t.kind === 'contract') this.acceptContract(p, t.id);
+    else if (t.kind === 'vehicle') { const v = this.vehicles.find((q) => q.id === t.id); if (v) enterVehicle(this, p, v); }
+    else if (t.kind === 'exit') exitVehicle(this, p);
     else if (t.kind === 'crate') { const cr = this.crates.find((c) => c.id === t.id)!; cr.taken.add(p.id); if (!p.bot) this.emit({ t: 'announce', text: '__loadout__', squad: p.squad }); else this.applyLoadout(p, this.rng.int(0, LOADOUTS.length - 1)); }
     void dt;
   }
@@ -316,6 +353,7 @@ export class Sim {
     return false;
   }
   private downPlayer(v: Player, attacker: number, weapon: string) {
+    if ((v as any).vehicle !== undefined) exitVehicle(this, v);
     v.phase = Phase.Downed; v.health = DOWNED.health; v.armor = 0; v.downT = DOWNED.bleed; v.reviveBy = -1; v.reviveT = 0;
     v.plateT = 0; v.reloadT = 0; v.ads = 0; v.stance = Stance.Prone; v.sprinting = false; v.slideT = 0;
     this.emit({ t: 'down', victim: v.id, attacker, w: weapon });
@@ -327,6 +365,7 @@ export class Sim {
   }
 
   kill(v: Player, attacker: number, weapon: string, head: boolean, finish: boolean) {
+    if ((v as any).vehicle !== undefined) exitVehicle(this, v);
     const inGulag = v.phase === Phase.Gulag;
     v.health = 0; v.armor = 0;
     const att = attacker >= 0 ? this.players[attacker] : null;
@@ -356,6 +395,7 @@ export class Sim {
 
   explode(x: number, y: number, z: number, r: number, dmg: number, owner: number, kind: Explosion['kind']) {
     this.emit({ t: 'explosion', x, y, z, r, kind });
+    for (const v of this.vehicles) if (v.alive) { const d = Math.hypot(v.x - x, v.y - y, v.z - z); if (d < r + 2) v.health -= dmg * 3 * (1 - d / (r + 2)); }
     for (const p of this.playersNear(x, z, r)) {
       const d = Math.hypot(p.x - x, p.y + 1 - y, p.z - z);
       if (d > r) continue;

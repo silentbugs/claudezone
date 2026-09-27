@@ -52,11 +52,13 @@ export class TerrainMesh {
           vec3 asph = texture(tLayers, vec3(uv * 0.8, 5.0)).rgb;
           vec3 sand = texture(tLayers, vec3(uv, 6.0)).rgb;
           vec3 ice = texture(tLayers, vec3(uv * 0.3, 7.0)).rgb;
+          vec3 pave = texture(tLayers, vec3(vWPos.xz / 6.0, 8.0)).rgb;
           vec3 col = mix(grass, dry, smoothstep(0.45, 0.8, macro) * 0.8);
           col = mix(col, dirt, smoothstep(0.62, 0.8, macro2) * 0.8);
           col = mix(col, rock, smoothstep(0.28, 0.5, slope + (macro2 - 0.5) * 0.25));
           col = mix(col, sand, smoothstep(3.0, 0.8, vWPos.y) * (1.0 - vSplat.x));
           col = mix(col, snow, clamp(vSplat.y * (1.0 - smoothstep(0.45, 0.7, slope) * 0.6), 0.0, 1.0));
+          col = mix(col, pave, smoothstep(0.2, 0.6, vSplat.w + (vn(vWPos.xz * 0.2) - 0.5) * 0.3));
           // tyre-worn road edges
           float road = smoothstep(0.25, 0.75, vSplat.x + (vn(vWPos.xz * 0.35) - 0.5) * 0.25);
           col = mix(col, asph, road);
@@ -84,7 +86,7 @@ export class TerrainMesh {
           const k = j * n + i;
           pos[v * 3] = i * sp; pos[v * 3 + 1] = hf.h[k] - drop; pos[v * 3 + 2] = j * sp;
           nor[v * 3] = normals[k * 3]; nor[v * 3 + 1] = normals[k * 3 + 1]; nor[v * 3 + 2] = normals[k * 3 + 2];
-          spl[v * 4] = extra.road[k]; spl[v * 4 + 1] = extra.snow[k]; spl[v * 4 + 2] = extra.river[k]; spl[v * 4 + 3] = 0;
+          spl[v * 4] = extra.road[k]; spl[v * 4 + 1] = extra.snow[k]; spl[v * 4 + 2] = extra.river[k]; spl[v * 4 + 3] = extra.paved[k];
           return v++;
         };
         for (const j of zs) for (const i of xs) put(i, j, 0);

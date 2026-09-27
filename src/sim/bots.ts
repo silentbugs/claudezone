@@ -28,6 +28,7 @@ export class BotBrain {
   skill: number;
   fireHold = 0; burstT = 0;
   buyId = -1;
+  roofT = 0;
   constructor(public id: number, r: number) { this.skill = 0.35 + r * 0.55; this.wanderA = r * 6.28; }
 }
 
@@ -51,6 +52,7 @@ function chooseDrop(sim: Sim, b: BotBrain, p: Player) {
   claims.set(pick.id, (claims.get(pick.id) ?? 0) + 1);
   const a = sim.rng.range(0, 6.28), d = Math.sqrt(sim.rng.next()) * Math.max(40, pick.r * 0.7);
   b.dropX = pick.x + Math.cos(a) * d; b.dropZ = pick.z + Math.sin(a) * d;
+  for (let i = 0; i < 12; i++) { const g = sim.world.hf.at(b.dropX, b.dropZ); if (sim.world.col.groundAt(b.dropX, b.dropZ, g + 300, 2) <= g + 1 && g > 1) break; b.dropX += sim.rng.range(-15, 15); b.dropZ += sim.rng.range(-15, 15); }
   // jump when the plane's along-track position passes the target minus a glide lead
   const rx = b.dropX - pl.sx, rz = b.dropZ - pl.sz; const along = rx * pl.dx + rz * pl.dz; const off = Math.abs(rx * pl.dz - rz * pl.dx);
   const lead = Math.max(0, Math.min(off * 0.3, 350));
@@ -69,6 +71,12 @@ function moveToward(sim: Sim, b: BotBrain, p: Player, x: number, z: number, run:
     b.lastX = p.x; b.lastZ = p.z;
     if (moved < 0.02 && p.onGround) b.stuckT += dt; else b.stuckT = Math.max(0, b.stuckT - dt);
     if (b.stuckT > 0.8) { b.stuckT = 0; b.detourT = 0.9 + sim.rng.next(); b.detourA = (sim.rng.chance(0.5) ? 1 : -1) * (0.9 + sim.rng.next() * 0.8); it.jump = true; }
+  }
+  // don't walk off drops that would hurt: probe the ground two metres ahead
+  if (p.onGround && b.detourT <= 0) {
+    const ax = p.x - Math.sin(a) * 2, az = p.z - Math.cos(a) * 2;
+    const g = sim.world.col.groundAt(ax, az, p.y + 0.6, 0.2);
+    if (p.y - g > 4.5 && Math.abs(b.tx - p.x) + Math.abs(b.tz - p.z) > 3) { b.detourT = 0.6; b.detourA = (sim.rng.chance(0.5) ? 1 : -1) * 1.6; b.roofT = (b.roofT ?? 0) + dt * 10; a += b.detourA; }
   }
   it.yaw = lerpYaw(it.yaw, a, Math.min(1, dt * 8));
   it.mz = 1; it.mx = 0;
@@ -120,6 +128,11 @@ export function botThink(sim: Sim, b: BotBrain, p: Player, dt: number, think: bo
       const agl = p.y - sim.world.hf.at(p.x, p.z);
       // glide ratio: dive when the target is under us
       it.pitch = d < agl * 0.5 ? -1.2 : -0.1;
+      if (p.phase === Phase.Chute && agl < 60) {
+        // about to land on a roof? slide the target to open ground
+        const col = sim.world.col, g = sim.world.hf.at(b.dropX, b.dropZ);
+        if (col.groundAt(b.dropX, b.dropZ, g + 200, 1.5) > g + 1.5) { const a2 = sim.rng.range(0, 6.28); b.dropX += Math.cos(a2) * 12; b.dropZ += Math.sin(a2) * 12; }
+      }
       it.mz = d > 15 ? 1 : 0; it.mx = 0;
       return;
     }
@@ -160,7 +173,7 @@ export function botThink(sim: Sim, b: BotBrain, p: Player, dt: number, think: bo
     const ax = q.x + q.vx * tof, az = q.z + q.vz * tof;
     const wantYaw = Math.atan2(-(ax - p.x), -(az - p.z));
     const wantPitch = Math.atan2(aimY - ey, dist) + (def ? 0.5 * 9.8 * 0.55 * tof * tof / Math.max(1, dist) : 0);
-    b.aimErr = Math.max(0.004 + (1 - b.skill) * 0.012, b.aimErr - dt * (0.25 + b.skill * 0.5));
+    b.aimErr = Math.max(0.008 + (1 - b.skill) * 0.02, b.aimErr - dt * (0.1 + b.skill * 0.22));
     const errYaw = Math.sin(sim.time * 3.1 + b.id) * b.aimErr * (1 + dist / 120), errPitch = Math.cos(sim.time * 2.3 + b.id * 1.7) * b.aimErr * 0.7 * (1 + dist / 120);
     const turn = Math.min(1, dt * (6 + b.skill * 10));
     it.yaw = lerpYaw(it.yaw, wantYaw + errYaw, turn);
@@ -295,8 +308,8 @@ function decide(sim: Sim, b: BotBrain, p: Player, inGulag: boolean) {
     }
     if (best) {
       b.target = best.id; b.seenAt = sim.time; b.engageStart = sim.time; b.lastSeenX = best.x; b.lastSeenZ = best.z;
-      b.reactAt = sim.time + 0.22 + (1 - b.skill) * 0.45 + Math.hypot(best.x - p.x, best.z - p.z) / 600;
-      b.aimErr = 0.05 + (1 - b.skill) * 0.08;
+      b.reactAt = sim.time + 0.35 + (1 - b.skill) * 0.6 + Math.hypot(best.x - p.x, best.z - p.z) / 300;
+      b.aimErr = 0.07 + (1 - b.skill) * 0.1;
       const dist = Math.hypot(best.x - p.x, best.z - p.z);
       const slot = bestWeaponFor(p, dist); if (slot !== p.cur) it.slot = slot + 1;
       return;
