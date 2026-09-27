@@ -43,7 +43,7 @@ const claims = new Map<string, number>();
 
 function chooseDrop(sim: Sim, b: BotBrain, p: Player) {
   // squadmates share the leader's choice
-  const leader = sim.brains[p.squad * 3];
+  const leader = sim.brains[p.squad * sim.squadSize];
   if (leader && leader.id !== b.id && leader.dropX) { b.dropX = leader.dropX + sim.rng.range(-40, 40); b.dropZ = leader.dropZ + sim.rng.range(-40, 40); b.jumpAt = leader.jumpAt + sim.rng.range(-1, 1); return; }
   const pl = sim.plane;
   const cand = POIS.filter((q) => q.tier !== 'landmark');

@@ -41,32 +41,36 @@ async function boot() {
     if (k === 'brightness') sm.renderer.toneMappingExposure = settings.brightness;
     if (k === 'musicVolume') audio.setMusic(settings.musicVolume);
   };
+  const lastMode = () => { try { const m = +(localStorage.getItem('vd-mode') ?? 3); return m >= 1 && m <= 3 ? m : 3; } catch { return 3; } };
   const menu = document.createElement('div'); menu.className = 'menu';
   const showMenu = () => {
     menu.innerHTML = `<h1>VERDANSK</h1><h2>BATTLE ROYALE • 2020</h2>
-      <button data-a="play">Play — Trios (150)</button>
+      <div class="modes">${[1, 2, 3].map((n) => `<button data-m="${n}" class="${n === lastMode() ? 'sel' : ''}">${['Solos', 'Duos', 'Trios'][n - 1]}<small>150 players · ${[150, 75, 50][n - 1]} ${n === 1 ? 'players' : 'squads'}</small></button>`).join('')}</div>
       <button data-a="settings">Settings</button>
-      <div class="sub">A fan rebuild of the original 2020 Verdansk: the map traced from the 2020 tac map, C-130 infil, gas circles, armor plates, loot rarities, supply boxes, buy stations, contracts, the Gulag, redeploys and 149 bots. All art and audio are generated in code.<br><br>Esc during a match opens the menu and settings.</div>`;
-    menu.querySelector<HTMLElement>('[data-a=play]')!.onclick = start;
+      <div class="sub">A fan rebuild of the original 2020 Verdansk: the map traced from the 2020 tac map, C-130 infil, gas circles, armor plates, loot rarities, supply boxes, buy stations, contracts, the Gulag, redeploys and 149 bots in Solos, Duos or Trios. Soldiers, guns, photo textures and most sounds are CC0 assets; the rest is generated in code.<br><br>Esc during a match opens the menu and settings.</div>`;
+    menu.querySelectorAll<HTMLElement>('[data-m]').forEach((b) => b.onclick = () => start(+b.dataset.m!));
     menu.querySelector<HTMLElement>('[data-a=settings]')!.onclick = () => { const sMenu = new SettingsMenu(settings, input, applySetting, () => sMenu.el.remove()); ui.appendChild(sMenu.el); };
     ui.appendChild(menu);
   };
-  const start = () => {
+  const start = (mode = lastMode()) => {
+    try { localStorage.setItem('vd-mode', String(mode)); } catch { /* storage blocked */ }
     audio.init(); audio.setVolume(settings.volume, settings.sfx, settings.ui); audio.voiceOn = settings.announcer;
     menu.remove();
-    match = new Match(sm, world, input, tac, ui, settings, (Date.now() & 0xffff) + 1);
+    match = new Match(sm, world, input, tac, ui, settings, (Date.now() & 0xffff) + 1, mode);
     match.onSettingChange = applySetting;
     match.onEnd = (won, place, me) => {
       document.exitPointerLock?.();
       const e = document.createElement('div'); e.className = 'endscr';
       e.innerHTML = `<div class="big ${won ? 'win' : ''}">${won ? 'WARZONE VICTORY' : `#${place}`}</div><div class="stats"><div><b>${me.kills}</b>Kills</div><div><b>${Math.round(me.damage)}</b>Damage</div><div><b>${Math.floor(match!.sim.time / 60)}:${String(Math.floor(match!.sim.time % 60)).padStart(2, '0')}</b>Time</div></div><button data-a="again">Play again</button><button data-a="menu">Main menu</button>`;
-      e.querySelector('[data-a=again]')!.addEventListener('click', () => { e.remove(); match!.dispose(); match = null; location.reload(); });
+      e.querySelector('[data-a=again]')!.addEventListener('click', () => { e.remove(); match!.dispose(); match = null; try { sessionStorage.setItem('vd-autostart', '1'); } catch { /* */ } location.reload(); });
       e.querySelector('[data-a=menu]')!.addEventListener('click', () => { e.remove(); match!.dispose(); match = null; showMenu(); });
       ui.appendChild(e);
     };
     input.lock();
   };
   showMenu();
+  // "Play again" reloads the page for a clean slate and jumps straight back into the same mode
+  try { if (sessionStorage.getItem('vd-autostart')) { sessionStorage.removeItem('vd-autostart'); addEventListener('click', () => { if (!match) start(); }, { once: true }); } } catch { /* */ }
   (window as any).__vd = { sm, world, cam, start, get match() { return match; } };
 
   let last = performance.now();

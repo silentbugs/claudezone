@@ -73,11 +73,14 @@ export class Sim {
   private pGrid = new Map<number, Player[]>();
 
   warmup = 0;
-  constructor(public world: WorldData, seed = 1, opts: { humans?: number; players?: number; warmup?: number } = {}) {
+  /** 1 = Solos, 2 = Duos, 3 = Trios */
+  squadSize = SQUAD_SIZE;
+  constructor(public world: WorldData, seed = 1, opts: { humans?: number; players?: number; warmup?: number; squadSize?: number } = {}) {
+    this.squadSize = opts.squadSize ?? SQUAD_SIZE;
     this.rng = new Rng(seed);
     this.nav = (world as any).__nav ?? ((world as any).__nav = new NavGrid(world.col));
     const n = opts.players ?? PLAYERS;
-    for (let i = 0; i < n; i++) this.players.push(this.makePlayer(i, Math.floor(i / SQUAD_SIZE), i >= (opts.humans ?? 1)));
+    for (let i = 0; i < n; i++) this.players.push(this.makePlayer(i, Math.floor(i / this.squadSize), i >= (opts.humans ?? 1)));
     this.players[0].name = 'You';
     this.brains = this.players.map((p) => new BotBrain(p.id, this.rng.next()));
     // plane path: a random chord through the map's middle third
@@ -535,6 +538,7 @@ export class Sim {
   /** Buy-station purchase. Returns an error string or null. */
   buy(p: Player, item: BuyId, arg?: number): string | null {
     const price = PRICES[item];
+    if (this.squadSize === 1 && (item === 'buyback' || item === 'selfRevive')) return 'Not available in Solos';
     if (p.cash < price) return 'Not enough cash';
     switch (item) {
       case 'plates': if (p.plates >= p.maxPlates) return 'Plates full'; p.plates = p.maxPlates; break;

@@ -52,8 +52,8 @@ export class Match {
   /** Dev/test: pin the camera (position + look target) regardless of phase. */
   debugCam: { pos: [number, number, number]; target: [number, number, number] } | null = null;
 
-  constructor(public sm: SceneMgr, private world: WorldData, private input: Input, tac: HTMLCanvasElement, private ui: HTMLElement, public settings: Settings, seed: number) {
-    this.sim = new Sim(world, seed, { humans: 1, warmup: 45 });
+  constructor(public sm: SceneMgr, private world: WorldData, private input: Input, tac: HTMLCanvasElement, private ui: HTMLElement, public settings: Settings, seed: number, squadSize = 3) {
+    this.sim = new Sim(world, seed, { humans: 1, warmup: 45, squadSize });
     this.controls = new Controls(input, settings);
     input.onUnlock = () => { if (!this.menuOpen && !this.hud.panel && !this.done) this.togglePause(); };
     this.fpsEl.className = 'fps'; ui.appendChild(this.fpsEl);
@@ -210,7 +210,7 @@ export class Match {
       case 'squadwipe': if (e.squad === me.squad) audio.say('Your squad has been eliminated.'); break;
       case 'contract': if (e.p >= 0 && sim.players[e.p].squad === me.squad) audio.say(e.msg === 'start' ? 'Contract accepted.' : e.msg === 'done' ? 'Contract complete.' : e.msg === 'fail' ? 'Contract failed.' : 'Next target marked.'); break;
       case 'announce':
-        if (e.text === '__infil__') { audio.play('musicInfil', { music: true, vol: 0.8 }); this.hud.showBanner('Verdansk', 'Battle Royale — Trios • 150 players'); this.camYaw = Math.atan2(-sim.plane.dx, -sim.plane.dz); this.camPitch = -0.2; audio.play('uiBuy', { vol: 0.4 }); }
+        if (e.text === '__infil__') { audio.play('musicInfil', { music: true, vol: 0.8 }); this.hud.showBanner('Verdansk', `Battle Royale — ${['Solos', 'Duos', 'Trios'][sim.squadSize - 1] ?? 'Quads'} • 150 players`); this.camYaw = Math.atan2(-sim.plane.dx, -sim.plane.dz); this.camPitch = -0.2; audio.play('uiBuy', { vol: 0.4 }); }
         if (e.text === '__buy__' && e.squad === me.squad && me.phase === Phase.Alive && sim.interactTarget(me)?.kind === 'buy') { document.exitPointerLock?.(); this.hud.openBuy((k, a) => { const r = sim.buy(me, k, a); if (!r) audio.play('uiBuy'); return r; }, () => (document.getElementById('game') as HTMLElement).requestPointerLock?.()); }
         if (e.text === '__loadout__' && e.squad === me.squad && me.phase === Phase.Alive) { document.exitPointerLock?.(); this.hud.openLoadout((i) => { sim.applyLoadout(me, i); (document.getElementById('game') as HTMLElement).requestPointerLock?.(); }); }
         break;

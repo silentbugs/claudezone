@@ -456,6 +456,7 @@ export class Hud {
       const dead = this.sim.players.filter((q) => q.squad === me.squad && q.id !== me.id && q.phase === Phase.Dead);
       const rows: { k: BuyId; a?: number; name: string; desc: string; price: number; icon: string; cat: string; ok: boolean }[] = [];
       for (const b of BUY_ITEMS) {
+        if (this.sim.squadSize === 1 && (b.id === 'buyback' || b.id === 'selfRevive')) continue;
         if (b.id === 'buyback') {
           if (!dead.length) rows.push({ k: 'buyback', name: 'Squad Buyback', desc: 'No teammates to buy back.', price: b.price, icon: b.icon, cat: b.cat, ok: false });
           for (const q of dead) rows.push({ k: 'buyback', a: q.id, name: `Buyback ${q.name}`, desc: b.desc, price: b.price, icon: b.icon, cat: b.cat, ok: me.cash >= b.price });
