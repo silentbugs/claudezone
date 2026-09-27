@@ -94,7 +94,7 @@ export class Foliage {
       const y = hf.at(x, z);
       if (y < 0.6) continue;
       const nrm = hf.normal(x, z); if (nrm[1] < 0.8) continue;
-      if (col.groundAt(x, z, y + 30, 0.5) > y + 0.3) continue; // under a structure
+      if (col.groundAt(x, z, y + 30, 0.6) > y + 0.02) continue; // under or on a structure (runways, slabs)
       const s = 0.45 + hash2(ci + k, cj - k, 23) * 0.55;
       out.push(x, y - 0.05, z, hash2(k, ci + cj, 29) * 6.28, s, 0.8 + hash2(ci - k, cj + k, 31) * 0.35);
     }

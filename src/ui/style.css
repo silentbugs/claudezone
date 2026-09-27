@@ -1,7 +1,7 @@
 html, body { margin: 0; height: 100%; overflow: hidden; background: #000; font-family: 'Segoe UI', 'DejaVu Sans', Arial, sans-serif; user-select: none; }
 #game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 #ui { position: fixed; inset: 0; pointer-events: none; color: #fff; }
-.menu { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; padding-left: 8vw; pointer-events: auto; background: linear-gradient(90deg, rgba(0,0,0,0.75), rgba(0,0,0,0.15) 60%, transparent); font-family: 'Arial Narrow', 'DejaVu Sans Condensed', sans-serif; }
+.menu { position: absolute; inset: 0; display: flex; flex-direction: column; justify-content: center; padding-left: 8vw; pointer-events: auto; background: linear-gradient(90deg, rgba(0,0,0,0.75), rgba(0,0,0,0.15) 60%, transparent); font-family: 'Rajdhani', 'Arial Narrow', 'DejaVu Sans Condensed', sans-serif; font-weight: 600; }
 .menu h1 { font-size: 86px; margin: 0; letter-spacing: 0.06em; font-weight: 900; line-height: 0.9; }
 .menu h2 { font-size: 20px; margin: 8px 0 32px; color: var(--accent); letter-spacing: 0.3em; font-weight: 700; }
 .menu button { display: block; width: 340px; text-align: left; padding: 14px 18px; margin: 5px 0; font-size: 20px; font-weight: 700; letter-spacing: 0.08em; color: #fff; background: rgba(255,255,255,0.08); border: none; border-left: 4px solid transparent; cursor: pointer; text-transform: uppercase; font-family: inherit; }
@@ -9,7 +9,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #000; font-f
 .menu .sub { font-size: 13px; color: var(--dim); max-width: 520px; margin-top: 26px; line-height: 1.6; }
 .menu .row { display: flex; align-items: center; gap: 12px; margin: 8px 0; font-size: 15px; }
 .menu input[type=range] { width: 200px; }
-.panel { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); background: rgba(14,16,18,0.94); border: 1px solid rgba(255,255,255,0.15); padding: 22px 26px; min-width: 520px; pointer-events: auto; font-family: 'Arial Narrow', 'DejaVu Sans Condensed', sans-serif; }
+.panel { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); background: rgba(14,16,18,0.94); border: 1px solid rgba(255,255,255,0.15); padding: 22px 26px; min-width: 520px; pointer-events: auto; font-family: 'Rajdhani', 'Arial Narrow', 'DejaVu Sans Condensed', sans-serif; font-weight: 600; }
 .panel h3 { margin: 0 0 4px; font-size: 26px; letter-spacing: 0.08em; text-transform: uppercase; }
 .panel .cash { color: #7be07b; font-size: 18px; font-weight: 700; margin-bottom: 14px; }
 .panel .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
@@ -19,7 +19,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #000; font-f
 .panel .it em { font-style: normal; color: #7be07b; }
 .panel .err { color: var(--red); min-height: 20px; margin-top: 10px; }
 .panel .close { margin-top: 12px; color: var(--dim); font-size: 13px; }
-.endscr { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(0,0,0,0.55); pointer-events: auto; font-family: 'Arial Narrow', 'DejaVu Sans Condensed', sans-serif; }
+.endscr { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(0,0,0,0.55); pointer-events: auto; font-family: 'Rajdhani', 'Arial Narrow', 'DejaVu Sans Condensed', sans-serif; font-weight: 600; }
 .endscr .big { font-size: 90px; font-weight: 900; letter-spacing: 0.05em; }
 .endscr .big.win { color: var(--accent); }
 .endscr .stats { display: flex; gap: 30px; margin: 20px 0; font-size: 18px; }
@@ -29,7 +29,7 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #000; font-f
 .tip { position: absolute; left: 50%; bottom: 6%; transform: translateX(-50%); font-size: 14px; color: var(--dim); }
 .keys { position: absolute; right: 26px; top: 50%; transform: translateY(-50%); font-size: 12px; color: var(--dim); line-height: 1.8; text-align: right; }
 .menu select { font-size: 15px; padding: 3px 8px; background: #222; color: #fff; border: 1px solid #555; text-transform: capitalize; }
-.settings { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(4,6,8,0.72); pointer-events: auto; z-index: 50; font-family: 'Arial Narrow', 'DejaVu Sans Condensed', sans-serif; }
+.settings { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(4,6,8,0.72); pointer-events: auto; z-index: 50; font-family: 'Rajdhani', 'Arial Narrow', 'DejaVu Sans Condensed', sans-serif; font-weight: 600; }
 .settings .sbox { width: min(860px, 94vw); height: min(640px, 90vh); background: rgba(16,18,20,0.97); border: 1px solid rgba(255,255,255,0.12); display: flex; flex-direction: column; }
 .settings .stabs { display: flex; border-bottom: 1px solid rgba(255,255,255,0.12); }
 .settings .stabs button { flex: 1; padding: 14px 10px; background: none; border: none; color: #aaa; font: 700 15px inherit; font-family: inherit; letter-spacing: 0.08em; text-transform: uppercase; cursor: pointer; border-bottom: 3px solid transparent; }

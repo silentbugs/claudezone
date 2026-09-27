@@ -126,8 +126,8 @@ function airport(ctx: GenContext) {
   ctx.flatten(rx, rz, 0, rl, rw + 70, ctx.footprintHeights(rx, rz, 0, rl, rw).avg, 30);
   const ry = ctx.hf.at(rx, rz);
   const r = new Builder();
-  r.box(-rl / 2, -0.6, -rw / 2, rl / 2, 0.08, rw / 2, Mat.Asphalt, { color: 0x3a3b3d });
-  r.box(-rl / 2, -0.6, rw / 2 + 12, rl / 2 - 60, 0.06, rw / 2 + 32, Mat.Asphalt, { color: 0x44454a }); // taxiway
+  r.box(-rl / 2, -0.6, -rw / 2, rl / 2, 0.08, rw / 2, Mat.Asphalt, { color: 0x77787a });
+  r.box(-rl / 2, -0.6, rw / 2 + 12, rl / 2 - 60, 0.06, rw / 2 + 32, Mat.Asphalt, { color: 0x6e6f72 }); // taxiway
   for (let x = -rl / 2 + 20; x < rl / 2 - 20; x += 30) r.box(x, 0.08, -0.6, x + 14, 0.1, 0.6, Mat.Trim, { color: 0xe8e8e0, noCollide: true });
   ctx.place(r, 'runway', rx, rz, 0, { y: ry, flatten: false, pad: 4, lodColor: 0x3a3b3d });
   // crashed plane on the runway edge
