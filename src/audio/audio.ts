@@ -149,7 +149,7 @@ export class Audio {
     const far = group('far');
     set('far_rifle', far); set('far_light', far); set('far_heavy', far.length ? far : group('explosionFar'));
     const direct: [SoundName, string][] = [['explosion', 'explosion'], ['explosionFar', 'explosionFar'], ['impact', 'impact'], ['impactMetal', 'impactMetal'], ['impactWood', 'impactWood'], ['impactGlass', 'impactGlass'], ['impactWater', 'impactWater'], ['whiz', 'whiz'], ['magOut', 'magOut'], ['magIn', 'magIn'], ['bolt', 'bolt'], ['swap', 'swap'], ['dry', 'dry'], ['step_dirt', 'step_dirt'], ['step_concrete', 'step_concrete'], ['step_metal', 'step_metal'], ['step_wood', 'step_wood'], ['land', 'land'], ['chute', 'chute'], ['cough', 'cough'], ['uiBuy', 'uiBuy'], ['crate', 'crate'], ['hitArmor', 'armorTink'], ['armorBreak', 'armorBreak'], ['selfArmorBreak', 'armorBreak'], ['gear', 'cloth'], ['uiHover', 'uiClick']];
-    for (const [n, k] of direct) set(n, group(k));
+    for (const [n, k] of direct) set(n, group(k).filter((b) => !(n === 'explosion' && b.duration < 0.6)));
     // plate insert: recorded velcro + clack laid out like the real sequence
     const vel = group('velcro')[0], clack = group('plateClack')[0];
     if (vel || clack) {

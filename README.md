@@ -97,3 +97,9 @@ Every key is rebindable in **Settings → Key bindings** (from the main menu or 
 | `src/ui` | DOM HUD, minimap and tac map, menus |
 | `src/audio` | WebAudio sounds synthesized at startup, with HRTF positional playback |
 | `scripts/export-map.mjs` | One-off tool that turned the traced references into `verdansk.ts` and `masks.bin` |
+
+## Third-party assets
+
+- **Sound effects:** recorded CC0 / public-domain clips from Freesound, BigSoundBank and Kenney (113 files in `public/sfx`; per-file sources in `public/sfx/CREDITS.md`). Anything missing falls back to the in-code synthesizer.
+- **Materials and sky lighting:** CC0 photo-scanned textures and an HDRI from [Poly Haven](https://polyhaven.com) (`public/tex`, resized to 512 px).
+- Nothing is taken from Call of Duty itself.
