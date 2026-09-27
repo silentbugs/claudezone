@@ -2,3 +2,5 @@ node_modules
 dist
 .build
 .harness
+_*.html
+public/models/_cand

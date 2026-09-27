@@ -1,0 +1,1810 @@
+{
+ "soldier_swat": {
+  "file": "models/characters/soldier_swat.glb",
+  "source": "https://poly.pizza/m/Btfn3G5Xv4 (Quaternius Ultimate Modular Men \"Swat\") + clips from https://quaternius.com/packs/universalanimationlibrary.html and universalanimationlibrary2.html",
+  "author": "Quaternius",
+  "license": "CC0 1.0",
+  "kind": "character",
+  "tris": 7752,
+  "bbox": [
+   1.675,
+   1.854,
+   0.362
+  ],
+  "bboxMin": [
+   -0.838,
+   -0.001,
+   -0.084
+  ],
+  "bones": 62,
+  "clips": {
+   "Swat_Death": 1.042,
+   "Swat_Gun_Shoot": 0.583,
+   "Swat_HitRecieve": 0.542,
+   "Swat_HitRecieve_2": 0.542,
+   "Swat_Idle": 1.667,
+   "Swat_Idle_Gun": 1.667,
+   "Swat_Idle_Gun_Pointing": 1.667,
+   "Swat_Idle_Gun_Shoot": 0.667,
+   "Swat_Idle_Neutral": 1.667,
+   "Swat_Idle_Sword": 1.667,
+   "Swat_Interact": 1.25,
+   "Swat_Kick_Left": 0.917,
+   "Swat_Kick_Right": 0.917,
+   "Swat_Punch_Left": 0.833,
+   "Swat_Punch_Right": 0.833,
+   "Swat_Roll": 1.333,
+   "Swat_Run": 0.792,
+   "Swat_Run_Back": 0.833,
+   "Swat_Run_Left": 0.792,
+   "Swat_Run_Right": 0.792,
+   "Swat_Run_Shoot": 0.833,
+   "Swat_Sword_Slash": 1,
+   "Swat_Walk": 1.333,
+   "Swat_Wave": 1.667,
+   "Idle": 2.5,
+   "Walk": 1.333,
+   "Jog": 0.933,
+   "Sprint": 0.667,
+   "Crouch_Idle": 2.933,
+   "Crouch_Walk": 2,
+   "Jump_Start": 1.333,
+   "Jump_Loop": 2.5,
+   "Jump_Land": 1.267,
+   "Death": 2.4,
+   "Hit_Chest": 0.333,
+   "Hit_Head": 0.433,
+   "Roll": 1.467,
+   "Pistol_Idle": 1.667,
+   "Pistol_Aim_Neutral": 0.167,
+   "Pistol_Aim_Up": 0.167,
+   "Pistol_Aim_Down": 0.167,
+   "Pistol_Shoot": 0.633,
+   "Pistol_Reload": 1.667,
+   "Interact": 2,
+   "PickUp": 0.833,
+   "Driving": 1.667,
+   "Swim": 1.333,
+   "Swim_Idle": 3.333,
+   "Punch": 0.867,
+   "Slide_Start": 0.833,
+   "Slide_Loop": 2,
+   "Slide_Exit": 0.5,
+   "Throw": 1.333,
+   "Climb_1m": 0.667,
+   "Prone_GetUp": 1.533,
+   "Hit_Knockback": 0.833,
+   "Consume": 1.333,
+   "Chest_Open": 1.367,
+   "Walk_Carry": 2
+  },
+  "forward": "+Z (face/chest); Y up; ~1.82 m tall, feet at y=0",
+  "notes": "SWAT mesh with its 24 native clips (prefixed Swat_) plus 35 clips retargeted offline from Quaternius Universal Animation Library 1+2 (Standard, in-place/non-root-motion) onto the SWAT rig (re-run: node .harness/retarget_run.mjs <out.glb> with a Vite server on :5189; page .harness/retarget_swat.html, sources in .harness/model_src/). Rig quirk: legs are children of Body, not Hips; feet (FootL/FootR) and pole targets (PTL/PTR) are children of Root (baked IK) - animate via clips only, and to attach a weapon use WristR (right hand). No prone/crawl clip exists (Prone_GetUp is lying on the back then standing). Native Swat_ gun clips are one-handed pistol-style pointing; no two-handed rifle hold - aim the rifle with a WristR attachment + upper-body override. Materials are flat-colour (Swat, Swat_Black, Skin, Visor): recolour Swat/Swat_Black per squad (e.g. olive/tan camo).",
+  "skeleton": [
+   "Root",
+   "Body",
+   "Hips",
+   "Abdomen",
+   "Torso",
+   "Chest",
+   "Neck",
+   "Head",
+   "ShoulderL",
+   "UpperArmL",
+   "LowerArmL",
+   "WristL",
+   "Index1L",
+   "Index2L",
+   "Index3L",
+   "Index4L",
+   "Middle1L",
+   "Middle2L",
+   "Middle3L",
+   "Middle4L",
+   "Ring1L",
+   "Ring2L",
+   "Ring3L",
+   "Ring4L",
+   "Pinky1L",
+   "Pinky2L",
+   "Pinky3L",
+   "Pinky4L",
+   "Thumb1L",
+   "Thumb2L",
+   "Thumb3L",
+   "ShoulderR",
+   "UpperArmR",
+   "LowerArmR",
+   "WristR",
+   "Index1R",
+   "Index2R",
+   "Index3R",
+   "Index4R",
+   "Middle1R",
+   "Middle2R",
+   "Middle3R",
+   "Middle4R",
+   "Ring1R",
+   "Ring2R",
+   "Ring3R",
+   "Ring4R",
+   "Pinky1R",
+   "Pinky2R",
+   "Pinky3R",
+   "Pinky4R",
+   "Thumb1R",
+   "Thumb2R",
+   "Thumb3R",
+   "UpperLegL",
+   "LowerLegL",
+   "UpperLegR",
+   "LowerLegR",
+   "FootL",
+   "PTL",
+   "FootR",
+   "PTR"
+  ],
+  "attachBoneRightHand": "WristR",
+  "attachBoneLeftHand": "WristL"
+ },
+ "ar_m4": {
+  "file": "models/guns/ar_m4.glb",
+  "source": "https://poly.pizza/m/ss1nz3gJnx",
+  "author": "Pichuliru",
+  "license": "CC0 1.0",
+  "kind": "gun",
+  "tris": 4353,
+  "bbox": [
+   0.053,
+   0.253,
+   0.697
+  ],
+  "bboxMin": [
+   -0.024,
+   -0.178,
+   -0.339
+  ],
+  "bones": 19,
+  "clips": {},
+  "originalTitle": "Assault Rifle West",
+  "gunClass": "ar",
+  "forward": "-Z (muzzle points -Z, stock toward +Z, up +Y); units metres, true-to-life scale",
+  "sockets": {
+   "Magazine": [
+    0,
+    -0.004,
+    -0.004
+   ],
+   "Charging_Handle": [
+    0,
+    0.039,
+    0.136
+   ],
+   "Bolt": [
+    0,
+    0.013,
+    0.014
+   ],
+   "Attach_Scope": [
+    0,
+    0.041,
+    0.011
+   ],
+   "Attach_RailBottom": [
+    0,
+    -0.004,
+    -0.157
+   ],
+   "Attach_Muzzle": [
+    0,
+    0.016,
+    -0.304
+   ],
+   "Attach_RailTop": [
+    0,
+    0.041,
+    -0.157
+   ],
+   "Attach_RailSideLeft": [
+    -0.019,
+    0.018,
+    -0.157
+   ],
+   "Attach_RailSideRight": [
+    0.019,
+    0.018,
+    -0.157
+   ]
+  },
+  "notes": "M4/AR-15 style. Skinned rigid parts with bones (Magazine, Bolt/Slide, Trigger...) - move Magazine/Bolt bones for reload/cycling; Attach_* bones are mount sockets (positions listed in sockets, gun-local metres, rest pose)."
+ },
+ "ar_ak": {
+  "file": "models/guns/ar_ak.glb",
+  "source": "https://poly.pizza/m/xrJfQgAuDL",
+  "author": "Pichuliru",
+  "license": "CC0 1.0",
+  "kind": "gun",
+  "tris": 3271,
+  "bbox": [
+   0.068,
+   0.268,
+   0.723
+  ],
+  "bboxMin": [
+   -0.034,
+   -0.196,
+   -0.341
+  ],
+  "bones": 13,
+  "clips": {},
+  "originalTitle": "Rifle Assault East",
+  "gunClass": "ar",
+  "forward": "-Z (muzzle points -Z, stock toward +Z, up +Y); units metres, true-to-life scale",
+  "sockets": {
+   "Bolt": [
+    0,
+    0.025,
+    0.019
+   ],
+   "Magazine": [
+    0,
+    -0.031,
+    0.002
+   ],
+   "Attach_Scope": [
+    0,
+    0.051,
+    0.011
+   ],
+   "Attach_RailBottom": [
+    0,
+    -0.014,
+    -0.157
+   ],
+   "Attach_Muzzle": [
+    0,
+    0.006,
+    -0.289
+   ],
+   "Attach_RailTop": [
+    0,
+    0.051,
+    -0.157
+   ],
+   "Attach_RailSideLeft": [
+    -0.02,
+    0.031,
+    -0.187
+   ],
+   "Attach_RailSideRight": [
+    0.021,
+    0.031,
+    -0.187
+   ]
+  },
+  "notes": "AK style (AK-74U-ish length). Skinned rigid parts with bones (Magazine, Bolt/Slide, Trigger...) - move Magazine/Bolt bones for reload/cycling; Attach_* bones are mount sockets (positions listed in sockets, gun-local metres, rest pose)."
+ },
+ "lmg_rpk": {
+  "file": "models/guns/lmg_rpk.glb",
+  "source": "https://poly.pizza/m/tJaWNYo064",
+  "author": "Pichuliru",
+  "license": "CC0 1.0",
+  "kind": "gun",
+  "tris": 3141,
+  "bbox": [
+   0.079,
+   0.263,
+   0.755
+  ],
+  "bboxMin": [
+   -0.039,
+   -0.184,
+   -0.359
+  ],
+  "bones": 13,
+  "clips": {},
+  "originalTitle": "Rifle Battle East",
+  "gunClass": "lmg",
+  "forward": "-Z (muzzle points -Z, stock toward +Z, up +Y); units metres, true-to-life scale",
+  "sockets": {
+   "Bolt": [
+    0,
+    0.025,
+    0.062
+   ],
+   "Magazine": [
+    0,
+    -0.027,
+    0.008
+   ],
+   "Attach_Scope": [
+    0,
+    0.06,
+    0.011
+   ],
+   "Attach_RailBottom": [
+    0,
+    -0.01,
+    -0.157
+   ],
+   "Attach_Muzzle": [
+    0,
+    0.018,
+    -0.324
+   ],
+   "Attach_RailTop": [
+    0,
+    0.06,
+    -0.157
+   ],
+   "Attach_RailSideLeft": [
+    -0.026,
+    0.025,
+    -0.177
+   ],
+   "Attach_RailSideRight": [
+    0.027,
+    0.025,
+    -0.177
+   ]
+  },
+  "notes": "Stand-in LMG: long-barrel AK (RPK-like). No CC0 belt-fed LMG found.. Skinned rigid parts with bones (Magazine, Bolt/Slide, Trigger...) - move Magazine/Bolt bones for reload/cycling; Attach_* bones are mount sockets (positions listed in sockets, gun-local metres, rest pose)."
+ },
+ "dmr_west": {
+  "file": "models/guns/dmr_west.glb",
+  "source": "https://poly.pizza/m/wED1MSx2SK",
+  "author": "Pichuliru",
+  "license": "CC0 1.0",
+  "kind": "gun",
+  "tris": 3173,
+  "bbox": [
+   0.054,
+   0.257,
+   0.844
+  ],
+  "bboxMin": [
+   -0.027,
+   -0.155,
+   -0.452
+  ],
+  "bones": 17,
+  "clips": {},
+  "originalTitle": "Rifle West",
+  "gunClass": "ar",
+  "forward": "-Z (muzzle points -Z, stock toward +Z, up +Y); units metres, true-to-life scale",
+  "sockets": {
+   "Magazine": [
+    0,
+    -0.005,
+    -0.01
+   ],
+   "Charging_Handle": [
+    0.022,
+    0.043,
+    -0.106
+   ],
+   "Bolt": [
+    0,
+    0.013,
+    -0.05
+   ],
+   "Attach_Scope": [
+    0,
+    0.052,
+    0.011
+   ],
+   "Attach_RailBottom": [
+    0,
+    -0.011,
+    -0.157
+   ],
+   "Attach_Muzzle": [
+    0,
+    0.012,
+    -0.409
+   ],
+   "Attach_RailTop": [
+    0,
+    0.052,
+    -0.157
+   ],
+   "Attach_RailSideLeft": [
+    -0.021,
+    0.014,
+    -0.157
+   ],
+   "Attach_RailSideRight": [
+    0.021,
+    0.014,
+    -0.157
+   ]
+  },
+  "notes": "Battle rifle / DMR (HK417/SCAR-H-like); also usable as LMG or marksman stand-in. Skinned rigid parts with bones (Magazine, Bolt/Slide, Trigger...) - move Magazine/Bolt bones for reload/cycling; Attach_* bones are mount sockets (positions listed in sockets, gun-local metres, rest pose)."
+ },
+ "smg_mp5": {
+  "file": "models/guns/smg_mp5.glb",
+  "source": "https://poly.pizza/m/7Dh5JSbZcp",
+  "author": "Pichuliru",
+  "license": "CC0 1.0",
+  "kind": "gun",
+  "tris": 2030,
+  "bbox": [
+   0.046,
+   0.25,
+   0.561
+  ],
+  "bboxMin": [
+   -0.023,
+   -0.182,
+   -0.222
+  ],
+  "bones": 16,
+  "clips": {},
+  "originalTitle": "Smg West",
+  "gunClass": "smg",
+  "forward": "-Z (muzzle points -Z, stock toward +Z, up +Y); units metres, true-to-life scale",
+  "sockets": {
+   "Bolt": [
+    0,
+    0.017,
+    -0.037
+   ],
+   "Magazine": [
+    0,
+    -0.029,
+    -0.023
+   ],
+   "Attach_Scope": [
+    0,
+    0.035,
+    0.011
+   ],
+   "Attach_RailBottom": [
+    0,
+    0.002,
+    -0.114
+   ],
+   "Attach_Muzzle": [
+    0,
+    0.017,
+    -0.19
+   ],
+   "Attach_RailTop": [
+    0,
+    0.035,
+    -0.114
+   ],
+   "Attach_RailSideLeft": [
+    -0.014,
+    0.019,
+    -0.114
+   ],
+   "Attach_RailSideRight": [
+    0.014,
+    0.019,
+    -0.114
+   ]
+  },
+  "notes": "MP5 style. Skinned rigid parts with bones (Magazine, Bolt/Slide, Trigger...) - move Magazine/Bolt bones for reload/cycling; Attach_* bones are mount sockets (positions listed in sockets, gun-local metres, rest pose)."
+ },
+ "smg_east": {
+  "file": "models/guns/smg_east.glb",
+  "source": "https://poly.pizza/m/0SC1d2gERM",
+  "author": "Pichuliru",
+  "license": "CC0 1.0",
+  "kind": "gun",
+  "tris": 2143,
+  "bbox": [
+   0.059,
+   0.266,
+   0.543
+  ],
+  "bboxMin": [
+   -0.027,
+   -0.192,
+   -0.223
+  ],
+  "bones": 13,
+  "clips": {},
+  "originalTitle": "Smg Full East",
+  "gunClass": "smg",
+  "forward": "-Z (muzzle points -Z, stock toward +Z, up +Y); units metres, true-to-life scale",
+  "sockets": {
+   "Bolt": [
+    0,
+    0.03,
+    0.039
+   ],
+   "Magazine": [
+    0,
+    -0.029,
+    -0.007
+   ],
+   "Attach_Scope": [
+    0,
+    0.053,
+    0.011
+   ],
+   "Attach_RailBottom": [
+    0,
+    -0.006,
+    -0.115
+   ],
+   "Attach_Muzzle": [
+    0,
+    0.014,
+    -0.189
+   ],
+   "Attach_RailTop": [
+    0,
+    0.053,
+    -0.115
+   ],
+   "Attach_RailSideLeft": [
+    -0.021,
+    0.015,
+    -0.115
+   ],
+   "Attach_RailSideRight": [
+    0.021,
+    0.015,
+    -0.115
+   ]
+  },
+  "notes": "Bizon/PP-style SMG. Skinned rigid parts with bones (Magazine, Bolt/Slide, Trigger...) - move Magazine/Bolt bones for reload/cycling; Attach_* bones are mount sockets (positions listed in sockets, gun-local metres, rest pose)."
+ },
+ "smg_compact_west": {
+  "file": "models/guns/smg_compact_west.glb",
+  "source": "https://poly.pizza/m/RmWDMB5bI9",
+  "author": "Pichuliru",
+  "license": "CC0 1.0",
+  "kind": "gun",
+  "tris": 2201,
+  "bbox": [
+   0.042,
+   0.212,
+   0.443
+  ],
+  "bboxMin": [
+   -0.021,
+   -0.17,
+   -0.181
+  ],
+  "bones": 14,
+  "clips": {},
+  "originalTitle": "Smg Compact West",
+  "gunClass": "smg",
+  "forward": "-Z (muzzle points -Z, stock toward +Z, up +Y); units metres, true-to-life scale",
+  "sockets": {
+   "Magazine": [
+    0,
+    -0.023,
+    0.018
+   ],
+   "Charging_Handle": [
+    0,
+    0.029,
+    0.095
+   ],
+   "Bolt": [
+    0,
+    0.013,
+    0.023
+   ],
+   "Attach_Scope": [
+    0,
+    0.028,
+    -0.012
+   ],
+   "Attach_RailBottom": [
+    0,
+    -0.014,
+    -0.107
+   ],
+   "Attach_Muzzle": [
+    0,
+    0.013,
+    -0.16
+   ],
+   "Attach_RailTop": [
+    0,
+    0.028,
+    -0.107
+   ],
+   "Attach_RailSideLeft": [
+    -0.015,
+    0.009,
+    -0.107
+   ],
+   "Attach_RailSideRight": [
+    0.015,
+    0.009,
+    -0.107
+   ]
+  },
+  "notes": "MP7/Uzi-like compact. Skinned rigid parts with bones (Magazine, Bolt/Slide, Trigger...) - move Magazine/Bolt bones for reload/cycling; Attach_* bones are mount sockets (positions listed in sockets, gun-local metres, rest pose)."
+ },
+ "smg_compact_east": {
+  "file": "models/guns/smg_compact_east.glb",
+  "source": "https://poly.pizza/m/7IK1O1FfXu",
+  "author": "Pichuliru",
+  "license": "CC0 1.0",
+  "kind": "gun",
+  "tris": 1685,
+  "bbox": [
+   0.051,
+   0.248,
+   0.516
+  ],
+  "bboxMin": [
+   -0.026,
+   -0.186,
+   -0.191
+  ],
+  "bones": 13,
+  "clips": {},
+  "originalTitle": "Smg Compact East",
+  "gunClass": "smg",
+  "forward": "-Z (muzzle points -Z, stock toward +Z, up +Y); units metres, true-to-life scale",
+  "sockets": {
+   "Bolt": [
+    0,
+    0.025,
+    0.022
+   ],
+   "Magazine": [
+    0,
+    -0.029,
+    0.005
+   ],
+   "Attach_Scope": [
+    0,
+    0.044,
+    0.06
+   ],
+   "Attach_RailBottom": [
+    0,
+    -0.004,
+    -0.109
+   ],
+   "Attach_Muzzle": [
+    0,
+    0.022,
+    -0.177
+   ],
+   "Attach_RailTop": [
+    0,
+    0.044,
+    -0.109
+   ],
+   "Attach_RailSideLeft": [
+    -0.02,
+    0.023,
+    -0.109
+   ],
+   "Attach_RailSideRight": [
+    0.019,
+    0.023,
+    -0.109
+   ]
+  },
+  "notes": "MAC-10-like compact. Skinned rigid parts with bones (Magazine, Bolt/Slide, Trigger...) - move Magazine/Bolt bones for reload/cycling; Attach_* bones are mount sockets (positions listed in sockets, gun-local metres, rest pose)."
+ },
+ "pistol_west": {
+  "file": "models/guns/pistol_west.glb",
+  "source": "https://poly.pizza/m/r8RjoAwN5A",
+  "author": "Pichuliru",
+  "license": "CC0 1.0",
+  "kind": "gun",
+  "tris": 1244,
+  "bbox": [
+   0.027,
+   0.135,
+   0.192
+  ],
+  "bboxMin": [
+   -0.013,
+   -0.093,
+   -0.117
+  ],
+  "bones": 10,
+  "clips": {},
+  "originalTitle": "Pistol West",
+  "gunClass": "pistol",
+  "forward": "-Z (muzzle points -Z, stock toward +Z, up +Y); units metres, true-to-life scale",
+  "sockets": {
+   "Magazine": [
+    0,
+    0.001,
+    0.024
+   ],
+   "Slide": [
+    0,
+    0.027,
+    0.046
+   ],
+   "Attach_Scope": [
+    0,
+    0.033,
+    0.026
+   ],
+   "Attach_RailBottom": [
+    0,
+    0.002,
+    -0.066
+   ],
+   "Attach_Muzzle": [
+    0,
+    0.025,
+    -0.108
+   ]
+  },
+  "notes": "P226/M9-like; Slide bone for recoil. Skinned rigid parts with bones (Magazine, Bolt/Slide, Trigger...) - move Magazine/Bolt bones for reload/cycling; Attach_* bones are mount sockets (positions listed in sockets, gun-local metres, rest pose)."
+ },
+ "pistol_east": {
+  "file": "models/guns/pistol_east.glb",
+  "source": "https://poly.pizza/m/pNHeIJFHcQ",
+  "author": "Pichuliru",
+  "license": "CC0 1.0",
+  "kind": "gun",
+  "tris": 1204,
+  "bbox": [
+   0.029,
+   0.148,
+   0.207
+  ],
+  "bboxMin": [
+   -0.015,
+   -0.11,
+   -0.127
+  ],
+  "bones": 9,
+  "clips": {},
+  "originalTitle": "Pistol Full East",
+  "gunClass": "pistol",
+  "forward": "-Z (muzzle points -Z, stock toward +Z, up +Y); units metres, true-to-life scale",
+  "sockets": {
+   "Slide": [
+    0,
+    0.023,
+    0.037
+   ],
+   "Magazine": [
+    0,
+    0.007,
+    0.023
+   ],
+   "Attach_Scope": [
+    0,
+    0.029,
+    0.045
+   ],
+   "Attach_RailBottom": [
+    0,
+    -0.004,
+    -0.07
+   ],
+   "Attach_Muzzle": [
+    0,
+    0.024,
+    -0.121
+   ]
+  },
+  "notes": "Full-size pistol. Skinned rigid parts with bones (Magazine, Bolt/Slide, Trigger...) - move Magazine/Bolt bones for reload/cycling; Attach_* bones are mount sockets (positions listed in sockets, gun-local metres, rest pose)."
+ },
+ "pistol_compact_east": {
+  "file": "models/guns/pistol_compact_east.glb",
+  "source": "https://poly.pizza/m/dx0oQNXWz0",
+  "author": "Pichuliru",
+  "license": "CC0 1.0",
+  "kind": "gun",
+  "tris": 1249,
+  "bbox": [
+   0.03,
+   0.125,
+   0.166
+  ],
+  "bboxMin": [
+   -0.015,
+   -0.09,
+   -0.108
+  ],
+  "bones": 10,
+  "clips": {},
+  "originalTitle": "Pistol Compact East",
+  "gunClass": "pistol",
+  "forward": "-Z (muzzle points -Z, stock toward +Z, up +Y); units metres, true-to-life scale",
+  "sockets": {
+   "Slide": [
+    0,
+    0.023,
+    0.003
+   ],
+   "Magazine": [
+    0,
+    0.008,
+    0.018
+   ],
+   "Attach_Scope": [
+    0,
+    0.029,
+    0.032
+   ],
+   "Attach_RailBottom": [
+    0,
+    0.006,
+    -0.061
+   ],
+   "Attach_Muzzle": [
+    0,
+    0.023,
+    -0.101
+   ]
+  },
+  "notes": "Makarov-like, red grip. Skinned rigid parts with bones (Magazine, Bolt/Slide, Trigger...) - move Magazine/Bolt bones for reload/cycling; Attach_* bones are mount sockets (positions listed in sockets, gun-local metres, rest pose)."
+ },
+ "shotgun_pump": {
+  "file": "models/guns/shotgun_pump.glb",
+  "source": "https://poly.pizza/m/NfQETBKOiw",
+  "author": "Pichuliru",
+  "license": "CC0 1.0",
+  "kind": "gun",
+  "tris": 1069,
+  "bbox": [
+   0.046,
+   0.127,
+   0.597
+  ],
+  "bboxMin": [
+   -0.023,
+   -0.073,
+   -0.277
+  ],
+  "bones": 6,
+  "clips": {},
+  "originalTitle": "Shotgun Pump West",
+  "gunClass": "shotgun",
+  "forward": "-Z (muzzle points -Z, stock toward +Z, up +Y); units metres, true-to-life scale",
+  "notes": "Pump shotgun (Model 680-like), wood stock; no socket bones. Skinned rigid parts with bones (Magazine, Bolt/Slide, Trigger...) - move Magazine/Bolt bones for reload/cycling; Attach_* bones are mount sockets (positions listed in sockets, gun-local metres, rest pose)."
+ },
+ "shotgun_auto": {
+  "file": "models/guns/shotgun_auto.glb",
+  "source": "https://poly.pizza/m/f0USjc13vj",
+  "author": "Pichuliru",
+  "license": "CC0 1.0",
+  "kind": "gun",
+  "tris": 1540,
+  "bbox": [
+   0.187,
+   0.32,
+   0.781
+  ],
+  "bboxMin": [
+   -0.094,
+   -0.205,
+   -0.371
+  ],
+  "bones": 13,
+  "clips": {},
+  "originalTitle": "Shotgun Auto West",
+  "gunClass": "shotgun",
+  "forward": "-Z (muzzle points -Z, stock toward +Z, up +Y); units metres, true-to-life scale",
+  "sockets": {
+   "Magazine": [
+    0,
+    -0.002,
+    0.019
+   ],
+   "Charging_Handle": [
+    0,
+    0.038,
+    -0.024
+   ],
+   "Bolt": [
+    0,
+    0.021,
+    0.073
+   ],
+   "Attach_Scope": [
+    0,
+    0.073,
+    0.043
+   ],
+   "Attach_RailBottom": [
+    0,
+    -0.02,
+    -0.157
+   ],
+   "Attach_Muzzle": [
+    0,
+    0.012,
+    -0.347
+   ],
+   "Attach_RailSideLeft": [
+    -0.023,
+    0.025,
+    -0.19
+   ],
+   "Attach_RailSideRight": [
+    0.022,
+    0.025,
+    -0.19
+   ]
+  },
+  "notes": "Drum-fed auto shotgun (AA-12-like). Skinned rigid parts with bones (Magazine, Bolt/Slide, Trigger...) - move Magazine/Bolt bones for reload/cycling; Attach_* bones are mount sockets (positions listed in sockets, gun-local metres, rest pose)."
+ },
+ "sniper_west": {
+  "file": "models/guns/sniper_west.glb",
+  "source": "https://poly.pizza/m/kwJawENuvA",
+  "author": "Pichuliru",
+  "license": "CC0 1.0",
+  "kind": "gun",
+  "tris": 3208,
+  "bbox": [
+   0.077,
+   0.242,
+   0.961
+  ],
+  "bboxMin": [
+   -0.031,
+   -0.139,
+   -0.545
+  ],
+  "bones": 14,
+  "clips": {},
+  "originalTitle": "Sniper Rifle West",
+  "gunClass": "sniper",
+  "forward": "-Z (muzzle points -Z, stock toward +Z, up +Y); units metres, true-to-life scale",
+  "sockets": {
+   "Bolt": [
+    0,
+    0.017,
+    -0.031
+   ],
+   "Magazine": [
+    0,
+    -0.002,
+    0.007
+   ],
+   "Attach_Scope": [
+    0,
+    0.044,
+    0.011
+   ],
+   "Attach_RailBottom": [
+    0,
+    -0.009,
+    -0.334
+   ],
+   "Attach_Muzzle": [
+    0,
+    0.015,
+    -0.5
+   ],
+   "Attach_RailTop": [
+    0,
+    0.044,
+    -0.334
+   ],
+   "Attach_RailSideLeft": [
+    -0.026,
+    0.017,
+    -0.334
+   ],
+   "Attach_RailSideRight": [
+    0.025,
+    0.017,
+    -0.334
+   ]
+  },
+  "notes": "Bolt/precision rifle; add attachments/rifle_scope.glb at Attach_Scope. Skinned rigid parts with bones (Magazine, Bolt/Slide, Trigger...) - move Magazine/Bolt bones for reload/cycling; Attach_* bones are mount sockets (positions listed in sockets, gun-local metres, rest pose)."
+ },
+ "sniper_east": {
+  "file": "models/guns/sniper_east.glb",
+  "source": "https://poly.pizza/m/mqhnsEX5VJ",
+  "author": "Pichuliru",
+  "license": "CC0 1.0",
+  "kind": "gun",
+  "tris": 2943,
+  "bbox": [
+   0.069,
+   0.198,
+   0.864
+  ],
+  "bboxMin": [
+   -0.031,
+   -0.126,
+   -0.425
+  ],
+  "bones": 13,
+  "clips": {},
+  "originalTitle": "Sniper Rifle East",
+  "gunClass": "sniper",
+  "forward": "-Z (muzzle points -Z, stock toward +Z, up +Y); units metres, true-to-life scale",
+  "sockets": {
+   "Bolt": [
+    0,
+    0.021,
+    0.066
+   ],
+   "Magazine": [
+    0,
+    0.002,
+    0.024
+   ],
+   "Attach_Scope": [
+    0,
+    0.045,
+    0.077
+   ],
+   "Attach_RailBottom": [
+    0,
+    -0.011,
+    -0.251
+   ],
+   "Attach_Muzzle": [
+    0,
+    0.017,
+    -0.374
+   ],
+   "Attach_RailTop": [
+    0,
+    0.045,
+    -0.251
+   ],
+   "Attach_RailSideLeft": [
+    -0.019,
+    0.017,
+    -0.251
+   ],
+   "Attach_RailSideRight": [
+    0.019,
+    0.017,
+    -0.251
+   ]
+  },
+  "notes": "SVD/SVU-style. Skinned rigid parts with bones (Magazine, Bolt/Slide, Trigger...) - move Magazine/Bolt bones for reload/cycling; Attach_* bones are mount sockets (positions listed in sockets, gun-local metres, rest pose)."
+ },
+ "sniper_50cal_west": {
+  "file": "models/guns/sniper_50cal_west.glb",
+  "source": "https://poly.pizza/m/hcB4it4UpA",
+  "author": "Pichuliru",
+  "license": "CC0 1.0",
+  "kind": "gun",
+  "tris": 3676,
+  "bbox": [
+   0.11,
+   0.264,
+   1.167
+  ],
+  "bboxMin": [
+   -0.044,
+   -0.156,
+   -0.634
+  ],
+  "bones": 14,
+  "clips": {},
+  "originalTitle": "Sniper Material West",
+  "gunClass": "sniper",
+  "forward": "-Z (muzzle points -Z, stock toward +Z, up +Y); units metres, true-to-life scale",
+  "sockets": {
+   "Bolt": [
+    0,
+    0.017,
+    0.025
+   ],
+   "Magazine": [
+    0,
+    -0.022,
+    0.098
+   ],
+   "Attach_Scope": [
+    0,
+    0.05,
+    0.111
+   ],
+   "Attach_RailBottom": [
+    0,
+    -0.018,
+    -0.297
+   ],
+   "Attach_Muzzle": [
+    0,
+    0.018,
+    -0.53
+   ],
+   "Attach_RailTop": [
+    0,
+    0.05,
+    -0.297
+   ],
+   "Attach_RailSideLeft": [
+    -0.039,
+    0.012,
+    -0.297
+   ],
+   "Attach_RailSideRight": [
+    0.037,
+    0.012,
+    -0.297
+   ]
+  },
+  "notes": ".50 anti-materiel (Barrett-like). Skinned rigid parts with bones (Magazine, Bolt/Slide, Trigger...) - move Magazine/Bolt bones for reload/cycling; Attach_* bones are mount sockets (positions listed in sockets, gun-local metres, rest pose)."
+ },
+ "sniper_50cal_east": {
+  "file": "models/guns/sniper_50cal_east.glb",
+  "source": "https://poly.pizza/m/R1qESvHtZH",
+  "author": "Pichuliru",
+  "license": "CC0 1.0",
+  "kind": "gun",
+  "tris": 2452,
+  "bbox": [
+   0.101,
+   0.193,
+   0.988
+  ],
+  "bboxMin": [
+   -0.037,
+   -0.117,
+   -0.613
+  ],
+  "bones": 12,
+  "clips": {},
+  "originalTitle": "Sniper Material East",
+  "gunClass": "sniper",
+  "forward": "-Z (muzzle points -Z, stock toward +Z, up +Y); units metres, true-to-life scale",
+  "sockets": {
+   "Bolt": [
+    0,
+    0.023,
+    0.193
+   ],
+   "Magazine": [
+    0,
+    0.002,
+    0.126
+   ],
+   "Attach_Scope": [
+    0,
+    0.046,
+    0.011
+   ],
+   "Attach_RailBottom": [
+    0,
+    -0.018,
+    -0.226
+   ],
+   "Attach_Muzzle": [
+    0,
+    0.015,
+    -0.545
+   ],
+   "Attach_RailTop": [
+    0,
+    0.046,
+    -0.215
+   ],
+   "Attach_RailSideLeft": [
+    -0.019,
+    0.006,
+    -0.226
+   ],
+   "Attach_RailSideRight": [
+    0.019,
+    0.006,
+    -0.226
+   ]
+  },
+  "notes": "Anti-materiel rifle. Skinned rigid parts with bones (Magazine, Bolt/Slide, Trigger...) - move Magazine/Bolt bones for reload/cycling; Attach_* bones are mount sockets (positions listed in sockets, gun-local metres, rest pose)."
+ },
+ "launcher_rpg": {
+  "file": "models/guns/launcher_rpg.glb",
+  "source": "https://poly.pizza/m/eJNzLpBsEt",
+  "author": "CreativeTrio",
+  "license": "CC0 1.0",
+  "kind": "gun",
+  "tris": 1536,
+  "bbox": [
+   0.613,
+   0.237,
+   3.141
+  ],
+  "bboxMin": [
+   -0.306,
+   -0.119,
+   -1.57
+  ],
+  "bones": 0,
+  "clips": {},
+  "gunClass": "launcher",
+  "forward": "-Z (muzzle points -Z, stock toward +Z, up +Y); units metres, true-to-life scale except RPG (see notes)",
+  "notes": "RPG-7 style (Poly.pizza title \"Bazooka\"). Authored ~3.14 m long - scale by ~0.31 for a real ~0.95-1.0 m RPG-7. Single textured material, no bones."
+ },
+ "att_suppressor": {
+  "file": "models/attachments/suppressor.glb",
+  "source": "https://poly.pizza/m/VLiLj3j1tS",
+  "author": "Pichuliru",
+  "license": "CC0 1.0",
+  "kind": "prop",
+  "tris": 192,
+  "bbox": [
+   0.036,
+   0.036,
+   0.143
+  ],
+  "bboxMin": [
+   -0.018,
+   -0.018,
+   -0.14
+  ],
+  "bones": 0,
+  "clips": {},
+  "originalTitle": "Suppressor",
+  "forward": "-Z (same convention as guns)",
+  "sub": "attachment",
+  "notes": "Origin at its rear; mount at gun Attach_Muzzle, extends toward -Z"
+ },
+ "att_red_dot": {
+  "file": "models/attachments/red_dot_sight.glb",
+  "source": "https://poly.pizza/m/S9sDv7SZRm",
+  "author": "Pichuliru",
+  "license": "CC0 1.0",
+  "kind": "prop",
+  "tris": 436,
+  "bbox": [
+   0.043,
+   0.049,
+   0.056
+  ],
+  "bboxMin": [
+   -0.028,
+   -0.006,
+   -0.021
+  ],
+  "bones": 0,
+  "clips": {},
+  "originalTitle": "Red Dot Sight",
+  "forward": "-Z (same convention as guns)",
+  "sub": "attachment",
+  "notes": "Mount at Attach_Scope"
+ },
+ "att_holo": {
+  "file": "models/attachments/holographic_sight.glb",
+  "source": "https://poly.pizza/m/9rPJxvm9sw",
+  "author": "Pichuliru",
+  "license": "CC0 1.0",
+  "kind": "prop",
+  "tris": 432,
+  "bbox": [
+   0.039,
+   0.055,
+   0.076
+  ],
+  "bboxMin": [
+   -0.021,
+   -0.005,
+   -0.034
+  ],
+  "bones": 0,
+  "clips": {},
+  "originalTitle": "Holographic Sight",
+  "forward": "-Z (same convention as guns)",
+  "sub": "attachment",
+  "notes": "Mount at Attach_Scope"
+ },
+ "att_scope": {
+  "file": "models/attachments/rifle_scope.glb",
+  "source": "https://poly.pizza/m/98ocxnqLFf",
+  "author": "Pichuliru",
+  "license": "CC0 1.0",
+  "kind": "prop",
+  "tris": 910,
+  "bbox": [
+   0.065,
+   0.084,
+   0.358
+  ],
+  "bboxMin": [
+   -0.033,
+   -0.005,
+   -0.196
+  ],
+  "bones": 0,
+  "clips": {},
+  "originalTitle": "Rifle Scope",
+  "forward": "-Z (same convention as guns)",
+  "sub": "attachment",
+  "notes": "Mount at Attach_Scope"
+ },
+ "frag_west": {
+  "file": "models/attachments/frag_grenade_west.glb",
+  "source": "https://poly.pizza/m/1aIZys4mhg",
+  "author": "Pichuliru",
+  "license": "CC0 1.0",
+  "kind": "prop",
+  "tris": 536,
+  "bbox": [
+   0.067,
+   0.099,
+   0.078
+  ],
+  "bboxMin": [
+   -0.034,
+   -0.031,
+   -0.044
+  ],
+  "bones": 0,
+  "clips": {},
+  "originalTitle": "Frag Grenade West",
+  "forward": "-Z (same convention as guns)",
+  "sub": "throwable",
+  "notes": "M67-style frag"
+ },
+ "frag_east": {
+  "file": "models/attachments/frag_grenade_east.glb",
+  "source": "https://poly.pizza/m/C4ZrgKsmLq",
+  "author": "Pichuliru",
+  "license": "CC0 1.0",
+  "kind": "prop",
+  "tris": 492,
+  "bbox": [
+   0.066,
+   0.132,
+   0.066
+  ],
+  "bboxMin": [
+   -0.03,
+   -0.045,
+   -0.036
+  ],
+  "bones": 0,
+  "clips": {},
+  "originalTitle": "Frag Grenade East",
+  "forward": "-Z (same convention as guns)",
+  "sub": "throwable",
+  "notes": "RGD-style frag"
+ },
+ "ammo_can": {
+  "file": "models/props/ammo_can.glb",
+  "source": "https://poly.pizza/m/9xeB2FkEYr",
+  "author": "Pichuliru",
+  "license": "CC0 1.0",
+  "kind": "prop",
+  "tris": 10071,
+  "bbox": [
+   0.32,
+   0.265,
+   0.171
+  ],
+  "bboxMin": [
+   -0.159,
+   0,
+   -0.086
+  ],
+  "bones": 0,
+  "clips": {},
+  "originalTitle": "Ammo Can",
+  "forward": "n/a (Y up, base at y~0)",
+  "notes": "10k tris / 1 MB - heaviest prop; palette texture"
+ },
+ "loose_ammo": {
+  "file": "models/props/loose_ammo.glb",
+  "source": "https://poly.pizza/m/sWyJu6XMpY",
+  "author": "Pichuliru",
+  "license": "CC0 1.0",
+  "kind": "prop",
+  "tris": 3336,
+  "bbox": [
+   0.055,
+   0.147,
+   0.133
+  ],
+  "bboxMin": [
+   -0.011,
+   -0.031,
+   -0.122
+  ],
+  "bones": 0,
+  "clips": {},
+  "originalTitle": "Loose Ammo",
+  "forward": "n/a (Y up, base at y~0)",
+  "notes": "Assorted cartridges (ammo pickup)"
+ },
+ "ammo_pack_sniper": {
+  "file": "models/props/ammo_pack_sniper.glb",
+  "source": "https://poly.pizza/m/HaZi9tki43",
+  "author": "Pichuliru",
+  "license": "CC0 1.0",
+  "kind": "prop",
+  "tris": 1780,
+  "bbox": [
+   0.195,
+   0.111,
+   0.109
+  ],
+  "bboxMin": [
+   -0.113,
+   0,
+   -0.059
+  ],
+  "bones": 0,
+  "clips": {},
+  "originalTitle": "Ammo Pack Sniper",
+  "forward": "n/a (Y up, base at y~0)",
+  "notes": "Cartridge box"
+ },
+ "backpack": {
+  "file": "models/props/backpack.glb",
+  "source": "https://poly.pizza/m/2g9Jm7kvIU",
+  "author": "Quaternius",
+  "license": "CC0 1.0",
+  "kind": "prop",
+  "tris": 1748,
+  "bbox": [
+   3.343,
+   3.119,
+   1.746
+  ],
+  "bboxMin": [
+   -1.671,
+   -1.465,
+   -0.629
+  ],
+  "bones": 0,
+  "clips": {},
+  "forward": "n/a (Y up, base at y~0)",
+  "notes": "Olive rucksack. Authored ~3.1 m tall: scale ~0.18"
+ },
+ "barrel_explode": {
+  "file": "models/props/barrel_explode.glb",
+  "source": "https://poly.pizza/m/1orHe0kCc1",
+  "author": "Quaternius",
+  "license": "CC0 1.0",
+  "kind": "prop",
+  "tris": 516,
+  "bbox": [
+   0.785,
+   1.024,
+   0.785
+  ],
+  "bboxMin": [
+   -0.392,
+   0,
+   -0.392
+  ],
+  "bones": 0,
+  "clips": {},
+  "forward": "n/a (Y up, base at y~0)",
+  "notes": "Red/white hazard drum, ~1 m"
+ },
+ "oil_drum": {
+  "file": "models/props/oil_drum.glb",
+  "source": "https://poly.pizza/m/MraIiFnpAY",
+  "author": "Quaternius",
+  "license": "CC0 1.0",
+  "kind": "prop",
+  "tris": 882,
+  "bbox": [
+   0.704,
+   1.145,
+   0.704
+  ],
+  "bboxMin": [
+   -0.352,
+   0.002,
+   -0.352
+  ],
+  "bones": 0,
+  "clips": {},
+  "forward": "n/a (Y up, base at y~0)",
+  "notes": "Rusty blue 55-gal drum, ~1.15 m"
+ },
+ "jersey_barrier": {
+  "file": "models/props/jersey_barrier.glb",
+  "source": "https://poly.pizza/m/wCUxgt2jSP",
+  "author": "Quaternius",
+  "license": "CC0 1.0",
+  "kind": "prop",
+  "tris": 232,
+  "bbox": [
+   1.89,
+   0.628,
+   0.657
+  ],
+  "bboxMin": [
+   -0.935,
+   -0.003,
+   -0.329
+  ],
+  "bones": 0,
+  "clips": {},
+  "forward": "n/a (Y up, base at y~0)",
+  "notes": "Concrete barrier with hazard stripes, 1.9 m long (Quaternius \"Barrier Single\")"
+ },
+ "barrier_fence": {
+  "file": "models/props/barrier_fence.glb",
+  "source": "https://poly.pizza/m/gLbBiYwt7l",
+  "author": "Quaternius",
+  "license": "CC0 1.0",
+  "kind": "prop",
+  "tris": 624,
+  "bbox": [
+   3.806,
+   3.183,
+   0.667
+  ],
+  "bboxMin": [
+   -1.909,
+   -0.003,
+   -0.339
+  ],
+  "bones": 0,
+  "clips": {},
+  "forward": "n/a (Y up, base at y~0)",
+  "notes": "Two barriers + chain-link fence, 3.8 m"
+ },
+ "broken_car": {
+  "file": "models/props/broken_car.glb",
+  "source": "https://poly.pizza/m/Y67erogmR9",
+  "author": "Quaternius",
+  "license": "CC0 1.0",
+  "kind": "prop",
+  "tris": 5432,
+  "bbox": [
+   2.641,
+   1.76,
+   5.494
+  ],
+  "bboxMin": [
+   -1.321,
+   -0.098,
+   -2.545
+  ],
+  "bones": 0,
+  "clips": {},
+  "forward": "n/a (Y up, base at y~0)",
+  "notes": "Rusty wrecked sedan, 5.5 m long along Z"
+ },
+ "pickup_truck": {
+  "file": "models/props/pickup_truck.glb",
+  "source": "https://poly.pizza/m/qn4grQgHm8",
+  "author": "Quaternius",
+  "license": "CC0 1.0",
+  "kind": "prop",
+  "tris": 6432,
+  "bbox": [
+   2.312,
+   1.848,
+   5.18
+  ],
+  "bboxMin": [
+   -1.156,
+   -0.006,
+   -2.487
+  ],
+  "bones": 0,
+  "clips": {},
+  "forward": "n/a (Y up, base at y~0)",
+  "notes": "Pickup, 5.2 m along Z"
+ },
+ "suv": {
+  "file": "models/props/suv.glb",
+  "source": "https://poly.pizza/m/xsMtZhBkxL",
+  "author": "Quaternius",
+  "license": "CC0 1.0",
+  "kind": "prop",
+  "tris": 3294,
+  "bbox": [
+   2.111,
+   1.528,
+   4.209
+  ],
+  "bboxMin": [
+   -1.056,
+   -0.018,
+   -2.105
+  ],
+  "bones": 0,
+  "clips": {},
+  "forward": "n/a (Y up, base at y~0)",
+  "notes": "White SUV, 4.2 m along Z"
+ },
+ "container_green": {
+  "file": "models/props/container_green.glb",
+  "source": "https://poly.pizza/m/h5RUr3vlcS",
+  "author": "Quaternius",
+  "license": "CC0 1.0",
+  "kind": "prop",
+  "tris": 1336,
+  "bbox": [
+   5.709,
+   2.603,
+   2.561
+  ],
+  "bboxMin": [
+   -2.854,
+   0.038,
+   -1.28
+  ],
+  "bones": 0,
+  "clips": {},
+  "forward": "n/a (Y up, base at y~0)",
+  "notes": "Shipping container 5.7x2.6x2.6 m (scale ~1.07 on X for a real 20ft 6.06 m)"
+ },
+ "container_red": {
+  "file": "models/props/container_red.glb",
+  "source": "https://poly.pizza/m/vzzCNUB6Zn",
+  "author": "Quaternius",
+  "license": "CC0 1.0",
+  "kind": "prop",
+  "tris": 1032,
+  "bbox": [
+   5.708,
+   2.603,
+   2.559
+  ],
+  "bboxMin": [
+   -2.83,
+   -0.009,
+   -1.273
+  ],
+  "bones": 0,
+  "clips": {},
+  "forward": "n/a (Y up, base at y~0)",
+  "notes": "Shipping container 5.7x2.6x2.6 m"
+ },
+ "crate_wood_large": {
+  "file": "models/props/crate_wood_large.glb",
+  "source": "https://poly.pizza/m/SfJtdV8GDr",
+  "author": "Quaternius",
+  "license": "CC0 1.0",
+  "kind": "prop",
+  "tris": 2502,
+  "bbox": [
+   1.38,
+   1.308,
+   1.311
+  ],
+  "bboxMin": [
+   -0.69,
+   0.001,
+   -0.656
+  ],
+  "bones": 0,
+  "clips": {},
+  "forward": "n/a (Y up, base at y~0)",
+  "notes": "1.38 m wooden crate"
+ },
+ "crate_wood": {
+  "file": "models/props/crate_wood.glb",
+  "source": "https://poly.pizza/m/3VGWnZPXmG",
+  "author": "Quaternius",
+  "license": "CC0 1.0",
+  "kind": "prop",
+  "tris": 784,
+  "bbox": [
+   0.824,
+   0.824,
+   0.824
+  ],
+  "bboxMin": [
+   -0.412,
+   -0.01,
+   -0.412
+  ],
+  "bones": 0,
+  "clips": {},
+  "forward": "n/a (Y up, base at y~0)",
+  "notes": "0.82 m wooden crate"
+ },
+ "supply_box": {
+  "file": "models/props/supply_box.glb",
+  "source": "https://poly.pizza/m/LNQWE3LzNf",
+  "author": "Quaternius",
+  "license": "CC0 1.0",
+  "kind": "prop",
+  "tris": 940,
+  "bbox": [
+   0.592,
+   0.512,
+   0.608
+  ],
+  "bboxMin": [
+   -0.296,
+   0,
+   -0.313
+  ],
+  "bones": 0,
+  "clips": {},
+  "forward": "n/a (Y up, base at y~0)",
+  "notes": "Loot/supply box (Quaternius \"Lootbox\"), 0.6 m"
+ },
+ "jerry_can": {
+  "file": "models/props/jerry_can.glb",
+  "source": "https://poly.pizza/m/eS1OXGo51c",
+  "author": "Quaternius",
+  "license": "CC0 1.0",
+  "kind": "prop",
+  "tris": 788,
+  "bbox": [
+   1.877,
+   2.473,
+   0.615
+  ],
+  "bboxMin": [
+   -0.901,
+   -0.003,
+   -0.308
+  ],
+  "bones": 0,
+  "clips": {},
+  "forward": "n/a (Y up, base at y~0)",
+  "notes": "Red jerry can. Authored ~2.47 m tall: scale ~0.2"
+ },
+ "pallet": {
+  "file": "models/props/pallet.glb",
+  "source": "https://poly.pizza/m/MwOFAOgOhg",
+  "author": "Quaternius",
+  "license": "CC0 1.0",
+  "kind": "prop",
+  "tris": 240,
+  "bbox": [
+   0.893,
+   0.14,
+   1.217
+  ],
+  "bboxMin": [
+   -0.436,
+   0.002,
+   -0.608
+  ],
+  "bones": 0,
+  "clips": {},
+  "forward": "n/a (Y up, base at y~0)",
+  "notes": "Wood pallet 1.2 m"
+ },
+ "sandbags": {
+  "file": "models/props/sandbags.glb",
+  "source": "https://poly.pizza/m/LW3jwpPfiN",
+  "author": "Quaternius",
+  "license": "CC0 1.0",
+  "kind": "prop",
+  "tris": 7168,
+  "bbox": [
+   3.162,
+   1.194,
+   0.775
+  ],
+  "bboxMin": [
+   -1.525,
+   -0.011,
+   -0.481
+  ],
+  "bones": 0,
+  "clips": {},
+  "forward": "n/a (Y up, base at y~0)",
+  "notes": "Sandbag wall 3.2 m (Quaternius \"Sack Trench\"), 7k tris"
+ },
+ "sandbags_small": {
+  "file": "models/props/sandbags_small.glb",
+  "source": "https://poly.pizza/m/iHyRewQQcN",
+  "author": "Quaternius",
+  "license": "CC0 1.0",
+  "kind": "prop",
+  "tris": 3584,
+  "bbox": [
+   2.315,
+   0.932,
+   0.747
+  ],
+  "bboxMin": [
+   -1.155,
+   -0.011,
+   -0.43
+  ],
+  "bones": 0,
+  "clips": {},
+  "forward": "n/a (Y up, base at y~0)",
+  "notes": "Sandbag wall 2.3 m"
+ }
+}

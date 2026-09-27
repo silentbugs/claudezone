@@ -1,5 +1,0 @@
-<script type="module">
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-const g=await new GLTFLoader().loadAsync('/public/models/_cand/swat.glb');const out=[];
-g.scene.traverse(o=>{if(o.isBone&&!/Index|Middle|Ring|Pinky|Thumb/.test(o.name))out.push(o.name+'<'+o.parent.name)});window.__r=out.join(' ');
-</script>
