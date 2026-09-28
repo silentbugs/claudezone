@@ -127,10 +127,11 @@ export interface Style { wall: Mat; wallColor: number; trim: number; roof: Mat; 
  * gable roof you can stand on.
  */
 export function house(rng: Rng, w: number, d: number, floors: number, st: Style): Builder {
-  const b = new Builder(), hw = w / 2, hd = d / 2, H = FLOOR_H;
-  b.box(-hw - 0.1, -1.5, -hd - 0.1, hw + 0.1, 0.05, hd + 0.1, Mat.Concrete, { color: 0x8a8580 }); // plinth + floor
+  // 2020 village houses sit on a plinth ~0.5 m up, with a few concrete steps at every door
+  const b = new Builder(), hw = w / 2, hd = d / 2, H = FLOOR_H, E = 0.45;
+  b.box(-hw - 0.1, -1.5, -hd - 0.1, hw + 0.1, E + 0.05, hd + 0.1, Mat.Concrete, { color: 0x8a8580 }); // plinth + floor
   for (let f = 0; f < floors; f++) {
-    const y = f * H + 0.05, wh = H - 0.05;
+    const y = f * H + E + 0.05, wh = H - 0.05;
     const door: Opening = { u0: w / 2 - 0.6, u1: w / 2 + 0.6, v0: 0, v1: 2.3 };
     const frontOps = [...windows(w, 3.2, 1.3, 0.95, 2.25, f === 0 ? [[door.u0, door.u1]] : []), ...(f === 0 ? [door] : [])];
     const backDoor: Opening = { u0: w * 0.3 - 0.55, u1: w * 0.3 + 0.55, v0: 0, v1: 2.3 };
@@ -149,12 +150,12 @@ export function house(rng: Rng, w: number, d: number, floors: number, st: Style)
   const sw = 1.1, run = 4.2;
   const sx0 = -hw + WALL_T / 2 + 0.05, sz1 = hd - WALL_T / 2 - 0.05;
   for (let f = 1; f < floors; f++) {
-    const y = f * H + 0.05;
+    const y = f * H + E + 0.05;
     b.slab(-hw, -hd, hw, hd, y, 0.25, Mat.Concrete, [[sx0, sz1 - sw, sx0 + run + 0.3, sz1]]);
-    b.ramp(sx0, (f - 1) * H + 0.05, sz1 - sw, sx0 + run, y, sz1, 0, 1);
+    b.ramp(sx0, (f - 1) * H + E + 0.05, sz1 - sw, sx0 + run, y, sz1, 0, 1);
   }
   // roof
-  const top = floors * H + 0.05;
+  const top = floors * H + E + 0.05;
   b.slab(-hw - 0.3, -hd - 0.3, hw + 0.3, hd + 0.3, top, 0.25, st.roof);
   const ridge = Math.min(2.6, d * 0.28);
   b.box(-hw - 0.4, top, -hd - 0.4, hw + 0.4, top + ridge, hd + 0.4, st.roof, { shape: 'gable', noCollide: true, color: st.roofColor });
@@ -162,7 +163,20 @@ export function house(rng: Rng, w: number, d: number, floors: number, st: Style)
   b.ramp(-hw - 0.4, top, 0, hw + 0.4, top + ridge, hd + 0.4, 1, -1, st.roof);
   b.box(-hw, top, -hd * 0.3, hw, top + ridge * 0.6, hd * 0.3, st.roof, { noCollide: true, mat: Mat.Wood } as any); // bullet blocker inside the gable
   if (rng.chance(0.6)) { const cx = rng.range(-hw * 0.6, hw * 0.6); b.box(cx - 0.35, top + ridge * 0.4, -0.35 + d * 0.12, cx + 0.35, top + ridge + 0.9, 0.35 + d * 0.12, Mat.Brick, { color: 0x8a6a5a }); }
-  b.box(-hw - 0.1, -0.3, -hd - 0.1, hw + 0.1, 0.35, hd + 0.1, Mat.Concrete, { color: 0x8a8580, noCollide: true }); // plinth band
+  b.box(-hw - 0.1, -0.3, -hd - 0.1, hw + 0.1, E + 0.35, hd + 0.1, Mat.Concrete, { color: 0x8a8580, noCollide: true }); // plinth band
+  // steps up to the front and back doors
+  const steps = (cx: number, zFace: number, out: number) => { for (let k = 0; k < 3; k++) { const z0 = zFace + out * (0.05 + (2 - k) * 0.3); b.box(cx - 0.8, 0, Math.min(z0, z0 + out * 0.3), cx + 0.8, (k + 1) * (E + 0.05) / 3, Math.max(z0, z0 + out * 0.3), Mat.Concrete, { color: 0x9a968f }); } };
+  steps(0, -hd - 0.1, -1); steps(-hw + w * 0.3, hd + 0.1, 1);
+  // single-storey lean-to annex with its own door; its flat roof is the way up onto the main roof
+  if (rng.chance(0.55) && d >= 7) {
+    const ax0 = hw + 0.1, ax1 = hw + 4.1, az0 = -hd + 0.6, az1 = az0 + 5, ay = 0.05, ah = 2.6;
+    b.box(ax0, -1.2, az0, ax1, ay, az1, Mat.Concrete, { color: 0x8a8580 });
+    b.wall(0, ax0, ax1, az0 + 0.1, ay, ah, 0.2, st.wall, [{ u0: 1.4, u1: 2.4, v0: 0, v1: 2.15 }], st.wallColor, -1, st.trim);
+    b.wall(0, ax0, ax1, az1 - 0.1, ay, ah, 0.2, st.wall, [], st.wallColor, 1, st.trim);
+    b.wall(1, az0 + 0.2, az1 - 0.2, ax1 - 0.1, ay, ah, 0.2, st.wall, [{ u0: 1.8, u1: 3.0, v0: 1.0, v1: 2.1 }], st.wallColor, 1, st.trim);
+    b.slab(ax0 - 0.1, az0 - 0.15, ax1 + 0.15, az1 + 0.15, ay + ah + 0.2, 0.2, st.roof);
+    b.addLoot(ax0 + 2, ay, az0 + 3);
+  }
   return b;
 }
 
