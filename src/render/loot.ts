@@ -118,13 +118,13 @@ export class LootMeshes {
       let geo: THREE.BufferGeometry;
       if (key.startsWith('w:')) {
         const [, id, r] = key.split(':');
-        const g = models.bakedGun(id, +r)?.clone() ?? gunGeometry(describeGun(WEAPON[id], +r));
+        const g = models.bakedGun(id, +r, true)?.clone() ?? gunGeometry(describeGun(WEAPON[id], +r));
         g.rotateZ(Math.PI / 2); // lying on its side
         g.computeBoundingBox(); g.translate(0, -g.boundingBox!.min.y, 0);
         geo = withEmit(g);
       } else geo = itemModel(key);
       im = new THREE.InstancedMesh(geo, this.mat, 128);
-      im.count = 0; im.frustumCulled = false; im.castShadow = true; im.receiveShadow = true;
+      im.count = 0; im.frustumCulled = false; im.castShadow = false; im.receiveShadow = true;
       this.pools.set(key, im); this.group.add(im);
     }
     return im;

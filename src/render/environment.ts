@@ -25,18 +25,18 @@ THREE.ShaderChunk.fog_pars_fragment = `#ifdef USE_FOG
 #endif`;
 THREE.ShaderChunk.fog_fragment = `#ifdef USE_FOG
   #ifdef FOG_EXP2
-    vec3 fd = vFogWorld; float fdist = length(fd);
-    float fk = ${FOG_FALLOFF.toFixed(5)}, fh0 = max(cameraPosition.y - ${FOG_BASE.toFixed(1)}, 0.0);
-    float fdy = fd.y * fk;
-    float fint = abs(fdy) > 1e-4 ? (1.0 - exp(-fdy)) / fdy : 1.0;
-    float fogFactor = 1.0 - exp(-fogDensity * exp(-fk * fh0) * fdist * fint);
-    float fsun = pow(max(dot(fd / max(fdist, 1e-3), vec3(${SUN_DIR.x.toFixed(4)}, ${SUN_DIR.y.toFixed(4)}, ${SUN_DIR.z.toFixed(4)})), 0.0), 6.0);
-    vec3 fcol = mix(fogColor, vec3(1.0, 0.9, 0.74), fsun * 0.55);
+    vec3 vdFog_fd = vFogWorld; float vdFog_fdist = length(vdFog_fd);
+    float vdFog_fk = ${FOG_FALLOFF.toFixed(5)}, vdFog_fh0 = max(cameraPosition.y - ${FOG_BASE.toFixed(1)}, 0.0);
+    float vdFog_fdy = vdFog_fd.y * vdFog_fk;
+    float vdFog_fint = abs(vdFog_fdy) > 1e-4 ? (1.0 - exp(-vdFog_fdy)) / vdFog_fdy : 1.0;
+    float fogFactor = 1.0 - exp(-fogDensity * exp(-vdFog_fk * vdFog_fh0) * vdFog_fdist * vdFog_fint);
+    float vdFog_fsun = pow(max(dot(vdFog_fd / max(vdFog_fdist, 1e-3), vec3(${SUN_DIR.x.toFixed(4)}, ${SUN_DIR.y.toFixed(4)}, ${SUN_DIR.z.toFixed(4)})), 0.0), 6.0);
+    vec3 vdFog_fcol = mix(fogColor, vec3(1.0, 0.9, 0.74), vdFog_fsun * 0.55);
   #else
     float fogFactor = smoothstep(fogNear, fogFar, length(vFogWorld));
-    vec3 fcol = fogColor;
+    vec3 vdFog_fcol = fogColor;
   #endif
-  gl_FragColor.rgb = mix(gl_FragColor.rgb, fcol, clamp(fogFactor, 0.0, 1.0));
+  gl_FragColor.rgb = mix(gl_FragColor.rgb, vdFog_fcol, clamp(fogFactor, 0.0, 1.0));
 #endif`;
 
 export function makeSky(): THREE.Mesh {

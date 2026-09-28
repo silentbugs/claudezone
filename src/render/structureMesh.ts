@@ -165,7 +165,11 @@ export function structureMaterial(tex: THREE.DataArrayTexture, transparent = fal
   return m;
 }
 
-interface Chunk { detail: THREE.Mesh | null; glass: THREE.Mesh | null; lod: THREE.Mesh | null; cx: number; cz: number; near: boolean | null }
+interface Chunk { detail: THREE.Mesh | null; glass: THREE.Mesh | null; lod: THREE.Mesh | null; shadowLod: THREE.Mesh | null; cx: number; cz: number; near: boolean | null; detailShadow: boolean | null }
+/** Layer seen only by shadow cameras: cheap building shells cast the shadows of far detailed chunks. */
+export const SHADOW_ONLY_LAYER = 1;
+/** Detailed building geometry casts shadows only when its chunk is within this distance (m) of the camera. */
+const DETAIL_SHADOW = 70;
 
 export class StructureMesh {
   group = new THREE.Group();
@@ -208,7 +212,10 @@ export class StructureMesh {
     for (let i = 0; i < n * n; i++) {
       const B = bufs[i];
       const mk = (b: GeoBuf, m: THREE.Material, shadow: boolean) => { const g = b.build(); if (!g) return null; const mesh = new THREE.Mesh(g, m); mesh.castShadow = shadow; mesh.receiveShadow = true; mesh.matrixAutoUpdate = false; mesh.visible = false; this.group.add(mesh); return mesh; };
-      const c: Chunk = { detail: mk(B.d, opaque, true), glass: mk(B.g, glassM, false), lod: mk(B.l, opaque, true), cx: (i % n + 0.5) * CHUNK, cz: (Math.floor(i / n) + 0.5) * CHUNK, near: null };
+      const lod = mk(B.l, opaque, true);
+      let shadowLod: THREE.Mesh | null = null;
+      if (lod) { shadowLod = new THREE.Mesh(lod.geometry, opaque); shadowLod.castShadow = true; shadowLod.matrixAutoUpdate = false; shadowLod.visible = false; shadowLod.layers.set(SHADOW_ONLY_LAYER); this.group.add(shadowLod); }
+      const c: Chunk = { detail: mk(B.d, opaque, true), glass: mk(B.g, glassM, false), lod, shadowLod, cx: (i % n + 0.5) * CHUNK, cz: (Math.floor(i / n) + 0.5) * CHUNK, near: null, detailShadow: null };
       if (c.glass) c.glass.renderOrder = 2;
       this.chunks.push(c);
     }
@@ -217,11 +224,15 @@ export class StructureMesh {
   update(cam: THREE.Vector3) {
     for (const c of this.chunks) {
       const near = Math.hypot(c.cx - cam.x, c.cz - cam.z) < this.detailDist;
-      if (near === c.near) continue;
-      c.near = near;
-      if (c.detail) c.detail.visible = near;
+      // distance from the camera to the chunk's square (0 inside it)
+      const dx = Math.max(0, Math.abs(cam.x - c.cx) - CHUNK / 2), dz = Math.max(0, Math.abs(cam.z - c.cz) - CHUNK / 2);
+      const detailShadow = near && Math.hypot(dx, dz) < DETAIL_SHADOW;
+      if (near === c.near && detailShadow === c.detailShadow) continue;
+      c.near = near; c.detailShadow = detailShadow;
+      if (c.detail) { c.detail.visible = near; c.detail.castShadow = detailShadow; }
       if (c.glass) c.glass.visible = near;
       if (c.lod) c.lod.visible = !near;
+      if (c.shadowLod) c.shadowLod.visible = near && !detailShadow;
     }
   }
 }

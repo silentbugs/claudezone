@@ -29,6 +29,7 @@ export class Match {
   hud: Hud;
   chars = new Characters();
   soldiers = new Soldiers();
+  private frustum = new THREE.Frustum(); private projView = new THREE.Matrix4();
   ambient!: Ambient;
   vm = new ViewModel();
   fx: Effects;
@@ -324,6 +325,7 @@ export class Match {
     this.soldiers.hidden = this.chars.hidden;
     this.soldiers.update(sim.players, a, cam.position, dt, sim.time);
     this.chars.skip = this.soldiers.ids;
+    cam.updateMatrixWorld(); this.frustum.setFromProjectionMatrix(this.projView.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse)); this.chars.frustum = this.frustum;
     this.chars.update(sim.players, a, cam.position, dt, me.squad);
     this.ambient.update(dt, cam.position);
     this.fx.viewId = this.viewId();

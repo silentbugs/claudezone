@@ -32,7 +32,7 @@ import type { WorldData } from '../world/mapgen';
 import { materialArray, terrainArray, normalArrayFrom, photoArrays, BUILDING_PHOTOS, TERRAIN_PHOTOS } from './textures';
 import { RGBELoader } from 'three/addons/loaders/RGBELoader.js';
 import { TerrainMesh } from './terrainMesh';
-import { StructureMesh } from './structureMesh';
+import { StructureMesh, SHADOW_ONLY_LAYER } from './structureMesh';
 import { Trees } from './trees';
 import { Foliage } from './foliage';
 import { makeSky, makeLights, followSun, makeWater, waterMaterial, FOG_COLOR } from './environment';
@@ -108,6 +108,7 @@ export class SceneMgr {
     this.scene.environment = this.hdrEnv ?? pm.fromScene(new RoomEnvironment(), 0.04).texture;
     this.scene.environmentIntensity = this.hdrEnv ? 0.42 : 0.3;
     const { sun } = makeLights(this.scene);
+    sun.shadow.camera.layers.enable(SHADOW_ONLY_LAYER);
     this.sun = sun;
     this.water = waterMaterial();
     this.scene.add(makeWater(w.extra.rivers, this.water));
@@ -122,16 +123,16 @@ export class SceneMgr {
   setQuality(q: Quality) {
     this.quality = q;
     const r = this.renderer;
-    r.setPixelRatio((q === 'low' ? 1 : Math.min(devicePixelRatio, q === 'medium' ? 1.25 : 1.5)) * this.renderScale);
+    r.setPixelRatio((q === 'ultra' ? Math.min(devicePixelRatio, 1.5) : 1) * this.renderScale);
     r.shadowMap.enabled = q !== 'low';
     if (this.sun) { this.sun.castShadow = q !== 'low'; this.sun.shadow.mapSize.set(q === 'medium' ? 1024 : 2048, q === 'medium' ? 1024 : 2048); this.sun.shadow.map?.dispose(); (this.sun.shadow as any).map = null; }
     if (this.structures) this.structures.detailDist = q === 'low' ? 260 : q === 'medium' ? 360 : 460;
     // cascaded shadows on high/ultra: long-range shadows from buildings, trees and players
     if (this.csm) { this.csm.remove(); this.csm.dispose(); this.csm = null; }
     if (this.sun && (q === 'high' || q === 'ultra')) {
-      this.csm = new CSM({ maxFar: q === 'ultra' ? 1400 : 900, cascades: q === 'ultra' ? 4 : 3, mode: 'practical', parent: this.scene, shadowMapSize: q === 'ultra' ? 4096 : 2048, lightDirection: SUN_DIR.clone().negate(), camera: this.camera, lightIntensity: 2.5, lightFar: 3000, lightMargin: 250 });
+      this.csm = new CSM({ maxFar: q === 'ultra' ? 1000 : 450, cascades: q === 'ultra' ? 4 : 3, mode: 'practical', parent: this.scene, shadowMapSize: q === 'ultra' ? 4096 : 2048, lightDirection: SUN_DIR.clone().negate(), camera: this.camera, lightIntensity: 2.5, lightFar: 3000, lightMargin: 250 });
       this.csm.fade = true;
-      for (const l of this.csm.lights) { l.color.setHex(0xfff0dc); l.shadow.bias = -0.0003; l.shadow.normalBias = 0.5; }
+      for (const l of this.csm.lights) { l.color.setHex(0xfff0dc); l.shadow.bias = -0.0003; l.shadow.normalBias = 0.5; l.shadow.camera.layers.enable(SHADOW_ONLY_LAYER); }
       this.sun.intensity = 0; this.sun.castShadow = false;
       this.csmMaterials = new WeakSet();
       this.scene.traverse((o) => { const m = (o as THREE.Mesh).material as THREE.Material; if (m) m.needsUpdate = true; });

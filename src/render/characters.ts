@@ -51,6 +51,9 @@ export class Characters {
   private max: number;
   private phase = new Float32Array(200);
   hidden = -1; // local player id (first person)
+  /** camera frustum for culling off-screen players */
+  frustum: THREE.Frustum | null = null;
+  private sph = new THREE.Sphere();
   /** players drawn by the skinned soldier renderer this frame */
   skip: Set<number> = new Set();
   canopyOnly = false;
@@ -66,7 +69,7 @@ export class Characters {
     for (const n of PARTS) {
       const im = new THREE.InstancedMesh(GEO[n], n === 'canopy' ? canopyMat : mat, max);
       im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-      im.castShadow = n !== 'canopy'; im.receiveShadow = true; im.frustumCulled = false;
+      im.castShadow = false; im.receiveShadow = true; im.frustumCulled = false; // far players only (near ones are the skinned soldiers)
       im.count = 0;
       this.meshes.set(n, im); this.group.add(im);
     }
@@ -90,6 +93,7 @@ export class Characters {
       const x = p.px + (p.x - p.px) * alpha, y = p.py + (p.y - p.py) * alpha, z = p.pz + (p.z - p.pz) * alpha;
       const d2 = (x - cam.x) ** 2 + (z - cam.z) ** 2;
       if (d2 > 700 * 700) continue;
+      if (this.frustum && !this.frustum.intersectsSphere(this.sph.set(tmpV.set(x, y + 1, z), p.phase === Phase.Chute ? 7 : 1.6))) continue;
       if (n >= this.max) break;
       const speed = Math.hypot(p.vx, p.vz);
       this.phase[p.id] += dt * (speed > 0.3 ? 2.2 + speed * 0.95 : 0);

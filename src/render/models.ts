@@ -40,6 +40,11 @@ const HD_GRIP: Record<string, [number, number]> = {
   sniper_bullpup: [0.64, 0.4], rifle_bolt_wood: [0.72, 0.45], smg_mp5sd: [0.62, 0.42], smg_mp7_hd: [0.36, 0.14], smg_mpx: [0.61, 0.36],
   pistol_glock: [0.72, 0.72], pistol_deagle: [0.8, 0.8], revolver_357: [0.8, 0.8], launcher_rpg7: [0.47, 0.3],
 };
+/** low-poly stand-in for each detailed model */
+const LOW_MODEL: Record<string, string> = {
+  ar_m4_hd: 'ar_m4', ar_ak_hd: 'ar_ak', ar_scar_hd: 'dmr_west', dmr_ebr: 'dmr_west', ar_bullpup: 'smg_east', sniper_bullpup: 'sniper_west',
+  rifle_bolt_wood: 'sniper_east', smg_mp5sd: 'smg_mp5', smg_mp7_hd: 'smg_compact_west', smg_mpx: 'smg_mp5', pistol_glock: 'pistol_west', pistol_deagle: 'pistol_east', revolver_357: 'pistol_east',
+};
 /** guns whose model already has a suppressor built in */
 const BUILT_IN_SUPPRESSOR = new Set(['smg_mp5sd']);
 
@@ -68,8 +73,9 @@ class Models {
   hasGun(id: string) { return this.ready && !!GUN_MODEL[id] && this.gltf.has(GUN_MODEL[id]); }
 
   /** A posed gun (muzzle -Z) with rarity attachments; sight = height of the sight line, muzzle = distance. */
-  gun(id: string, rarity: number): GunModel | null {
-    const key = GUN_MODEL[id]; const g = key && this.gltf.get(key); if (!g) return null;
+  /** low: prefer the original low-poly pack model (ground loot, far away / many instances) */
+  gun(id: string, rarity: number, low = false): GunModel | null {
+    const key = low && LOW_MODEL[GUN_MODEL[id]] && this.gltf.has(LOW_MODEL[GUN_MODEL[id]]) ? LOW_MODEL[GUN_MODEL[id]] : GUN_MODEL[id]; const g = key && this.gltf.get(key); if (!g) return null;
     const def = WEAPON[id], sockets = this.man[key].sockets ?? {};
     const root = new THREE.Group();
     const body = skClone(g.scene); body.scale.copy(g.scene.scale); root.add(body);
@@ -159,10 +165,10 @@ class Models {
   }
 
   /** Whole gun (with attachments) merged into one vertex-coloured geometry, for instancing. */
-  bakedGun(id: string, rarity: number): THREE.BufferGeometry | null {
-    const ck = `${id}:${Math.min(rarity, 4)}`;
+  bakedGun(id: string, rarity: number, low = false): THREE.BufferGeometry | null {
+    const ck = `${id}:${Math.min(rarity, 4)}:${low}`;
     if (this.bakeCache.has(ck)) return this.bakeCache.get(ck)!;
-    const gm = this.gun(id, rarity); if (!gm) return null;
+    const gm = this.gun(id, rarity, low); if (!gm) return null;
     const geo = bake(gm.obj); this.bakeCache.set(ck, geo); return geo;
   }
 }
