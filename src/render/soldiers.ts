@@ -10,7 +10,7 @@ import { Phase, Player, Stance } from '../sim/types';
 import { WEAPON } from '../data/weapons';
 import { models } from './models';
 
-const MAX = 20, RANGE = 85;
+const MAX = 12, RANGE = 60;
 const SCALE = 0.94; // model is 1.82 m; our soldiers are ~1.72 m
 const CAMO = [[0x5b6147, 0x2e2f28], [0x6e6a58, 0x2f2e29], [0x4a4f55, 0x25272a], [0x7a6d52, 0x33302a], [0x4d5a4a, 0x2a2e29], [0x5e5e5e, 0x2a2a2a], [0x6a5a48, 0x2c2824]];
 /** clip → running speed (m/s) it was authored for, 0 = don't scale */

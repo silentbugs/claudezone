@@ -26,7 +26,7 @@ class Particles {
       transparent: true, depthWrite: false, blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending, vertexColors: true,
       uniforms: { uScale: { value: 600 } },
       vertexShader: `attribute float aSize; attribute float aAlpha; varying vec3 vC; varying float vA; uniform float uScale;
-        void main(){ vC = color; vA = aAlpha; vec4 mv = modelViewMatrix * vec4(position,1.0); gl_PointSize = clamp(aSize * uScale / -mv.z, 1.0, 512.0); gl_Position = projectionMatrix * mv; }`,
+        void main(){ vC = color; vA = aAlpha; vec4 mv = modelViewMatrix * vec4(position,1.0); gl_PointSize = clamp(aSize * uScale / -mv.z, 1.0, 256.0); gl_Position = projectionMatrix * mv; }`,
       fragmentShader: `varying vec3 vC; varying float vA; void main(){ vec2 d = gl_PointCoord - 0.5; float r = dot(d,d)*4.0; if (r > 1.0) discard; float a = vA * (1.0 - r) * (1.0 - r); gl_FragColor = vec4(vC, a); }`,
     });
     this.points = new THREE.Points(g, m); this.points.frustumCulled = false; this.points.renderOrder = 5;

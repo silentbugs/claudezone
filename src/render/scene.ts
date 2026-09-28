@@ -136,13 +136,26 @@ export class SceneMgr {
       this.csmMaterials = new WeakSet();
       this.scene.traverse((o) => { const m = (o as THREE.Mesh).material as THREE.Material; if (m) m.needsUpdate = true; });
       this.setupCsm();
-    } else if (this.sun) { this.sun.intensity = 2.5; this.scene.traverse((o) => { const m = (o as THREE.Mesh).material as THREE.Material; if (m && (m as any).defines?.USE_CSM) { delete (m as any).defines.USE_CSM; delete (m as any).defines.CSM_CASCADES; delete (m as any).defines.CSM_FADE; m.needsUpdate = true; } }); }
+    } else if (this.sun) {
+      this.sun.intensity = 2.5;
+      // undo CSM completely: original shader hook, default program cache key, no CSM defines
+      this.scene.traverse((o) => {
+        const mats = (o as THREE.Mesh).material; if (!mats) return;
+        for (const m of (Array.isArray(mats) ? mats : [mats]) as any[]) {
+          if (m.__ownHook) { m.onBeforeCompile = m.__ownHook; delete m.__ownHook; delete m.customProgramCacheKey; }
+          if (m.defines) { delete m.defines.USE_CSM; delete m.defines.CSM_CASCADES; delete m.defines.CSM_FADE; }
+        }
+      });
+      this.csmMaterials = new WeakSet();
+    }
+    // shadow / light setup changed: every material must recompile
+    this.scene.traverse((o) => { const mats = (o as THREE.Mesh).material; if (mats) for (const m of Array.isArray(mats) ? mats : [mats]) m.needsUpdate = true; });
     this.composer = null; this.grade = null; this.gtao = null;
     if (q !== 'low') {
       const c = new EffectComposer(r);
       c.addPass(new RenderPass(this.scene, this.camera));
       if (q === 'ultra') { this.gtao = new GTAOPass(this.scene, this.camera, innerWidth, innerHeight); this.gtao.blendIntensity = 0.8; c.addPass(this.gtao); }
-      if (q !== 'medium') c.addPass(new UnrealBloomPass(new THREE.Vector2(innerWidth / 2, innerHeight / 2), 0.22, 0.35, 0.92));
+      if (q !== 'medium') c.addPass(new UnrealBloomPass(new THREE.Vector2(innerWidth / 4, innerHeight / 4), 0.12, 0.3, 1.1));
       this.grade = new ShaderPass(GradeShader); c.addPass(this.grade);
       c.addPass(new OutputPass());
       c.setSize(innerWidth, innerHeight);

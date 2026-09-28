@@ -24,7 +24,7 @@ export class Ambient {
     const rnd = () => ((h = (h * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
     // fires: near a handful of POIs, on open ground or a structure top
     const pois = POIS.filter((p) => p.r > 60);
-    for (let i = 0; i < 11 && pois.length; i++) {
+    for (let i = 0; i < 6 && pois.length; i++) {
       const p = pois[Math.floor(rnd() * pois.length)];
       const a = rnd() * Math.PI * 2, d = rnd() * p.r * 0.7;
       const x = p.x + Math.cos(a) * d, z = p.z + Math.sin(a) * d;
@@ -57,14 +57,14 @@ export class Ambient {
     const R = Math.random;
     for (const f of this.fires) {
       const d = Math.hypot(f.x - cam.x, f.z - cam.z);
-      if (d > 3200) continue;
+      if (d > 2400) continue;
       f.acc += dt;
-      const every = f.big ? 0.28 : 0.45;
+      const every = f.big ? 0.9 : 1.3; // few, large puffs: smoke sprites are expensive overdraw
       while (f.acc > every) {
         f.acc -= every;
         const sh = 0.13 + R() * 0.08;
-        this.smoke.spawn(f.x + (R() - 0.5) * 3, f.y + 1, f.z + (R() - 0.5) * 3, WIND.x * 2 + (R() - 0.5), (f.big ? 5 : 3.5) + R() * 1.5, WIND.y * 2 + (R() - 0.5), f.big ? 28 : 20, f.big ? 6 : 4, f.big ? 38 : 24, sh, sh, sh * 1.02, 0.55, 0.02, -0.02);
-        if (d < 260) this.add.spawn(f.x + (R() - 0.5) * 2, f.y + 0.6, f.z + (R() - 0.5) * 2, 0, 2 + R() * 2, 0, 0.5, 1.6, 0.4, 1, 0.55 + R() * 0.2, 0.2, 0.9, 1, 0);
+        this.smoke.spawn(f.x + (R() - 0.5) * 3, f.y + 1, f.z + (R() - 0.5) * 3, WIND.x * 2 + (R() - 0.5), (f.big ? 5 : 3.5) + R() * 1.5, WIND.y * 2 + (R() - 0.5), f.big ? 20 : 15, f.big ? 7 : 5, f.big ? 30 : 20, sh, sh, sh * 1.02, 0.5, 0.02, -0.02);
+        if (d < 120) this.add.spawn(f.x + (R() - 0.5) * 2, f.y + 0.6, f.z + (R() - 0.5) * 2, 0, 2 + R() * 2, 0, 0.5, 1.6, 0.4, 1, 0.55 + R() * 0.2, 0.2, 0.9, 1, 0);
       }
     }
     let i = 0;
