@@ -10,7 +10,7 @@ import { Phase, Player, Stance } from '../sim/types';
 import { WEAPON } from '../data/weapons';
 import { models } from './models';
 
-const MAX = 14, RANGE = 55;
+const MAX = 20, RANGE = 85;
 const SCALE = 0.94; // model is 1.82 m; our soldiers are ~1.72 m
 const CAMO = [[0x5b6147, 0x2e2f28], [0x6e6a58, 0x2f2e29], [0x4a4f55, 0x25272a], [0x7a6d52, 0x33302a], [0x4d5a4a, 0x2a2e29], [0x5e5e5e, 0x2a2a2a], [0x6a5a48, 0x2c2824]];
 /** clip → running speed (m/s) it was authored for, 0 = don't scale */
@@ -21,7 +21,7 @@ interface Slot {
   actions: Map<string, THREE.AnimationAction>; cur: string; pid: number;
   bones: Record<string, THREE.Bone>; mats: THREE.MeshStandardMaterial[][];
   gun: THREE.Group; gunKey: string; grip: THREE.Vector3; guard: THREE.Vector3; pistol: boolean;
-  pitch: number; used: boolean; tilt: THREE.Group; proneK: number;
+  pitch: number; used: boolean; tilt: THREE.Group; proneK: number; downK?: number;
 }
 
 const v1 = new THREE.Vector3(), v2 = new THREE.Vector3(), v3 = new THREE.Vector3(), v4 = new THREE.Vector3();
@@ -144,12 +144,16 @@ export class Soldiers {
     const fwdV = -(p.vx * Math.sin(yaw) + p.vz * Math.cos(yaw)), sideV = p.vx * Math.cos(yaw) - p.vz * Math.sin(yaw);
     const inVeh = (p as any).vehicle !== undefined;
     // prone: the whole body lies flat (pivoting so the player's position is mid-body); a slow walk cycle reads as a crawl
-    const prone = p.stance === Stance.Prone && !inVeh;
+    const downed = p.phase === Phase.Downed;
+    const prone = (p.stance === Stance.Prone || downed) && !inVeh;
     s.proneK += ((prone ? 1 : 0) - s.proneK) * Math.min(1, dt * 6);
     const pk = s.proneK;
-    s.tilt.rotation.x = -Math.PI / 2 * pk; s.tilt.position.set(0, 0.13 * pk, 0.85 * pk);
+    // downed: rolled half onto the side, curled up
+    s.downK = (s.downK ?? 0) + ((downed ? 1 : 0) - (s.downK ?? 0)) * Math.min(1, dt * 5);
+    s.tilt.rotation.set(-Math.PI / 2 * pk, 0, 0.9 * s.downK, 'XYZ'); s.tilt.position.set(0, (0.13 + 0.08 * s.downK) * pk, 0.85 * pk);
     let clip = 'Idle';
     if (inVeh) clip = 'Driving';
+    else if (downed) clip = 'Crouch_Idle';
     else if (prone) clip = speed > 0.3 ? 'Walk' : 'Idle';
     else if (p.slideT > 0) clip = 'Slide_Loop';
     else if (p.swimming) clip = speed > 0.5 ? 'Swim' : 'Swim_Idle';
@@ -161,15 +165,16 @@ export class Soldiers {
       else if (fwdV < 0) clip = 'Swat_Run_Back';
       else clip = speed < 2.6 ? 'Walk' : 'Jog';
     }
-    this.play(s, clip);
+    const stanceChange = /Crouch/.test(clip) !== /Crouch/.test(s.cur);
+    this.play(s, clip, stanceChange ? 0.3 : 0.18);
     const a = s.actions.get(s.cur);
-    if (a) a.timeScale = prone ? (speed > 0.3 ? 0.6 : 1) : NOMINAL[s.cur] ? THREE.MathUtils.clamp(speed / NOMINAL[s.cur], 0.55, 1.7) : 1;
+    if (a) a.timeScale = s.cur === 'Crouch_Walk' && fwdV < -0.3 ? -THREE.MathUtils.clamp(speed / 1.6, 0.55, 1.5) : prone ? (speed > 0.3 ? 0.6 : 1) : NOMINAL[s.cur] ? THREE.MathUtils.clamp(speed / NOMINAL[s.cur], 0.55, 1.7) : 1;
     s.mixer.update(dt);
 
     // --- upper body: pitch the spine to the aim, hold the gun in both hands
     s.pitch += (p.pitch - s.pitch) * Math.min(1, dt * 14);
     const w = p.weapons[p.cur];
-    const armed = !!w && !p.swimming && !inVeh && WEAPON[w.id].cls !== 'melee';
+    const armed = !!w && !p.swimming && !inVeh && !downed && WEAPON[w.id].cls !== 'melee';
     s.root.updateMatrixWorld(true);
     const right = v4.set(1, 0, 0).applyQuaternion(s.root.quaternion);
     const chest = s.bones.Chest ?? s.bones.Torso;
@@ -208,7 +213,7 @@ export class Soldiers {
 }
 
 function eligible(p: Player) {
-  if (p.phase === Phase.Plane || p.phase === Phase.Dead || p.phase === Phase.Spectate || p.phase === Phase.Freefall || p.phase === Phase.Chute || p.phase === Phase.Downed) return false;
+  if (p.phase === Phase.Plane || p.phase === Phase.Dead || p.phase === Phase.Spectate || p.phase === Phase.Freefall || p.phase === Phase.Chute) return false;
   if (p.phase === Phase.GulagWait) return false;
   return true;
 }
