@@ -141,9 +141,10 @@ export class TerrainMesh {
     }
   }
 
+  lodScale = 1;
   update(cam: THREE.Vector3) {
     for (const c of this.chunks) {
-      const d = Math.hypot(c.cx - cam.x, c.cz - cam.z) - 96;
+      const d = (Math.hypot(c.cx - cam.x, c.cz - cam.z) - 96) / this.lodScale;
       let l = 0; while (l < LOD_DIST.length && d > LOD_DIST[l]) l++;
       if (l !== c.cur) { if (c.cur >= 0) c.lods[c.cur].visible = false; c.lods[l].visible = true; c.cur = l; }
     }

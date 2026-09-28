@@ -51,7 +51,11 @@ export interface Settings {
   fov: number; adsFovAffected: boolean;
   volume: number; sfx: number; ui: number;
   quality: 'low' | 'medium' | 'high' | 'ultra';
-  renderScale: number; foliage: number; showFps: boolean; hitmarkerSounds: boolean; announcer: boolean;
+  renderScale: number; foliage: number;
+  /** screen-space ambient occlusion, independent of the preset */
+  ao: boolean;
+  /** how far full-detail buildings, trees and terrain reach (and how thick the haze is) */
+  drawDistance: 'near' | 'medium' | 'far' | 'max'; showFps: boolean; hitmarkerSounds: boolean; announcer: boolean;
   brightness: number; minimapShape: 'circle' | 'square'; showCompass: boolean; showKillfeed: boolean; showCrosshair: boolean; showHitmarkers: boolean;
   chuteAutoDeploy: boolean; depletedAmmoSwitch: boolean; pauseOnMenu: boolean; musicVolume: number;
 }
@@ -69,7 +73,7 @@ export const DEFAULT_SETTINGS: Settings = {
   sens: 1, adsSens: 1, invertY: false,
   fov: 80, adsFovAffected: true,
   volume: 0.7, sfx: 1, ui: 0.8,
-  quality: 'high', renderScale: 1, foliage: 1, showFps: false, hitmarkerSounds: true, announcer: true,
+  quality: 'high', renderScale: 1, foliage: 1, ao: false, drawDistance: 'far', showFps: false, hitmarkerSounds: true, announcer: true,
   brightness: 1, minimapShape: 'circle', showCompass: true, showKillfeed: true, showCrosshair: true, showHitmarkers: true,
   chuteAutoDeploy: true, depletedAmmoSwitch: true, pauseOnMenu: true, musicVolume: 0.6,
 };

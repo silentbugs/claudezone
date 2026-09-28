@@ -175,6 +175,10 @@ export class StructureMesh {
   group = new THREE.Group();
   chunks: Chunk[] = [];
   detailDist = DETAIL_DIST;
+  /** building shells beyond this are not drawn at all (lost in the haze) */
+  farDist = 1e9;
+  /** shells cast shadows only within the shadow cascades' reach */
+  shadowDist = 450;
 
   constructor(structures: Structure[], tex: THREE.DataArrayTexture, worldSize: number, normals?: THREE.DataArrayTexture, colored?: number[]) {
     const opaque = structureMaterial(tex, false, normals, colored), glassM = structureMaterial(tex, true, normals, colored);
@@ -223,16 +227,19 @@ export class StructureMesh {
 
   update(cam: THREE.Vector3) {
     for (const c of this.chunks) {
-      const near = Math.hypot(c.cx - cam.x, c.cz - cam.z) < this.detailDist;
+      const cd = Math.hypot(c.cx - cam.x, c.cz - cam.z);
+      const near = cd < this.detailDist, far = cd > this.farDist;
       // distance from the camera to the chunk's square (0 inside it)
       const dx = Math.max(0, Math.abs(cam.x - c.cx) - CHUNK / 2), dz = Math.max(0, Math.abs(cam.z - c.cz) - CHUNK / 2);
       const detailShadow = near && Math.hypot(dx, dz) < DETAIL_SHADOW;
-      if (near === c.near && detailShadow === c.detailShadow) continue;
+      const shellShadow = cd - CHUNK * 0.7 < this.shadowDist;
+      if (near === c.near && detailShadow === c.detailShadow && far === (c as any).far && shellShadow === (c as any).shellShadow) continue;
+      (c as any).far = far; (c as any).shellShadow = shellShadow;
       c.near = near; c.detailShadow = detailShadow;
       if (c.detail) { c.detail.visible = near; c.detail.castShadow = detailShadow; }
       if (c.glass) c.glass.visible = near;
-      if (c.lod) c.lod.visible = !near;
-      if (c.shadowLod) c.shadowLod.visible = near && !detailShadow;
+      if (c.lod) { c.lod.visible = !near && !far; c.lod.castShadow = shellShadow; }
+      if (c.shadowLod) c.shadowLod.visible = near && !detailShadow && shellShadow;
     }
   }
 }

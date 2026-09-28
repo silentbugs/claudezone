@@ -50,6 +50,8 @@ export class SceneMgr {
   grade: ShaderPass | null = null;
   private gtao: GTAOPass | null = null;
   quality: Quality = 'high';
+  ao = false;
+  drawDistance: 'near' | 'medium' | 'far' | 'max' = 'far';
   csm: CSM | null = null;
   private csmTimer = 0;
   private lastFov = 0;
@@ -126,11 +128,17 @@ export class SceneMgr {
     r.setPixelRatio((q === 'ultra' ? Math.min(devicePixelRatio, 1.5) : 1) * this.renderScale);
     r.shadowMap.enabled = q !== 'low';
     if (this.sun) { this.sun.castShadow = q !== 'low'; this.sun.shadow.mapSize.set(q === 'medium' ? 1024 : 2048, q === 'medium' ? 1024 : 2048); this.sun.shadow.map?.dispose(); (this.sun.shadow as any).map = null; }
-    if (this.structures) this.structures.detailDist = q === 'low' ? 260 : q === 'medium' ? 360 : 460;
+    // draw distance: detail ranges, far-shell cutoff and haze all scale together
+    const dk = { near: 0.6, medium: 0.8, far: 1, max: 1.35 }[this.drawDistance];
+    const shadowFar = q === 'ultra' ? 800 : 450;
+    if (this.structures) { this.structures.detailDist = (q === 'low' ? 260 : q === 'medium' ? 360 : 460) * dk; this.structures.farDist = this.drawDistance === 'max' ? 1e9 : 2600 * dk; this.structures.shadowDist = q === 'high' || q === 'ultra' ? shadowFar : 200; for (const c of this.structures.chunks) c.near = null; }
+    if (this.trees) { this.trees.nearDist = 650 * dk; this.trees.shadowDist = q === 'ultra' ? 260 : 160; for (const c of (this.trees as any).chunks) c.state = -1; }
+    if (this.terrain) this.terrain.lodScale = dk;
+    if (this.scene.fog) (this.scene.fog as THREE.FogExp2).density = 0.00062 / Math.pow(dk, 1.2);
     // cascaded shadows on high/ultra: long-range shadows from buildings, trees and players
     if (this.csm) { this.csm.remove(); this.csm.dispose(); this.csm = null; }
     if (this.sun && (q === 'high' || q === 'ultra')) {
-      this.csm = new CSM({ maxFar: q === 'ultra' ? 1000 : 450, cascades: q === 'ultra' ? 4 : 3, mode: 'practical', parent: this.scene, shadowMapSize: q === 'ultra' ? 4096 : 2048, lightDirection: SUN_DIR.clone().negate(), camera: this.camera, lightIntensity: 2.5, lightFar: 3000, lightMargin: 250 });
+      this.csm = new CSM({ maxFar: shadowFar, cascades: q === 'ultra' ? 4 : 3, mode: 'practical', parent: this.scene, shadowMapSize: 2048, lightDirection: SUN_DIR.clone().negate(), camera: this.camera, lightIntensity: 2.5, lightFar: 3000, lightMargin: 250 });
       this.csm.fade = true;
       for (const l of this.csm.lights) { l.color.setHex(0xfff0dc); l.shadow.bias = -0.0003; l.shadow.normalBias = 0.5; l.shadow.camera.layers.enable(SHADOW_ONLY_LAYER); }
       this.sun.intensity = 0; this.sun.castShadow = false;
@@ -152,11 +160,11 @@ export class SceneMgr {
     // shadow / light setup changed: every material must recompile
     this.scene.traverse((o) => { const mats = (o as THREE.Mesh).material; if (mats) for (const m of Array.isArray(mats) ? mats : [mats]) m.needsUpdate = true; });
     this.composer = null; this.grade = null; this.gtao = null;
-    if (q !== 'low') {
+    if (q !== 'low' || this.ao) {
       const c = new EffectComposer(r);
       c.addPass(new RenderPass(this.scene, this.camera));
-      if (q === 'ultra') { this.gtao = new GTAOPass(this.scene, this.camera, innerWidth, innerHeight); this.gtao.blendIntensity = 0.8; c.addPass(this.gtao); }
-      if (q !== 'medium') c.addPass(new UnrealBloomPass(new THREE.Vector2(innerWidth / 4, innerHeight / 4), 0.12, 0.3, 1.1));
+      if (this.ao) { this.gtao = new GTAOPass(this.scene, this.camera, innerWidth, innerHeight); this.gtao.blendIntensity = 0.8; c.addPass(this.gtao); }
+      if (q === 'high' || q === 'ultra') c.addPass(new UnrealBloomPass(new THREE.Vector2(innerWidth / 4, innerHeight / 4), 0.12, 0.3, 1.1));
       this.grade = new ShaderPass(GradeShader); c.addPass(this.grade);
       c.addPass(new OutputPass());
       c.setSize(innerWidth, innerHeight);

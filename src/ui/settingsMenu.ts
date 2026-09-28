@@ -43,7 +43,9 @@ export class SettingsMenu {
       }
       body += `<div class="srow"><label></label><div class="sctl"><button class="reset">Reset bindings to default</button></div></div><div class="shint">Click a slot, then press a key or mouse button. Esc cancels, Backspace clears.</div>`;
     } else if (t === 'graphics') {
-      body = this.row('Quality preset', this.select('quality', [['low', 'Low'], ['medium', 'Medium'], ['high', 'High'], ['ultra', 'Ultra (ambient occlusion)']])) +
+      body = this.row('Quality preset', this.select('quality', [['low', 'Low'], ['medium', 'Medium'], ['high', 'High'], ['ultra', 'Ultra']])) +
+        this.row('Ambient occlusion', this.check('ao'), 'soft contact shadows in corners and under objects (costly)') +
+        this.row('Draw distance', this.select('drawDistance', [['near', 'Near'], ['medium', 'Medium'], ['far', 'Far'], ['max', 'Max']]), 'how far buildings and trees keep full detail; nearer is faster') +
         this.row('Field of view', this.range('fov', 60, 120, 1, (v) => v.toFixed(0))) +
         this.row('ADS field of view', this.select('adsFovAffected', [['true', 'Affected (zooms)'], ['false', 'Independent']])) +
         this.row('Render resolution', this.range('renderScale', 0.5, 1.5, 0.05, (v) => Math.round(v * 100) + '%')) +

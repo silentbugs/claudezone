@@ -143,13 +143,19 @@ export class Trees {
       this.chunks.push({ near, far: farG, cx: (ci + 0.5) * CH, cz: (cj + 0.5) * CH, state: -1 });
     }
   }
+  nearDist = 820;
+  /** tree chunks cast shadows only when the camera is within this distance of their square */
+  shadowDist = 160;
   update(cam: THREE.Vector3, time: number) {
     this.uTime.value = time;
     for (const c of this.chunks) {
-      const near = Math.hypot(c.cx - cam.x, c.cz - cam.z) < 820 ? 1 : 0;
-      if (near === c.state) continue;
-      c.state = near;
-      for (const o of c.near) o.visible = !!near;
+      const near = Math.hypot(c.cx - cam.x, c.cz - cam.z) < this.nearDist ? 1 : 0;
+      const dx = Math.max(0, Math.abs(cam.x - c.cx) - 270), dz = Math.max(0, Math.abs(cam.z - c.cz) - 270);
+      const shadow = near && Math.hypot(dx, dz) < this.shadowDist ? 2 : 0;
+      const st = near + shadow;
+      if (st === c.state) continue;
+      c.state = st;
+      for (const o of c.near) { o.visible = !!near; if ((o as any).__cast === undefined) (o as any).__cast = o.castShadow; o.castShadow = (o as any).__cast && !!shadow; }
       c.far.visible = !near;
     }
   }

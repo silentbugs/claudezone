@@ -24,7 +24,7 @@ async function boot() {
   await new Promise((r) => setTimeout(r, 30));
   const world = generateWorld(masks, 1);
   sm.buildWorld(world);
-  sm.setQuality(settings.quality); sm.setRenderScale(settings.renderScale); sm.setFoliage(settings.foliage); sm.renderer.toneMappingExposure = settings.brightness;
+  sm.ao = settings.ao; sm.drawDistance = settings.drawDistance; sm.setQuality(settings.quality); sm.setRenderScale(settings.renderScale); sm.setFoliage(settings.foliage); sm.renderer.toneMappingExposure = settings.brightness;
   const tac = renderTacMap(world);
   loading.remove();
   const input = new Input(canvas);
@@ -38,6 +38,7 @@ async function boot() {
     if (k === 'volume' || k === 'sfx' || k === 'ui') audio.setVolume(settings.volume, settings.sfx, settings.ui);
     if (k === 'announcer') audio.voiceOn = settings.announcer; audio.setMusic(settings.musicVolume);
     if (k === 'foliage') sm.setFoliage(settings.foliage);
+    if (k === 'ao' || k === 'drawDistance') { sm.ao = settings.ao; sm.drawDistance = settings.drawDistance; sm.setQuality(settings.quality); }
     if (k === 'brightness') sm.renderer.toneMappingExposure = settings.brightness;
     if (k === 'musicVolume') audio.setMusic(settings.musicVolume);
   };
