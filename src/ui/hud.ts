@@ -177,6 +177,7 @@ export class Hud {
     const mark = (x: number, z: number, cls: string) => { let b = ((Math.atan2(x - view.x, -(z - view.z)) * 180) / Math.PI + 360) % 360 - deg; b = ((b + 540) % 360) - 180; if (Math.abs(b) < 75) cm += `<i class="${cls}" style="left:${(cw / 2 + b * 4).toFixed(0)}px"></i>`; };
     for (const pg of this.pings) mark(pg.x, pg.z, '');
     for (const e of sim.enemyPings) if (e.squad === me.squad && e.until > sim.time) mark(e.x, e.z, 'enemy');
+    for (const q of sim.players) if (q.alive && q.squad !== me.squad && sim.time - ((q as any).lastLoudShot ?? -99) < 3 && Math.hypot(q.x - view.x, q.z - view.z) < 250) mark(q.x, q.z, 'shot');
     this.set('cmark', this.cpings, cm);
     const labels: Record<number, string> = { 0: 'N', 45: 'NE', 90: 'E', 135: 'SE', 180: 'S', 225: 'SW', 270: 'W', 315: 'NW' };
     const near8 = Math.round(deg / 45) * 45 % 360;
@@ -430,7 +431,8 @@ export class Hud {
     for (const cr of sim.crates) if (cr.squad === me.squad) icon(cr.x, cr.z, '#ff6fb5', 'sq', 5);
     const uav = sim.squadUav.get(me.squad);
     if (uav && uav.until > sim.time) for (const p of sim.players) if (p.alive && p.squad !== me.squad && p.phase === Phase.Alive && Math.hypot(p.x - uav.x, p.z - uav.z) < 450) icon(p.x, p.z, '#ff3a2a', 'dot', 4);
-    for (const p of sim.players) if (p.alive && p.squad !== me.squad && sim.time - ((p as any).lastLoudShot ?? -99) < 1.2 && Math.hypot(p.x - me.x, p.z - me.z) < 160) icon(p.x, p.z, 'rgba(255,60,40,0.95)', 'dot', 3.5);
+    // unsuppressed gunfire: a red dot for ~3 s within 250 m (suppressors hide it)
+    for (const p of sim.players) { const age = sim.time - ((p as any).lastLoudShot ?? -99); if (p.alive && p.squad !== me.squad && age < 3 && Math.hypot(p.x - me.x, p.z - me.z) < 250) icon(p.x, p.z, `rgba(255,60,40,${(0.95 * Math.min(1, (3 - age) / 1)).toFixed(2)})`, 'dot', 3.5); }
     const ac = sim.active.find((a) => a.squad === me.squad);
     if (ac?.kind === 'bounty') { const t = sim.players[ac.target!]; g.strokeStyle = '#ff4a3a'; g.lineWidth = 2 * px; g.beginPath(); g.arc(t.x + Math.sin(sim.time * 0.3) * 40, t.z + Math.cos(sim.time * 0.3) * 40, 90, 0, Math.PI * 2); g.stroke(); }
     if (ac?.kind === 'recon') icon(ac.zx!, ac.zz!, '#f6c343', 'sq', 6);
