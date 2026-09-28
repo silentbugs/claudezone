@@ -24,6 +24,12 @@ export interface WeaponDef {
   spreadHip: number; spreadAds: number; recoilV: number; recoilH: number;
   auto: boolean; bolt?: boolean; pump?: boolean;
   zoom: number; scope?: boolean; mobility: number;
+  /** m/s, datamined per class (IW8 rawfiles / Symthic / TrueGameData, see .harness/ref/wz_numbers.md) */
+  walk: number; adsWalk: number;
+  /** weapon drop + raise, and the Amped (quick swap) versions, seconds */
+  drop: number; raise: number; dropQuick: number; raiseQuick: number;
+  /** sprint-to-fire / tac-sprint-to-fire, seconds */
+  sprintOut: number; tacSprintOut: number;
   model: 'rifle' | 'bullpup' | 'smg' | 'lmg' | 'sniper' | 'shotgun' | 'pistol' | 'launcher' | 'marksman' | 'melee';
   look: Look;
   splash?: { radius: number; damage: number };
@@ -162,6 +168,20 @@ const ROWS: Row[] = [
   ['m79', 'M79', 'launcher', 'Cold War', [R(INF, 60)], 1, 60, 1, 1, 2.5, 350, 70, lk({ recv: 0.24, barrel: 0.32, guard: 0.1, mag: 'none', stock: 'wood', wood: true, tubeDia: 0.035 }), { family: 'CW', auto: false, splash: { radius: 5, damage: 150 }, weight: 0.12 }],
 ];
 
+/** Per-class movement and handling timings (Warzone 2020 data mine). */
+const CLASS_MOVE: Record<WeaponClass, { walk: number; ads: number; drop: number; raise: number; dropQ: number; raiseQ: number; sto: number; tsto: number }> = {
+  ar:       { walk: 4.73, ads: 2.4, drop: 0.661, raise: 0.838, dropQ: 0.243, raiseQ: 0.633, sto: 0.25, tsto: 0.375 },
+  tactical: { walk: 4.73, ads: 2.4, drop: 0.661, raise: 0.838, dropQ: 0.243, raiseQ: 0.633, sto: 0.25, tsto: 0.375 },
+  smg:      { walk: 4.93, ads: 3.1, drop: 0.518, raise: 0.787, dropQ: 0.194, raiseQ: 0.49, sto: 0.17, tsto: 0.3 },
+  lmg:      { walk: 4.44, ads: 2.0, drop: 0.942, raise: 1.432, dropQ: 0.3, raiseQ: 0.8, sto: 0.25, tsto: 0.375 },
+  marksman: { walk: 4.55, ads: 1.8, drop: 0.8, raise: 1.0, dropQ: 0.155, raiseQ: 0.575, sto: 0.25, tsto: 0.375 },
+  sniper:   { walk: 4.43, ads: 1.3, drop: 0.8, raise: 1.067, dropQ: 0.155, raiseQ: 0.575, sto: 0.25, tsto: 0.375 },
+  shotgun:  { walk: 4.83, ads: 2.9, drop: 0.6, raise: 0.8, dropQ: 0.22, raiseQ: 0.55, sto: 0.2, tsto: 0.33 },
+  pistol:   { walk: 5.13, ads: 3.6, drop: 0.4, raise: 0.81, dropQ: 0.2, raiseQ: 0.5, sto: 0.15, tsto: 0.27 },
+  launcher: { walk: 4.4, ads: 1.8, drop: 0.9, raise: 1.2, dropQ: 0.3, raiseQ: 0.7, sto: 0.3, tsto: 0.4 },
+  melee:    { walk: 5.2, ads: 3.6, drop: 0.35, raise: 0.5, dropQ: 0.2, raiseQ: 0.35, sto: 0.1, tsto: 0.2 },
+};
+
 export const WEAPONS: WeaponDef[] = ROWS.map(([id, name, cls, season, dmg, head, rpm, mag, magExt, reload, adsMs, vel, look, extra]) => {
   const c = CLS[cls];
   const auto = extra?.auto ?? (cls === 'ar' || cls === 'smg' || cls === 'lmg');
@@ -174,6 +194,7 @@ export const WEAPONS: WeaponDef[] = ROWS.map(([id, name, cls, season, dmg, head,
     spreadHip: c.hip * (cls === 'smg' ? 1 : 1), spreadAds: c.ads, recoilV: rv, recoilH: c.rh,
     auto, zoom: c.zoom, mobility: c.mob * (cls === 'ar' ? 1 - (look.recv - 0.36) * 0.2 : 1), model: look.bull ? 'bullpup' : c.model, look,
     weight: c.weight * (season === 'Cold War' ? 0.6 : 1),
+    ...(() => { const m = CLASS_MOVE[cls], tweak = (extra?.mobility ?? c.mob * (cls === 'ar' ? 1 - (look.recv - 0.36) * 0.2 : 1)) / c.mob; return { walk: m.walk * tweak, adsWalk: m.ads * tweak, drop: m.drop, raise: m.raise, dropQuick: m.dropQ, raiseQuick: m.raiseQ, sprintOut: m.sto, tacSprintOut: m.tsto }; })(),
     ...(burst ? { burst } : {}),
     ...extra,
   } as WeaponDef;

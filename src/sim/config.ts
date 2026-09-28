@@ -4,17 +4,19 @@ export const PLAYERS = 150;
 export const SQUAD_SIZE = 3;
 
 export const MOVE = {
-  walk: 4.9, sprint: 7.1, tacSprint: 9.1, crouch: 2.6, prone: 1.0, ads: 2.6, downed: 1.1, swim: 3.0,
+  // walk comes from the held weapon (WeaponDef.walk); these are multipliers / fallbacks (Warzone 2020 data mine)
+  walk: 4.9, sprintMul: 1.31, tacSprintMul: 1.57, crouchMul: 0.6, proneMul: 0.15, strafeMul: 0.7, strafeAdsMul: 0.8, backMul: 0.77, backAdsMul: 0.88,
+  sprint: 6.4, tacSprint: 7.7, crouch: 2.9, prone: 0.75, ads: 2.4, downed: 1.1, swim: 3.0,
   accel: 38, airAccel: 6, friction: 12,
   gravity: 19, jumpV: 6.1,
-  tacSprintTime: 3.6, tacSprintCooldown: 4.5,
+  tacSprintTime: 2.0, tacSprintCooldown: 4.5,
   slideSpeed: 10.2, slideTime: 1.05, slideCooldown: 0.9,
   height: 1.8, crouchH: 1.25, proneH: 0.6, radius: 0.34, step: 0.55,
   mantleMax: 2.7,
   fallSafe: 5.5, fallLethal: 16,
 };
 
-export const HEALTH = { max: 100, plate: 50, maxArmor: 150, plateTime: 1.25, regenDelay: 5, regenRate: 60, carry: 5, carrySatchel: 8 };
+export const HEALTH = { max: 100, plate: 50, maxArmor: 150, plateTime: 1.25, regenDelay: 5, regenRate: 40, stimRate: 160, carry: 5, carrySatchel: 8 };
 
 export const DEPLOY = {
   planeAlt: 620, planeSpeed: 62,

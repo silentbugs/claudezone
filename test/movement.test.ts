@@ -161,7 +161,7 @@ test('jumping indoors (floors, stairs) never goes through the ceiling', () => {
   let bad = 0, tries = 0;
   for (const s of cands) {
     // stand on each stair ramp's middle and on the ground floor next to it, jump-spam in 8 directions
-    for (const r of s.ramps.filter((q) => q.mat !== 8 /* roof slopes */).slice(0, 4)) {
+    for (const r of s.ramps.filter((q: any) => q.mat !== 8 /* roof slopes */).slice(0, 4)) {
       for (const [lx, lz] of [[(r.x0 + r.x1) / 2, (r.z0 + r.z1) / 2], [(r.x0 + r.x1) / 2 + 1.2, (r.z0 + r.z1) / 2]]) {
         for (let dir = 0; dir < 8; dir++) {
           const [wx, wz] = toWorld(s, lx, lz);

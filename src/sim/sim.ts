@@ -278,7 +278,10 @@ export class Sim {
     const it = p.intent;
     // regen
     if (p.phase === Phase.Alive || p.phase === Phase.Gulag) {
-      if (this.time - p.lastDamaged > HEALTH.regenDelay && p.health < HEALTH.max && !this.inGas(p)) p.health = Math.min(HEALTH.max, p.health + HEALTH.regenRate * dt);
+      // stim: skips the regen delay and heals fast (cancelled by damage, not by gas); otherwise 5 s delay then 40 HP/s
+      const P = p as any;
+      if (P.stimUntil > this.time && p.health < HEALTH.max) p.health = Math.min(HEALTH.max, p.health + HEALTH.stimRate * dt);
+      else if (this.time - p.lastDamaged > HEALTH.regenDelay && p.health < HEALTH.max && !this.inGas(p)) p.health = Math.min(HEALTH.max, p.health + HEALTH.regenRate * dt);
     }
     // gas
     if ((p.phase === Phase.Alive || p.phase === Phase.Downed || p.phase === Phase.Freefall || p.phase === Phase.Chute) && this.inGas(p)) {
@@ -305,7 +308,7 @@ export class Sim {
       it.tactical = false;
       if (p.phase === Phase.GulagWait) throwItem(this, p, 'rock');
       else if (p.tactical && p.tactical.n > 0) {
-        if (p.tactical.type === 'stim') { p.health = HEALTH.max; p.lastDamaged = -99; p.tacCooldown = 0; }
+        if (p.tactical.type === 'stim') { (p as any).stimUntil = this.time + 1.2; p.tacCooldown = 0; this.emit({ t: 'stim', p: p.id }); }
         else if (p.tactical.type === 'heartbeat') { (p as any).heartbeatUntil = this.time + 12; }
         else throwItem(this, p, p.tactical.type);
         if (--p.tactical.n <= 0) p.tactical = null;
@@ -417,6 +420,7 @@ export class Sim {
     if (att && att.squad === v.squad && att.id !== v.id) return; // no friendly fire
     if (att && v.phase === Phase.Gulag !== (att.phase === Phase.Gulag) && weapon !== 'rock') return;
     v.lastDamaged = this.time;
+    if (weapon !== 'gas') (v as any).stimUntil = 0; // damage cancels a stim
     if (att) v.killedBy = att.id;
     if (v.phase === Phase.Downed) {
       v.health -= amount;

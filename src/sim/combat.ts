@@ -43,7 +43,7 @@ export function weaponTick(sim: Sim, p: Player, dt: number) {
   if (p.swapT > 0) { p.swapT -= dt; return; }
   const wantSlot = it.swap ? (p.cur === 0 ? 1 : 0) : it.slot ? it.slot - 1 : -1;
   it.swap = false; it.slot = 0;
-  if (wantSlot >= 0 && wantSlot !== p.cur && p.weapons[wantSlot]) { p.cur = wantSlot; p.swapT = 0.6; p.reloadT = 0; p.plateT = 0; sim.emit({ t: 'reload', p: p.id, w: 'swap' }); return; }
+  if (wantSlot >= 0 && wantSlot !== p.cur && p.weapons[wantSlot]) { beginSwap(sim, p, wantSlot); return; }
   // plates (chain while held)
   if (p.plateT > 0) {
     p.plateT -= dt;
@@ -90,14 +90,14 @@ export function weaponTick(sim: Sim, p: Player, dt: number) {
         if (!p.triggerHeld) sim.emit({ t: 'dryfire', p: p.id });
         // depleted-ammo weapon switch
         const o = p.weapons[p.cur === 0 ? 1 : 0];
-        if (o && (p as any).prefs?.emptySwitch !== false && (o.mag > 0 || p.ammo[WEAPON[o.id].ammo] > 0)) { p.cur = p.cur === 0 ? 1 : 0; p.swapT = 0.6; sim.emit({ t: 'reload', p: p.id, w: 'swap' }); }
+        if (o && (p as any).prefs?.emptySwitch !== false && (o.mag > 0 || p.ammo[WEAPON[o.id].ammo] > 0)) { beginSwap(sim, p, p.cur === 0 ? 1 : 0); }
       }
       p.triggerHeld = true;
       return;
     }
     if (p.fireCd > 0 || p.boltT > 0) { p.triggerHeld = true; return; }
     if (!def.auto && p.triggerHeld) return;
-    if (p.sprinting) { p.sprinting = false; p.sprintOut = p.tacSprint > 0 ? 0.3 : 0.18; p.tacSprint = 0; return; } // sprint-to-fire delay
+    if (p.sprinting) { p.sprinting = false; p.sprintOut = p.tacSprint > 0 ? def.tacSprintOut : def.sprintOut; p.tacSprint = 0; return; } // sprint-to-fire delay (per class)
     if (p.sprintOut > 0) return;
     fire(sim, p, w, def, mods);
     if (def.burst && def.burst > 1) { p.burstLeft = def.burst - 1; if (w.mag <= 0) { p.burstLeft = 0; p.fireCd = 60 / (def.burstRpm ?? def.rpm); } }
@@ -380,4 +380,18 @@ function riotBlocks(v: Player, dx: number, dz: number): boolean {
   const fx = -Math.sin(v.yaw), fz = -Math.cos(v.yaw);
   const facing = -(dx * fx + dz * fz); // > 0 when the bullet comes at the victim's front
   return held ? facing > 0.55 : facing < -0.55;
+}
+
+/**
+ * Weapon swap: the old weapon drops, then the new one raises (Warzone 2020 per-class timings). With a
+ * loadout (Amped, the standard loadout perk of the time) the quick-swap timings apply.
+ */
+export function beginSwap(sim: Sim, p: Player, slot: number) {
+  const from = p.weapons[p.cur], to = p.weapons[slot]; if (!to) return;
+  const quick = p.loadoutUsed;
+  const fd = from ? WEAPON[from.id] : null, td = WEAPON[to.id];
+  const drop = fd ? (quick ? fd.dropQuick : fd.drop) : 0, raise = quick ? td.raiseQuick : td.raise;
+  (p as any).swapFrom = p.cur; (p as any).swapDrop = drop; (p as any).swapDur = drop + raise;
+  p.cur = slot; p.swapT = drop + raise; p.reloadT = 0; p.plateT = 0;
+  sim.emit({ t: 'reload', p: p.id, w: 'swap' });
 }

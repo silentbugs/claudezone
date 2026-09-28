@@ -86,6 +86,7 @@ export class ViewModel {
   private mag = new THREE.Mesh(new RoundedBoxGeometry(0.028, 0.13, 0.06, 2, 0.008), new THREE.MeshStandardMaterial({ color: 0x1d1e1f, roughness: 0.6, metalness: 0.3 }));
   private guardAt = new THREE.Vector3(); private gripZ = 0.085; private pistolArms = false;
   private reloadTotal = 0; private reloadEmpty = false;
+  private mantleHand = 0; private mantleU = 0;
   muzzle = 0.6; sight = 0.06; scope = false; optic = false; private opticZ = 0;
   private swayX = 0; swayY = 0; private bobT = 0; private kick = 0; private kickRot = 0; private flashT = 0;
   private swap = 0; private lastCur = -1; private lastId = '';
@@ -103,7 +104,15 @@ export class ViewModel {
     this.scene.add(this.root);
     this.scene.add(this.camera);
   }
-  setAspect(a: number) { this.camera.aspect = a; this.camera.updateProjectionMatrix(); }
+  /**
+   * The viewmodel keeps its own framing whatever the world FOV. Vertical 58° is tuned for 16:9; on
+   * narrower windows widen it so the horizontal view never crops the hands, gun or parachute toggles.
+   */
+  setAspect(a: number) {
+    const base = 58, ref = 16 / 9;
+    const vfov = a >= ref ? base : (2 * Math.atan(Math.tan((base * Math.PI) / 360) * ref / a) * 180) / Math.PI;
+    this.camera.aspect = a; this.camera.fov = Math.min(95, vfov); this.camera.updateProjectionMatrix();
+  }
   fire() { this.kick = 1; this.kickRot = 1; this.flashT = 0.05; this.flash.rotation.z = Math.random() * 3; }
 
   /** Hands on the parachute toggles / spread in freefall (first-person infil view). */
@@ -162,7 +171,10 @@ export class ViewModel {
   }
 
   update(p: Player, dt: number, mouseDX: number, mouseDY: number, speed: number, sprinting: boolean) {
-    const w = p.weapons[p.cur];
+    // during the drop half of a swap we still hold the old weapon
+    const P = p as any, swapDur = P.swapDur ?? 0, swapEl = swapDur - p.swapT;
+    const dropping = p.swapT > 0 && swapEl < (P.swapDrop ?? 0) && p.weapons[P.swapFrom] != null;
+    const w = dropping ? p.weapons[P.swapFrom] : p.weapons[p.cur];
     const hidden = !w || p.phase === Phase.Downed || p.phase === Phase.Freefall || p.phase === Phase.Chute || p.phase === Phase.Plane || p.phase === Phase.Dead || p.phase === Phase.GulagWait || p.swimming;
     this.root.visible = !hidden;
     if (hidden) return;
@@ -189,8 +201,12 @@ export class ViewModel {
         this.arms.geometry = pistolArms ? this.armsPistol : this.armsRifle; this.armL.visible = false;
       }
     }
-    if (p.cur !== this.lastCur || w!.id !== this.lastId) { this.swap = 1; this.lastCur = p.cur; this.lastId = w!.id; }
-    this.swap = Math.max(0, this.swap - dt * 2.2);
+    // swap pose follows the sim: lower over the drop time, raise over the raise time
+    if (p.swapT > 0 && swapDur > 0) {
+      const drop = P.swapDrop ?? 0;
+      this.swap = dropping ? Math.min(1, swapEl / Math.max(0.01, drop)) : Math.min(1, p.swapT / Math.max(0.01, swapDur - drop));
+    } else this.swap = Math.max(0, this.swap - dt * 4);
+    this.lastCur = p.cur; this.lastId = w!.id;
     const ads = p.ads;
     // sway lags the mouse; less when aiming
     const sw = 1 - ads * 0.8;
@@ -227,11 +243,17 @@ export class ViewModel {
         magVis = u > (this.reloadEmpty ? 0.12 : 0.14) && u < (this.reloadEmpty ? 0.66 : 0.78);
       }
     }
-    this.armL.position.copy(handOff ?? this.guardAt);
+    this.armL.position.copy(handOff ?? this.guardAt); this.armL.rotation.set(0, 0, 0);
     this.mag.visible = magVis;
     this.plate.visible = p.plateT > 0;
     if (p.plateT > 0) { pos.y -= 0.18; rx -= 0.4; const t = 1 - p.plateT / 1.25; this.plate.position.set(-0.08, 0.06 - t * 0.08, -0.1 + t * 0.12); this.plate.rotation.set(0.6, 0.3, 0); }
-    if (this.swap > 0) { pos.y -= this.swap * 0.25; rx -= this.swap * 0.6; }
+    if (this.swap > 0) { const e = this.swap * this.swap * (3 - 2 * this.swap); pos.y -= e * 0.3; rx -= e * 0.7; rz += e * 0.25; }
+    // mantle: weapon tucked down and away, left hand reaches out and plants on the ledge
+    if (p.mantleT > 0) {
+      const T = P.mantleDur ?? 0.5, u = 1 - p.mantleT / T, k = Math.sin(Math.min(1, u) * Math.PI);
+      pos.y -= 0.1 * k; pos.x += 0.04 * k; rx -= 0.3 * k; rz -= 0.25 * k;
+      this.mantleHand = this.glb ? k : 0; this.mantleU = u;
+    } else this.mantleHand = 0;
     // stance changes dip the weapon; prone crawling lowers and rocks it
     if (p.stanceT > 0) { const k = Math.min(1, p.stanceT / 0.45); pos.y -= 0.08 * k; rx -= 0.3 * k; rz += 0.15 * k; }
     if (p.stance === 2 && speed > 0.3) { pos.y -= 0.06; rz += Math.sin(this.bobT * 0.9) * 0.12; rx -= 0.25; }
@@ -241,6 +263,14 @@ export class ViewModel {
     pos.z += this.kick * (0.02 + (1 - ads) * 0.02);
     this.root.position.set(pos.x + bx + this.swayX, pos.y + by + this.swayY, pos.z);
     this.root.rotation.set(rx + this.kickRot * 0.05 + this.swayY * 2, ry + this.swayX * 3, rz + this.swayX * 1.5, 'YXZ');
+    if (this.mantleHand > 0.01) {
+      // the planted hand lives in view space: reach up-left, grab the ledge, then sink as we pull up over it
+      const u = this.mantleU, reach = Math.min(1, u / 0.3), push = Math.max(0, (u - 0.35) / 0.65);
+      const v = new THREE.Vector3(-0.1, -0.2 + 0.13 * reach - 0.16 * push, -0.4 + 0.05 * push);
+      this.root.updateMatrixWorld(true);
+      this.armL.position.copy(this.root.worldToLocal(v.divideScalar(1)));
+      this.armL.rotation.set(-this.root.rotation.x - 0.25, 0.15, -this.root.rotation.z - 0.2);
+    }
     // scope: hide the model when fully zoomed on a scoped weapon (overlay drawn by the HUD)
     this.arms.visible = !(this.scope && ads > 0.92);
     if (this.glb) this.armL.visible = this.arms.visible;

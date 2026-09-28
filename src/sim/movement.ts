@@ -140,20 +140,24 @@ function ground(sim: Sim, p: Player, dt: number) {
   const mob = def?.mobility ?? 1;
   const wantSprint = p.slideT <= 0 && it.sprint && !it.ads && mz > 0.3 && !downed && p.stance !== Stance.Prone && p.plateT <= 0 && !p.swimming && p.reloadT <= 0;
   if (wantSprint && !p.sprinting) { p.sprinting = true; if (p.stance === Stance.Crouch) p.stance = tryStand(sim, p); }
-  if (!wantSprint) { if (p.sprinting) p.sprintOut = p.tacSprint > 0 ? 0.3 : 0.18; p.sprinting = false; p.tacSprint = 0; }
+  if (!wantSprint) { if (p.sprinting) p.sprintOut = p.tacSprint > 0 ? (def?.tacSprintOut ?? 0.375) : (def?.sprintOut ?? 0.25); p.sprinting = false; p.tacSprint = 0; }
   if (p.sprintOut > 0) p.sprintOut -= dt;
   // tac sprint: second sprint press while sprinting (flagged by the input layer as sprint pulses)
   if (p.sprinting && (it as any).tac && p.tacCooldown <= 0 && p.tacSprint <= 0) { p.tacSprint = MOVE.tacSprintTime; (it as any).tac = false; }
   if (p.tacSprint > 0) { p.tacSprint -= dt; if (p.tacSprint <= 0) p.tacCooldown = MOVE.tacSprintCooldown; }
   else if (p.tacCooldown > 0) p.tacCooldown -= dt * (p.sprinting ? 0.5 : 1);
-  let speed = downed ? MOVE.downed : p.swimming ? MOVE.swim : p.stance === Stance.Prone ? MOVE.prone : p.stance === Stance.Crouch ? MOVE.crouch : p.sprinting ? (p.tacSprint > 0 ? MOVE.tacSprint : MOVE.sprint) : MOVE.walk;
-  if (!downed && p.stance === Stance.Stand && p.ads > 0.5) speed = Math.min(speed, MOVE.ads);
-  speed *= mob;
+  // speeds from the held weapon (walk per class, sprint x1.31, tac sprint x1.57, crouch 60%, prone 15%)
+  const walk = def?.walk ?? MOVE.walk * mob, adsWalk = def?.adsWalk ?? MOVE.ads * mob;
+  let speed = downed ? MOVE.downed : p.swimming ? MOVE.swim : p.stance === Stance.Prone ? walk * MOVE.proneMul : p.stance === Stance.Crouch ? walk * MOVE.crouchMul : p.sprinting ? walk * (p.tacSprint > 0 ? MOVE.tacSprintMul : MOVE.sprintMul) : walk;
+  const aiming = !downed && p.ads > 0.5;
+  if (aiming && p.stance === Stance.Stand) speed = Math.min(speed, adsWalk);
+  else if (aiming) speed *= adsWalk / walk;
   if (p.plateT > 0) speed *= 0.7;
   if (p.stunT > 0) speed *= 0.45;
   if (p.stanceT > 0) speed *= 0.35; // getting up / going prone
-  if (!p.sprinting) { // backwards/strafe slower
-    if (mz < 0) mz *= 0.8;
+  if (!p.sprinting) { // strafing / backpedalling are slower (datamined multipliers)
+    if (mz < 0) mz *= aiming ? MOVE.backAdsMul : MOVE.backMul;
+    mx *= aiming ? MOVE.strafeAdsMul : MOVE.strafeMul;
   }
   let tx = (fx * mz + rx * mx) * speed, tz = (fz * mz + rz * mx) * speed;
   if (p.slideT > 0) {
@@ -270,7 +274,7 @@ function tryMantle(sim: Sim, p: Player): boolean {
       if (Math.abs(g - top) < 0.3 && e >= 0.5) { deep = true; break; }
     }
     const go = (tx: number, tz: number, y: number, t: number, vault: boolean) => {
-      p.mantleT = t; p.mantleY = y;
+      t = Math.min(0.9, t); p.mantleT = t; p.mantleY = y;
       const M = p as any; M.mantleDur = t; M.mantleY0 = p.y; M.mantleX0 = p.x; M.mantleZ0 = p.z; M.mantleX1 = tx; M.mantleZ1 = tz;
       p.vx = (tx - p.x) / t; p.vz = (tz - p.z) / t; p.vy = 0;
       p.onGround = false; p.slideT = 0; p.sprinting = false;
@@ -282,11 +286,11 @@ function tryMantle(sim: Sim, p: Player): boolean {
       // vault: need crouched clearance over the top (window openings are ~1.35 m tall) and room on the far side
       const lx = x + fx * (drop + 0.4), lz = z + fz * (drop + 0.4);
       if (col.fits(x, top + 0.03, z, 0.85, 0.22) && col.fits(lx, top + 0.03, lz, 0.85, MOVE.radius * 0.8))
-        return go(lx, lz, top + 0.03, 0.32 + (top - p.y) * 0.12, true);
+        return go(lx, lz, top + 0.03, 0.5 + (top - p.y) * 0.2, true); // vault 0.5-0.9 s
     } else if (deep) {
       const tx = p.x + fx * (d + 0.4), tz = p.z + fz * (d + 0.4);
       if (col.fits(tx, top + 0.02, tz, MOVE.crouchH, MOVE.radius * 0.9))
-        return go(tx, tz, top + 0.02, 0.25 + (top - p.y) * 0.18, false);
+        return go(tx, tz, top + 0.02, 0.4 + (top - p.y) * 0.22, false); // climb 0.4-0.9 s
     }
   }
   return false;
