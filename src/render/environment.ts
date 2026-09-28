@@ -5,7 +5,39 @@ import { RIVER_DEPTH } from '../world/terrain';
 import { SHADER_NOISE } from './terrainMesh';
 
 export const SUN_DIR = new THREE.Vector3(-0.45, 0.62, -0.35).normalize();
-export const FOG_COLOR = new THREE.Color(0xb9c3c9);
+export const FOG_COLOR = new THREE.Color(0xbcc6cc);
+
+/**
+ * Aerial perspective for every fogged material: exponential haze that thins with altitude (valleys and
+ * the far side of the map sink into haze, the view from a rooftop or the plane stays clearer) and
+ * warms toward the sun. Replaces three's plain FogExp2 chunks; scene.fog.density is the ground density.
+ */
+const FOG_BASE = 20, FOG_FALLOFF = 0.0045;
+THREE.ShaderChunk.fog_pars_vertex = '#ifdef USE_FOG\n varying vec3 vFogWorld;\n#endif';
+THREE.ShaderChunk.fog_vertex = '#ifdef USE_FOG\n vFogWorld = transpose(mat3(viewMatrix)) * mvPosition.xyz;\n#endif';
+THREE.ShaderChunk.fog_pars_fragment = `#ifdef USE_FOG
+  uniform vec3 fogColor; varying vec3 vFogWorld;
+  #ifdef FOG_EXP2
+    uniform float fogDensity;
+  #else
+    uniform float fogNear; uniform float fogFar;
+  #endif
+#endif`;
+THREE.ShaderChunk.fog_fragment = `#ifdef USE_FOG
+  #ifdef FOG_EXP2
+    vec3 fd = vFogWorld; float fdist = length(fd);
+    float fk = ${FOG_FALLOFF.toFixed(5)}, fh0 = max(cameraPosition.y - ${FOG_BASE.toFixed(1)}, 0.0);
+    float fdy = fd.y * fk;
+    float fint = abs(fdy) > 1e-4 ? (1.0 - exp(-fdy)) / fdy : 1.0;
+    float fogFactor = 1.0 - exp(-fogDensity * exp(-fk * fh0) * fdist * fint);
+    float fsun = pow(max(dot(fd / max(fdist, 1e-3), vec3(${SUN_DIR.x.toFixed(4)}, ${SUN_DIR.y.toFixed(4)}, ${SUN_DIR.z.toFixed(4)})), 0.0), 6.0);
+    vec3 fcol = mix(fogColor, vec3(1.0, 0.9, 0.74), fsun * 0.55);
+  #else
+    float fogFactor = smoothstep(fogNear, fogFar, length(vFogWorld));
+    vec3 fcol = fogColor;
+  #endif
+  gl_FragColor.rgb = mix(gl_FragColor.rgb, fcol, clamp(fogFactor, 0.0, 1.0));
+#endif`;
 
 export function makeSky(): THREE.Mesh {
   const geo = new THREE.SphereGeometry(9000, 32, 16);

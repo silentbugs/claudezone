@@ -14,6 +14,7 @@ import { POIS, MAP_SIZE } from '../world/mapdata';
 import { vehicleOf, VEHICLES } from '../sim/vehicles';
 import { ICON, LETHAL_ICON, TACTICAL_ICON, STREAK_ICON } from './icons';
 import { describeGun, gunSilhouette } from '../render/gunModel';
+import { models } from '../render/models';
 import { keyName, Settings, Action } from '../core/settings';
 import { BUY_ITEMS, BuyId } from '../data/buy';
 import './hud.css';
@@ -30,12 +31,22 @@ const LOC_NAMES: Record<string, string> = {
 };
 
 const silCache = new Map<string, string>();
-function sil(id: string, rarity: number, fill = '#fff') { const k = `${id}:${rarity}:${fill}`; let s = silCache.get(k); if (!s) { s = gunSilhouette(describeGun(WEAPON[id], rarity), fill); silCache.set(k, s); } return s; }
+function sil(id: string, rarity: number, fill = '#fff') {
+  const k = `${id}:${rarity}:${fill}`; let s = silCache.get(k);
+  if (!s) {
+    // icon rendered from the actual gun model when there is one; procedural outline otherwise
+    const url = models.hasGun(id) ? models.icon(id, rarity) : null;
+    s = url ? `<img class="gsil" src="${url}" alt="">` : gunSilhouette(describeGun(WEAPON[id], rarity), fill);
+    silCache.set(k, s);
+  }
+  return s;
+}
 
 export class Hud {
   root = el('div', 'hud');
   private mm: HTMLCanvasElement; private mmCtx: CanvasRenderingContext2D;
   private circ = el('div', 'circ');
+  private cpings = el('div', 'pings');
   private compass = el('div', 'compass'); private strip = el('div', 'strip'); private heading = el('div', 'heading'); private loc = el('div', 'loc');
   private counters = el('div', 'counters');
   private feed = el('div', 'feed');
@@ -78,7 +89,7 @@ export class Hud {
     this.fmCanvas = document.createElement('canvas'); this.fmCanvas.width = this.fmCanvas.height = 1200;
     this.fullmap.append(this.fmCanvas, el('div', 'legend', '<b style="color:#fff;font-size:18px">TAC MAP</b><br>White ring: next safe zone<br>Red: gas<br>Coloured arrows: your squad<br>Dashed line: C-130 route<br>Red dots: enemies (UAV / gunfire)<br>Orange carts: buy stations<br><br>Click to place a marker — your squad will head there'));
     this.fmCanvas.addEventListener('mousedown', (e) => { const r = this.fmCanvas.getBoundingClientRect(); const x = ((e.clientX - r.left) / r.width) * MAP_SIZE, z = ((e.clientY - r.top) / r.height) * MAP_SIZE; this.pings = [{ x, z, t: 999 }]; (this.sim.players[this.localId] as any).ping = { x, z }; });
-    this.root.append(this.vig, this.scope, mmw, this.circ, this.compass, this.heading, this.loc, this.counters, this.feed, this.squad, this.inv, this.fu, this.weap, this.xh, this.hm, this.tags, this.lcard, this.hold, this.prog, this.ctx, this.alt, this.banner, this.note, this.dmg, this.flash, this.dot, this.fullmap);
+    this.root.append(this.vig, this.scope, mmw, this.circ, this.compass, this.cpings, this.heading, this.loc, this.counters, this.feed, this.squad, this.inv, this.fu, this.weap, this.xh, this.hm, this.tags, this.lcard, this.hold, this.prog, this.ctx, this.alt, this.banner, this.note, this.dmg, this.flash, this.dot, this.fullmap);
     this.buildCompass();
   }
 
@@ -161,6 +172,12 @@ export class Hud {
     const deg = ((-camYaw * 180) / Math.PI % 360 + 360) % 360;
     const cw = this.compass.clientWidth || innerWidth * 0.36;
     this.strip.style.left = `${cw / 2 - deg * 4}px`;
+    // compass markers: your location ping (yellow) and squad enemy pings (red), 4 px per degree like the strip
+    let cm = '';
+    const mark = (x: number, z: number, cls: string) => { let b = ((Math.atan2(x - view.x, -(z - view.z)) * 180) / Math.PI + 360) % 360 - deg; b = ((b + 540) % 360) - 180; if (Math.abs(b) < 75) cm += `<i class="${cls}" style="left:${(cw / 2 + b * 4).toFixed(0)}px"></i>`; };
+    for (const pg of this.pings) mark(pg.x, pg.z, '');
+    for (const e of sim.enemyPings) if (e.squad === me.squad && e.until > sim.time) mark(e.x, e.z, 'enemy');
+    this.set('cmark', this.cpings, cm);
     const labels: Record<number, string> = { 0: 'N', 45: 'NE', 90: 'E', 135: 'SE', 180: 'S', 225: 'SW', 270: 'W', 315: 'NW' };
     const near8 = Math.round(deg / 45) * 45 % 360;
     this.set('head', this.heading, `<b></b>${Math.abs(deg - Math.round(deg / 45) * 45) < 8 ? labels[near8] : Math.round(deg)}<b></b>`);
@@ -264,6 +281,7 @@ export class Hud {
     const tag = (x: number, y: number, z: number, cls: string, inner: string) => { const [sx, sy, vis] = project(x, y, z); if (vis) tg += `<div class="tag ${cls}" style="left:${sx}px;top:${sy}px">${inner}</div>`; };
     mates.forEach((p, i) => { if (p.alive && p.phase !== Phase.GulagWait && p.phase !== Phase.Gulag && p.phase !== Phase.Plane && view.phase !== Phase.Plane) tag(p.x, p.y + 2.1, p.z, '', `<span style="color:${SQUAD_COLORS[i + 1]}">${p.name}${p.phase === Phase.Downed ? ' (DOWN)' : ''}</span><span class="dotc" style="background:${SQUAD_COLORS[i + 1]}"></span><div class="d">${Math.round(Math.hypot(p.x - view.x, p.z - view.z))}m</div>`); });
     for (const pg of this.pings) tag(pg.x, sim.world.hf.at(pg.x, pg.z) + 2, pg.z, 'ping', `<i></i><div class="d">${Math.round(Math.hypot(pg.x - view.x, pg.z - view.z))}m</div>`);
+    for (const e of sim.enemyPings) if (e.squad === me.squad && e.until > sim.time) tag(e.x, e.y + 2.2, e.z, 'ping enemy', `<i></i><div class="d">${Math.round(Math.hypot(e.x - view.x, e.z - view.z))}m</div>`);
     const ac = sim.active.find((a) => a.squad === me.squad);
     if (ac?.kind === 'recon') tag(ac.zx!, ac.zy! + 3, ac.zz!, 'mk', `RECON<div class="d">${Math.round(Math.hypot(ac.zx! - view.x, ac.zz! - view.z))}m</div>`);
     if (ac?.kind === 'scavenger') { const ch = sim.chests.find((q) => q.id === ac.chest); if (ch) tag(ch.x, ch.y + 2, ch.z, 'mk', `SUPPLY<div class="d">${Math.round(Math.hypot(ch.x - view.x, ch.z - view.z))}m</div>`); }
@@ -422,6 +440,7 @@ export class Hud {
       g.fillStyle = p.phase === Phase.Downed ? '#ff4a3a' : SQUAD_COLORS[i + 1];
       g.save(); g.translate(p.x, p.z); g.rotate(-p.yaw); g.beginPath(); g.moveTo(0, -9 * px); g.lineTo(7 * px, 7 * px); g.lineTo(-7 * px, 7 * px); g.closePath(); g.fill(); g.restore();
     });
+    for (const e of sim.enemyPings) if (e.squad === me.squad && e.until > sim.time) { g.fillStyle = '#e5171c'; g.strokeStyle = '#fff'; g.lineWidth = 1.5 * px; g.beginPath(); g.moveTo(e.x, e.z - 7 * px); g.lineTo(e.x + 7 * px, e.z); g.lineTo(e.x, e.z + 7 * px); g.lineTo(e.x - 7 * px, e.z); g.closePath(); g.fill(); g.stroke(); }
     for (const pg of this.pings) { g.strokeStyle = '#f6c343'; g.lineWidth = 2 * px; g.beginPath(); g.moveTo(pg.x, pg.z - 8 * px); g.lineTo(pg.x + 8 * px, pg.z); g.lineTo(pg.x, pg.z + 8 * px); g.lineTo(pg.x - 8 * px, pg.z); g.closePath(); g.stroke(); }
   }
 

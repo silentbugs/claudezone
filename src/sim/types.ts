@@ -110,6 +110,7 @@ export type SimEvent =
   | { t: 'buy'; p: number; item: string }
   | { t: 'uav'; squad: number }
   | { t: 'cuav'; squad: number }
+  | { t: 'eping'; squad: number; by: number; target: number; x: number; y: number; z: number }
   | { t: 'contract'; p: number; kind: string; msg: 'start' | 'done' | 'fail' | 'progress' }
   | { t: 'announce'; text: string; squad?: number }
   | { t: 'squadwipe'; squad: number }

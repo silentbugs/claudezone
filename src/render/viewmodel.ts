@@ -25,6 +25,15 @@ function limb(ax: number, ay: number, az: number, bx: number, by: number, bz: nu
   g.translate(ax, ay, az);
   return part(g, color, 0, 0, 0);
 }
+/** Support (left) arm for model guns, fist at the origin so the arm can be moved as a whole. */
+function leftArmGeometry(sleeve: number, pistol: boolean): THREE.BufferGeometry {
+  const glove = 0x2e2d2a;
+  const fist = new RoundedBoxGeometry(0.055, 0.045, 0.09, 2, 0.018);
+  return mergeGeometries([
+    part(fist, glove, 0, 0, 0),
+    limb(pistol ? -0.003 : -0.006, -0.015, 0.035, pistol ? -0.08 : -0.166, -0.26, 0.26, 0.036, sleeve),
+  ].map((g) => { g.deleteAttribute('uv'); return g; }))!;
+}
 function armsGeometry(sleeve: number, pistol: boolean, glb = false, gz?: number, hz?: number): THREE.BufferGeometry {
   const glove = 0x2e2d2a;
   // model guns: grip / support-hand positions come from the model (see models.ts HD_GRIP)
@@ -35,8 +44,6 @@ function armsGeometry(sleeve: number, pistol: boolean, glb = false, gz?: number,
     return mergeGeometries([
       part(fist(0.05, 0.075, 0.075), glove, 0.004, pistol ? -0.055 : -0.06, gripZ),
       limb(0.006, -0.07, gripZ + 0.03, 0.08, -0.3, gripZ + 0.24, 0.036, sleeve),
-      part(fist(0.055, 0.045, 0.09), glove, pistol ? -0.022 : -0.004, pistol ? -0.06 : -0.035, guardZ),
-      limb(pistol ? -0.025 : -0.01, pistol ? -0.075 : -0.05, guardZ + 0.035, pistol ? -0.1 : -0.17, -0.3, guardZ + 0.26, 0.036, sleeve),
     ].map((g) => { g.deleteAttribute('uv'); return g; }))!;
   }
   return mergeGeometries([
@@ -47,6 +54,16 @@ function armsGeometry(sleeve: number, pistol: boolean, glb = false, gz?: number,
     part(B(0.07, 0.05, 0.1), glove, pistol ? -0.02 : -0.005, pistol ? -0.1 : -0.04, guardZ),
     limb(pistol ? -0.02 : -0.01, pistol ? -0.11 : -0.06, guardZ + 0.04, pistol ? -0.1 : -0.16, -0.26, guardZ + 0.36, 0.036, sleeve),
   ])!;
+}
+
+const smooth = (x: number) => { const t = Math.min(1, Math.max(0, x)); return t * t * (3 - 2 * t); };
+/** Piecewise smooth interpolation through [time, position] keys (time 0..1). */
+function keyframe(keys: [number, THREE.Vector3][], u: number): THREE.Vector3 {
+  for (let i = 1; i < keys.length; i++) if (u <= keys[i][0]) {
+    const [t0, a] = keys[i - 1], [t1, b] = keys[i];
+    return a.clone().lerp(b, smooth((u - t0) / Math.max(1e-4, t1 - t0)));
+  }
+  return keys[keys.length - 1][1].clone();
 }
 
 export class ViewModel {
@@ -63,6 +80,12 @@ export class ViewModel {
   private glb: THREE.Object3D | null = null;
   private reticle: THREE.Object3D | null = null;
   private armsCache = new Map<string, THREE.BufferGeometry>();
+  /** model guns: the left arm + a magazine it carries during reloads */
+  private armL = new THREE.Mesh(leftArmGeometry(0x4d5140, false), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85 }));
+  private armLRifle = leftArmGeometry(0x4d5140, false); private armLPistol = leftArmGeometry(0x4d5140, true);
+  private mag = new THREE.Mesh(new RoundedBoxGeometry(0.028, 0.13, 0.06, 2, 0.008), new THREE.MeshStandardMaterial({ color: 0x1d1e1f, roughness: 0.6, metalness: 0.3 }));
+  private guardAt = new THREE.Vector3(); private gripZ = 0.085; private pistolArms = false;
+  private reloadTotal = 0; private reloadEmpty = false;
   muzzle = 0.6; sight = 0.06; scope = false; optic = false; private opticZ = 0;
   private swayX = 0; swayY = 0; private bobT = 0; private kick = 0; private kickRot = 0; private flashT = 0;
   private swap = 0; private lastCur = -1; private lastId = '';
@@ -73,7 +96,8 @@ export class ViewModel {
     const fg = mergeGeometries([new THREE.PlaneGeometry(0.16, 0.16), new THREE.PlaneGeometry(0.16, 0.16).rotateY(Math.PI / 2), new THREE.PlaneGeometry(0.16, 0.16).rotateX(Math.PI / 2)])!;
     this.flash = new THREE.Mesh(fg, fm); this.flash.visible = false;
     fm.side = THREE.DoubleSide;
-    this.root.add(this.gun, this.arms, this.plate, this.flash, this.flashLight);
+    this.root.add(this.gun, this.arms, this.plate, this.flash, this.flashLight, this.armL);
+    this.armL.add(this.mag); this.mag.position.set(0, -0.07, 0); this.mag.visible = false; this.armL.visible = false;
     this.plate.visible = false;
     this.root.scale.setScalar(0.7);
     this.scene.add(this.root);
@@ -155,10 +179,14 @@ export class ViewModel {
         const ak = `${pistolArms}:${m.gripZ.toFixed(3)}:${m.guardZ.toFixed(3)}`;
         let ag = this.armsCache.get(ak); if (!ag) { ag = armsGeometry(0x4d5140, pistolArms, true, m.gripZ, m.guardZ); this.armsCache.set(ak, ag); }
         this.arms.geometry = ag;
+        this.armL.geometry = pistolArms ? this.armLPistol : this.armLRifle; this.armL.visible = true;
+        this.pistolArms = pistolArms; this.gripZ = m.gripZ;
+        this.guardAt.set(pistolArms ? -0.022 : -0.004, pistolArms ? -0.06 : -0.035, m.guardZ);
+        this.mag.scale.set(1, pistolArms ? 0.7 : 1, pistolArms ? 0.6 : 1);
       } else {
         const g = describeGun(WEAPON[w!.id], w!.rarity); this.gun.geometry.dispose(); this.gun.geometry = gunGeometry(g);
         this.muzzle = g.muzzle; this.sight = g.sight; this.scope = g.scope; this.optic = g.optic;
-        this.arms.geometry = pistolArms ? this.armsPistol : this.armsRifle;
+        this.arms.geometry = pistolArms ? this.armsPistol : this.armsRifle; this.armL.visible = false;
       }
     }
     if (p.cur !== this.lastCur || w!.id !== this.lastId) { this.swap = 1; this.lastCur = p.cur; this.lastId = w!.id; }
@@ -178,7 +206,29 @@ export class ViewModel {
     const pos = hip.clone().lerp(aim, ads);
     let rx = 0, ry = 0, rz = 0;
     if (sprinting) { const s = p.tacSprint > 0 ? 1 : 0.7; pos.x -= 0.05 * s; pos.y -= 0.06 * s; rx -= 0.35 * s; ry += 0.75 * s; rz += 0.25 * s; if (p.tacSprint > 0) { rx = 0.9; ry = 0.2; pos.y += 0.02; } }
-    if (p.reloadT > 0) { const t = Math.min(1, p.reloadT * 3); pos.y -= 0.07 * t; rx -= 0.2 * t; rz += 0.5 * t; }
+    // reload: track the reload's length when it starts (empty reloads also rack the bolt / slide)
+    if (p.reloadT > 0 && this.reloadTotal === 0) { this.reloadTotal = p.reloadT; this.reloadEmpty = w!.mag === 0; }
+    if (p.reloadT <= 0) this.reloadTotal = 0;
+    let handOff: THREE.Vector3 | null = null, magVis = false;
+    if (p.reloadT > 0 && this.reloadTotal > 0) {
+      const u = 1 - p.reloadT / this.reloadTotal;
+      // cant the gun toward you, a little lower, and hold it there
+      const tilt = smooth(u / 0.12) * (1 - smooth((u - 0.86) / 0.14));
+      pos.y -= 0.03 * tilt; pos.x += 0.015 * tilt; rz -= 0.3 * tilt; rx += 0.1 * tilt; ry += 0.1 * tilt;
+      if (this.glb) {
+        const P = this.pistolArms, g = this.guardAt;
+        const well = new THREE.Vector3(P ? 0 : -0.004, P ? -0.13 : -0.1, P ? this.gripZ + 0.01 : this.gripZ - 0.1);
+        const below = well.clone().add(new THREE.Vector3(-0.05, -0.3, 0.12));
+        const bolt = new THREE.Vector3(-0.03, P ? 0.03 : 0.035, P ? this.gripZ - 0.02 : this.gripZ - 0.04);
+        const keys: [number, THREE.Vector3][] = this.reloadEmpty
+          ? [[0, g], [0.14, well], [0.3, below], [0.46, below], [0.62, well], [0.68, well.clone().add(new THREE.Vector3(0, 0.012, 0))], [0.76, bolt], [0.84, bolt.clone().add(new THREE.Vector3(0, 0, 0.07))], [0.9, bolt], [1, g]]
+          : [[0, g], [0.16, well], [0.34, below], [0.52, below], [0.74, well], [0.8, well.clone().add(new THREE.Vector3(0, 0.012, 0))], [1, g]];
+        handOff = keyframe(keys, u);
+        magVis = u > (this.reloadEmpty ? 0.12 : 0.14) && u < (this.reloadEmpty ? 0.66 : 0.78);
+      }
+    }
+    this.armL.position.copy(handOff ?? this.guardAt);
+    this.mag.visible = magVis;
     this.plate.visible = p.plateT > 0;
     if (p.plateT > 0) { pos.y -= 0.18; rx -= 0.4; const t = 1 - p.plateT / 1.25; this.plate.position.set(-0.08, 0.06 - t * 0.08, -0.1 + t * 0.12); this.plate.rotation.set(0.6, 0.3, 0); }
     if (this.swap > 0) { pos.y -= this.swap * 0.25; rx -= this.swap * 0.6; }
@@ -193,6 +243,7 @@ export class ViewModel {
     this.root.rotation.set(rx + this.kickRot * 0.05 + this.swayY * 2, ry + this.swayX * 3, rz + this.swayX * 1.5, 'YXZ');
     // scope: hide the model when fully zoomed on a scoped weapon (overlay drawn by the HUD)
     this.arms.visible = !(this.scope && ads > 0.92);
+    if (this.glb) this.armL.visible = this.arms.visible;
     this.gun.visible = this.arms.visible && !this.glb;
     if (this.glb) this.glb.visible = this.arms.visible;
     if (this.reticle) this.reticle.visible = p.ads > 0.6 && this.arms.visible;

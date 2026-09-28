@@ -65,6 +65,8 @@ export class Sim {
   squadUav = new Map<number, { until: number; x: number; z: number }>();
   /** active Counter UAVs: enemies within COUNTER_UAV_R have their minimap scrambled */
   counterUavs: { squad: number; x: number; z: number; until: number }[] = [];
+  /** enemy pings ("enemy spotted"): a red marker where the enemy was, shared with the squad for a few seconds */
+  enemyPings: { squad: number; by: number; target: number; x: number; y: number; z: number; until: number }[] = [];
   squadReveal = new Set<number>(); // squads that see the next circle early (recon)
   placementCounter = 0;
   private itemGrid = new Map<number, Item[]>();
@@ -502,6 +504,27 @@ export class Sim {
   private updateExplosions(dt: number) {
     for (const e of this.pending) { e.delay -= dt; if (e.delay <= 0) this.explode(e.x, e.y, e.z, e.r, e.dmg, e.owner, e.kind); }
     this.pending = this.pending.filter((e) => e.delay > 0);
+  }
+
+  /** The enemy under (or right next to) p's crosshair with a clear line of sight, if any. */
+  pingTarget(p: Player, maxD = 350): Player | null {
+    const d = aimDir(p, [0, 0, 0]), ey = p.y + eyeHeight(p);
+    let best: Player | null = null, ba = Infinity;
+    for (const q of this.playersNear(p.x, p.z, maxD)) {
+      if (q.squad === p.squad || !q.alive || (q.phase !== Phase.Alive && q.phase !== Phase.Downed && q.phase !== Phase.Chute && q.phase !== Phase.Freefall)) continue;
+      const ty = q.y + (q.phase === Phase.Downed || q.stance === Stance.Prone ? 0.4 : q.stance === Stance.Crouch ? 1.0 : 1.3);
+      const vx = q.x - p.x, vy = ty - ey, vz = q.z - p.z, dist = Math.hypot(vx, vy, vz); if (dist < 1) continue;
+      const ang = Math.acos(Math.min(1, (vx * d[0] + vy * d[1] + vz * d[2]) / dist));
+      if (ang > Math.max(0.045, Math.atan(1.2 / dist)) || ang >= ba) continue;
+      if (!this.world.col.los(p.x, ey, p.z, q.x, ty, q.z)) continue;
+      best = q; ba = ang;
+    }
+    return best;
+  }
+  pingEnemy(p: Player, q: Player) {
+    this.enemyPings = this.enemyPings.filter((e) => e.until > this.time && !(e.squad === p.squad && e.target === q.id));
+    this.enemyPings.push({ squad: p.squad, by: p.id, target: q.id, x: q.x, y: q.y, z: q.z, until: this.time + 6 });
+    this.emit({ t: 'eping', squad: p.squad, by: p.id, target: q.id, x: q.x, y: q.y, z: q.z });
   }
 
   /** 0..1 how badly an enemy Counter UAV jams this player's HUD (any >0 scrambles the minimap). */

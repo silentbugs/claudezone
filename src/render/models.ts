@@ -124,6 +124,40 @@ class Models {
     return { obj: root, muzzle, sight, scope, optic, gripZ, guardZ, opticZ };
   }
 
+  /**
+   * HUD icon: the baked gun projected side-on (muzzle to the left) into a white silhouette, with faces
+   * shaded by how square-on they are so rails, magazines and stocks read like the 2020 icons.
+   */
+  private iconCache = new Map<string, string>();
+  icon(id: string, rarity: number): string | null {
+    const ck = `${id}:${Math.min(rarity, 4)}`;
+    if (this.iconCache.has(ck)) return this.iconCache.get(ck)!;
+    const geo = this.bakedGun(id, rarity); if (!geo) return null;
+    const pos = geo.attributes.position as THREE.BufferAttribute, n = pos.count;
+    let z0 = Infinity, z1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+    for (let i = 0; i < n; i++) { const z = pos.getZ(i), y = pos.getY(i); if (z < z0) z0 = z; if (z > z1) z1 = z; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+    const W = 512, pad = 6, s = (W - pad * 2) / (z1 - z0), H = Math.ceil((y1 - y0) * s + pad * 2);
+    const c = document.createElement('canvas'); c.width = W; c.height = H; const g = c.getContext('2d')!;
+    // triangles far side first so the near face wins
+    const tris: { d: number; k: number; p: number[] }[] = [];
+    const a = new THREE.Vector3(), b = new THREE.Vector3(), d = new THREE.Vector3(), nrm = new THREE.Vector3();
+    for (let i = 0; i + 2 < n; i += 3) {
+      a.fromBufferAttribute(pos, i); b.fromBufferAttribute(pos, i + 1); d.fromBufferAttribute(pos, i + 2);
+      nrm.subVectors(b, a).cross(d.clone().sub(a)); const len = nrm.length(); if (len < 1e-12) continue; nrm.divideScalar(len);
+      tris.push({ d: (a.x + b.x + d.x) / 3, k: Math.abs(nrm.x), p: [a.z, a.y, b.z, b.y, d.z, d.y] });
+    }
+    tris.sort((u, v) => u.d - v.d);
+    for (const t of tris) {
+      const lv = Math.round(150 + 105 * Math.pow(t.k, 0.6));
+      g.fillStyle = g.strokeStyle = `rgb(${lv},${lv},${lv})`; g.lineWidth = 0.6;
+      g.beginPath();
+      for (let j = 0; j < 3; j++) { const X = pad + (t.p[j * 2] - z0) * s, Y = pad + (y1 - t.p[j * 2 + 1]) * s; if (j) g.lineTo(X, Y); else g.moveTo(X, Y); }
+      g.closePath(); g.fill(); g.stroke();
+    }
+    const url = c.toDataURL('image/png');
+    this.iconCache.set(ck, url); return url;
+  }
+
   /** Whole gun (with attachments) merged into one vertex-coloured geometry, for instancing. */
   bakedGun(id: string, rarity: number): THREE.BufferGeometry | null {
     const ck = `${id}:${Math.min(rarity, 4)}`;

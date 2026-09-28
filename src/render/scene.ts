@@ -64,7 +64,7 @@ export class SceneMgr {
     this.renderer.toneMappingExposure = 1.0;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.camera = new THREE.PerspectiveCamera(80, innerWidth / innerHeight, 0.1, 12000);
-    this.scene.fog = new THREE.FogExp2(FOG_COLOR.getHex(), 0.00032);
+    this.scene.fog = new THREE.FogExp2(FOG_COLOR.getHex(), 0.00062);
     this.scene.background = FOG_COLOR.clone();
     addEventListener('resize', () => this.resize());
   }

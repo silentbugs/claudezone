@@ -108,6 +108,7 @@ function moveToward(sim: Sim, b: BotBrain, p: Player, x: number, z: number, run:
 }
 const lerpYaw = (a: number, b: number, t: number) => a + wrapAngle(b - a) * t;
 
+function humanIn(sim: Sim, p: Player): boolean { for (const q of sim.players) if (q.squad === p.squad && !q.bot) return true; return false; }
 function canSee(sim: Sim, p: Player, q: Player): boolean {
   const ey = p.y + eyeHeight(p), ty = q.y + (q.phase === Phase.Downed || q.stance === Stance.Prone ? 0.35 : q.stance === Stance.Crouch ? 1.0 : 1.4);
   if (!sim.world.col.los(p.x, ey, p.z, q.x, ty, q.z)) return false;
@@ -326,6 +327,16 @@ function decide(sim: Sim, b: BotBrain, p: Player, inGulag: boolean) {
     else if (sim.time - b.seenAt > 6) b.target = -1;
     // stalemate breaker
     if (b.target >= 0 && sim.time - b.engageStart > 18 && p.health + p.armor > 150 && q.health + q.armor > 150) { b.blacklist.set(q.id, sim.time + 20); b.target = -1; }
+  }
+  // squad callouts: a bot that just picked a target pings it for its squad (if a human is in it)
+  if (b.target >= 0 && sim.time - b.targetSince < 0.05 && humanIn(sim, p) && canSee(sim, p, sim.players[b.target])) {
+    const last = (sim as any).lastBotPing?.[p.squad] ?? -99;
+    if (sim.time - last > 5) { ((sim as any).lastBotPing ??= {})[p.squad] = sim.time; sim.pingEnemy(p, sim.players[b.target]); }
+  }
+  // an enemy pinged by the squad becomes our target when we have none and it's close enough
+  if (b.target < 0) for (const e of sim.enemyPings) if (e.squad === p.squad && e.until > sim.time && e.by !== p.id) {
+    const q = sim.players[e.target]; if (!q.alive || Math.hypot(q.x - p.x, q.z - p.z) > 160) continue;
+    b.target = q.id; b.targetSince = sim.time; b.seenAt = sim.time; b.lastSeenX = e.x; b.lastSeenZ = e.z; b.lastSeenY = e.y; b.reactAt = sim.time + 0.4; break;
   }
   // killstreaks: scans as soon as a fight starts, strikes on a target that has been dug in for a while
   if (p.killstreak && p.killstreak !== 'turret' && b.target >= 0 && !inGulag && p.phase === Phase.Alive) {

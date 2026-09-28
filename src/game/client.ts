@@ -9,6 +9,7 @@ import { Input } from '../core/input';
 import { SceneMgr } from '../render/scene';
 import { Characters } from '../render/characters';
 import { Soldiers } from '../render/soldiers';
+import { Ambient } from '../render/ambient';
 import { ViewModel } from '../render/viewmodel';
 import { Effects } from '../render/effects';
 import { VehicleMeshes } from '../render/vehicles';
@@ -28,6 +29,7 @@ export class Match {
   hud: Hud;
   chars = new Characters();
   soldiers = new Soldiers();
+  ambient!: Ambient;
   vm = new ViewModel();
   fx: Effects;
   vehMeshes = new VehicleMeshes();
@@ -61,6 +63,7 @@ export class Match {
     ui.appendChild(this.hud.root);
     this.fx = new Effects(this.sim, sm.scene);
     sm.scene.add(this.chars.group); sm.scene.add(this.soldiers.group);
+    this.ambient = new Ambient(world, seed, this.fx.smoke, this.fx.add); sm.scene.add(this.ambient.group);
     sm.scene.add(this.vehMeshes.group);
     this.loot = new LootMeshes(this.sim); sm.scene.add(this.loot.group);
     this.chars.hidden = 0;
@@ -73,7 +76,7 @@ export class Match {
   }
 
   dispose() {
-    this.sm.scene.remove(this.chars.group); this.sm.scene.remove(this.soldiers.group); this.sm.scene.remove(this.fx.group); this.sm.scene.remove(this.vehMeshes.group); this.sm.scene.remove(this.loot.group);
+    this.sm.scene.remove(this.chars.group); this.sm.scene.remove(this.soldiers.group); this.sm.scene.remove(this.ambient.group); this.sm.scene.remove(this.fx.group); this.sm.scene.remove(this.vehMeshes.group); this.sm.scene.remove(this.loot.group);
     this.hud.root.remove(); this.pauseEl?.remove(); this.fpsEl.remove(); this.closeSettings(); this.input.onUnlock = () => {};
     audio.stopLoops();
   }
@@ -109,7 +112,11 @@ export class Match {
       this.controls.poll(this.me, time);
       const ui = this.controls.takeUi();
       if (ui.map) this.mapOpen = !this.mapOpen;
-      if (ui.ping) { const [x, , z] = this.sim.aimPoint(this.me, 800); this.hud.pings = [{ x, z, t: 999 }]; (this.me as any).ping = { x, z }; audio.play('beep', { vol: 0.3 }); }
+      if (ui.ping) {
+        const q = this.sim.pingTarget(this.me);
+        if (q) this.sim.pingEnemy(this.me, q);
+        else { const [x, , z] = this.sim.aimPoint(this.me, 800); this.hud.pings = [{ x, z, t: 999 }]; (this.me as any).ping = { x, z }; audio.play('beep', { vol: 0.3 }); }
+      }
     } else inp.endFrame();
     this.fpsAcc += dt; this.fpsN++; if (this.fpsAcc > 0.5) { this.fpsEl.textContent = this.settings.showFps ? `${Math.round(this.fpsN / this.fpsAcc)} FPS` : ''; this.fpsAcc = 0; this.fpsN = 0; }
     if (!this.paused) {
@@ -199,6 +206,7 @@ export class Match {
       case 'revive': if (e.p === 0) audio.play('revive', { vol: 0.6 }); break;
       case 'buy': if (e.p === 0) audio.play('uiBuy', { ui: true, vol: 0.6 }); if (sim.players[e.p].squad === me.squad) { if (e.item === 'uav') {} else if (e.item === 'loadout') audio.say('Loadout drop inbound.'); } break;
       case 'uav': audio.say(e.squad === me.squad ? 'UAV online.' : 'Enemy UAV overhead.'); break;
+      case 'eping': if (e.squad === me.squad) { audio.play('beep', { vol: 0.45, rate: 1.35 }); if (e.by === this.me.id) audio.say('Enemy spotted.'); } break;
       case 'cuav': audio.say(e.squad === me.squad ? 'Counter UAV online.' : 'Enemy Counter UAV deployed.'); break;
       case 'gas': if (e.p === 0 && Math.random() < 0.35) audio.play('cough', { vol: 0.55, throttle: 1.2 }); break;
       case 'throw': if (e.p === 0) { audio.play('pin', { vol: 0.4 }); audio.play('throw', { vol: 0.5 }); } break;
@@ -317,6 +325,7 @@ export class Match {
     this.soldiers.update(sim.players, a, cam.position, dt, sim.time);
     this.chars.skip = this.soldiers.ids;
     this.chars.update(sim.players, a, cam.position, dt, me.squad);
+    this.ambient.update(dt, cam.position);
     this.fx.viewId = this.viewId();
     this.fx.update(dt, a, cam.position, time, cam.fov);
     this.vehMeshes.update(sim.vehicles, a, dt, cam.position);
