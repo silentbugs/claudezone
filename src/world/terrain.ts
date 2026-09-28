@@ -81,6 +81,8 @@ export interface TerrainExtras {
   snow: Float32Array;
   /** 0..1 paved ground (plazas, lots, sidewalks) from the tac map's built-up areas. */
   paved: Float32Array;
+  /** Freight loop centreline: x, y (rail top), z every ~2 m, closed. */
+  railPath: Float32Array;
   /** Marks samples that are river ice / river bed. 1 = ice, 2 = water bed */
   river: Uint8Array;
   rivers: RiverDef[];
@@ -233,10 +235,51 @@ export function buildTerrain(masks: MapMasks): { hf: Heightfield; extra: Terrain
       bridges.push({ x: mx, z: mz, a: -(ra + Math.PI / 2), len: span, w: 12, y: yy }); // local x runs across the river
     }
   }
+  // --- the south-west freight loop (Season 4 2020): a smooth, graded bed flattened into the terrain.
+  // The sampled path (x, y, z every 2 m, closed loop) is what the train runs on.
+  const railPath: number[] = [];
+  {
+    const src = VERDANSK.rail[0].pts as unknown as [number, number][];
+    // Catmull-Rom through the traced points so the curves are smooth
+    const P = src.slice(0, -1); // last point repeats the first
+    const pts: [number, number][] = [];
+    for (let i = 0; i < P.length; i++) {
+      const p0 = P[(i - 1 + P.length) % P.length], p1 = P[i], p2 = P[(i + 1) % P.length], p3 = P[(i + 2) % P.length];
+      const L = Math.hypot(p2[0] - p1[0], p2[1] - p1[1]), steps = Math.max(2, Math.ceil(L / 2));
+      for (let s = 0; s < steps; s++) {
+        const t = s / steps, t2 = t * t, t3 = t2 * t;
+        const f = (a: number, b: number, c: number, d: number) => 0.5 * (2 * b + (-a + c) * t + (2 * a - 5 * b + 4 * c - d) * t2 + (-a + 3 * b - 3 * c + d) * t3);
+        pts.push([f(p0[0], p1[0], p2[0], p3[0]), f(p0[1], p1[1], p2[1], p3[1])]);
+      }
+    }
+    // height: ground under the line, smoothed along the loop (~120 m window) and kept above the sea
+    const g = pts.map(([x, z]) => h[clamp(Math.round(z / sp), 0, n - 1) * n + clamp(Math.round(x / sp), 0, n - 1)]);
+    const W = 30, m = pts.length, ys = new Array(m).fill(0);
+    for (let i = 0; i < m; i++) { let s = 0, c = 0; for (let d = -W; d <= W; d++) { const w = W + 1 - Math.abs(d); s += g[(i + d + m) % m] * w; c += w; } ys[i] = Math.max(2.2, s / c); }
+    for (let i = 0; i < m; i++) railPath.push(pts[i][0], ys[i], pts[i][1]);
+    // flatten: bed within 3.5 m of the centreline, blend back to the terrain by 10 m.
+    // Two passes: each cell takes the height of its nearest track sample (no accumulation on grades).
+    const bestD = new Float32Array(n * n).fill(1e9), bestY = new Float32Array(n * n);
+    const R = Math.ceil(10 / sp);
+    for (let i = 0; i < m; i++) {
+      const [x, z] = pts[i];
+      for (let dj = -R; dj <= R; dj++) for (let di = -R; di <= R; di++) {
+        const ii = Math.round(x / sp) + di, jj = Math.round(z / sp) + dj; if (ii < 0 || jj < 0 || ii >= n || jj >= n) continue;
+        const d = Math.hypot(ii * sp - x, jj * sp - z), k = jj * n + ii;
+        if (d < bestD[k]) { bestD[k] = d; bestY[k] = ys[i] - 0.35; } // ballast top sits just under the rails
+      }
+    }
+    for (let k = 0; k < n * n; k++) {
+      const d = bestD[k]; if (d > 10) continue;
+      const w = d <= 3.5 ? 1 : 1 - smoothstep(3.5, 10, d);
+      h[k] = lerp(h[k], bestY[k], w);
+      if (w > 0.6) { roadR[k] = 0; riverR[k] = 0; }
+    }
+  }
   const pb = blur(blur(builtR, n, 2), n, 2);
   const paved = new Float32Array(n * n);
   for (let k = 0; k < n * n; k++) paved[k] = riverR[k] || h[k] < 0.5 ? 0 : clamp((pb[k] - 0.18) * 2.2, 0, 1) * (1 - snow[k]);
-  return { hf, extra: { road, snow, paved, river: riverR, rivers, bridges } };
+  return { hf, extra: { road, snow, paved, river: riverR, rivers, bridges, railPath: Float32Array.from(railPath) } };
 }
 
 /** Water surface height at a point (sea = 0, rivers use their profile), or -Infinity where dry. */

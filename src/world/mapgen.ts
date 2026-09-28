@@ -119,6 +119,8 @@ export function generateWorld(masks: MapMasks, seed = 1): WorldData {
     const k = Math.round(z / hf.step) * hf.res + Math.round(x / hf.step);
     if (extra.river[k] || hf.h[k] < 0.3 || extra.road[k] > 0.35) occ.g[j * occ.res + i] = 3;
   }
+  // the freight line and a margin either side are off-limits too
+  { const rp = extra.railPath; for (let i = 0; i < rp.length; i += 3) { const x = rp[i], z = rp[i + 2]; for (let dz = -8; dz <= 8; dz += occ.cell) for (let dx = -8; dx <= 8; dx += occ.cell) { const oi = Math.floor((x + dx) / occ.cell), oj = Math.floor((z + dz) / occ.cell); if (oi >= 0 && oj >= 0 && oi < occ.res && oj < occ.res) occ.g[oj * occ.res + oi] = 3; } } }
   const ctx: GenContext = {
     rng, hf, extra, masks, col, occ,
     buyStations: [], chests: [], contracts: [], vehicleSpawns: [], wires: [], balloons: [],
@@ -234,6 +236,19 @@ export function generateWorld(masks: MapMasks, seed = 1): WorldData {
   for (const g of groundLoot) if (rng.chance(0.16)) ctx.chests.push({ x: g.x, y: g.y, z: g.z });
   col.finalize();
   void placed; void props;
+  // restore the track bed where later footprints (the Train Station, pads nearby) moved the ground under it
+  {
+    const rp = extra.railPath, n = hf.res, sp = hf.step, R = Math.ceil(4.5 / sp);
+    for (let i = 0; i < rp.length; i += 3) {
+      const x = rp[i], y = rp[i + 1] - 0.35, z = rp[i + 2];
+      for (let dj = -R; dj <= R; dj++) for (let di = -R; di <= R; di++) {
+        const ii = Math.round(x / sp) + di, jj = Math.round(z / sp) + dj; if (ii < 0 || jj < 0 || ii >= n || jj >= n) continue;
+        const d = Math.hypot(ii * sp - x, jj * sp - z), k = jj * n + ii;
+        if (d <= 2.6) hf.h[k] = y; // bed: exact (cut or fill)
+        else if (d <= 4.5) { const lim = (d - 2.6) * 1.2; hf.h[k] = Math.min(y + lim, Math.max(y - lim, hf.h[k])); } // shoulders: at most a 50° slope from the bed
+      }
+    }
+  }
   return { hf, extra, col, trees, masks, buyStations: ctx.buyStations, chests: ctx.chests, contracts: ctx.contracts, groundLoot: groundLoot.filter((g) => !ctx.chests.includes(g as any)), vehicleSpawns: ctx.vehicleSpawns, wires: Float32Array.from(ctx.wires), balloons: ctx.balloons };
 }
 

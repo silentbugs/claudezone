@@ -10,6 +10,7 @@ import { SceneMgr } from '../render/scene';
 import { Characters } from '../render/characters';
 import { Soldiers } from '../render/soldiers';
 import { Ambient } from '../render/ambient';
+import { TrainMeshes } from '../render/trainMesh';
 import { ViewModel } from '../render/viewmodel';
 import { Effects } from '../render/effects';
 import { VehicleMeshes } from '../render/vehicles';
@@ -32,6 +33,7 @@ export class Match {
   private lowState = false; private lowK = 0; private beatT = 0; private breathT = 0;
   private frustum = new THREE.Frustum(); private projView = new THREE.Matrix4();
   ambient!: Ambient;
+  trainMesh: TrainMeshes | null = null;
   vm = new ViewModel();
   fx: Effects;
   vehMeshes = new VehicleMeshes();
@@ -66,6 +68,7 @@ export class Match {
     this.fx = new Effects(this.sim, sm.scene);
     sm.scene.add(this.chars.group); sm.scene.add(this.soldiers.group);
     this.ambient = new Ambient(world, seed, this.fx.smoke, this.fx.add); sm.scene.add(this.ambient.group);
+    if (this.sim.train) { this.trainMesh = new TrainMeshes(this.sim.train, (world.extra as any).railPath); sm.scene.add(this.trainMesh.group); }
     sm.scene.add(this.vehMeshes.group);
     this.loot = new LootMeshes(this.sim); sm.scene.add(this.loot.group);
     this.chars.hidden = 0;
@@ -78,7 +81,7 @@ export class Match {
   }
 
   dispose() {
-    this.sm.scene.remove(this.chars.group); this.sm.scene.remove(this.soldiers.group); this.sm.scene.remove(this.ambient.group); this.sm.scene.remove(this.fx.group); this.sm.scene.remove(this.vehMeshes.group); this.sm.scene.remove(this.loot.group);
+    this.sm.scene.remove(this.chars.group); this.sm.scene.remove(this.soldiers.group); this.sm.scene.remove(this.ambient.group); if (this.trainMesh) this.sm.scene.remove(this.trainMesh.group); this.sm.scene.remove(this.fx.group); this.sm.scene.remove(this.vehMeshes.group); this.sm.scene.remove(this.loot.group);
     this.hud.root.remove(); this.pauseEl?.remove(); this.fpsEl.remove(); this.closeSettings(); this.input.onUnlock = () => {};
     audio.stopLoops();
   }
@@ -102,6 +105,7 @@ export class Match {
     const adsMul = 1 + (this.settings.adsSens / zoom - 1) * Math.min(1, p.ads * 1.2);
     const s = this.settings.sens * 0.0022 * adsMul * (p.stunT > 0 ? 0.35 : 1);
     this.camYaw -= dx * s;
+    { const ty = (this.me as any).trainYaw; if (ty) { this.camYaw += ty; (this.me as any).trainYaw = 0; } } // riding the train turns you with the car
     this.camPitch = clamp(this.camPitch - dy * s * (this.settings.invertY ? -1 : 1), -1.45, 1.45);
   }
 
@@ -347,6 +351,7 @@ export class Match {
     cam.updateMatrixWorld(); this.frustum.setFromProjectionMatrix(this.projView.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse)); this.chars.frustum = this.frustum;
     this.chars.update(sim.players, a, cam.position, dt, me.squad);
     this.ambient.update(dt, cam.position);
+    this.trainMesh?.update(a);
     this.fx.viewId = this.viewId();
     this.fx.update(dt, a, cam.position, time, cam.fov);
     this.vehMeshes.update(sim.vehicles, a, dt, cam.position);

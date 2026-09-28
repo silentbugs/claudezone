@@ -59,7 +59,7 @@ class Models {
       const r = await fetch(base + 'manifest.json'); if (!r.ok) return;
       this.man = await r.json();
       const loader = new GLTFLoader();
-      const want = new Set<string>(['soldier_swat', 'att_suppressor', 'att_red_dot', 'att_holo', 'att_scope', ...Object.values(GUN_MODEL)]);
+      const want = new Set<string>(['soldier_swat', 'att_suppressor', 'att_red_dot', 'att_holo', 'att_scope', ...Object.values(GUN_MODEL), ...Object.values(LOW_MODEL), 'container_red', 'container_green']);
       await Promise.all([...want].map(async (k) => {
         const e = this.man[k]; if (!e) return;
         try { const g = await loader.loadAsync(e.file.startsWith('models/') ? e.file : base + e.file); this.gltf.set(k, g); } catch (err) { console.warn('model failed', k, err); }

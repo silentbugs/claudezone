@@ -10,6 +10,7 @@ import { inPlayable } from '../world/mapgen';
 import { MAP_SIZE, POIS } from '../world/mapdata';
 import { GULAG_POS, GULAG_SPAWNS, GULAG_BALCONY_Z, GULAG_ARENAS, gulagArena } from '../world/landmarks';
 import { WEAPON, AMMO_MAX, AmmoType } from '../data/weapons';
+import { Train } from './train';
 import { PLAYERS, SQUAD_SIZE, HEALTH, DEPLOY, DOWNED, GAS, CIRCLES, INITIAL_RADIUS, GULAG, PRICES, CONTRACT } from './config';
 import { Bullet, Chest, emptyIntent, Explosion, Item, ItemKind, Phase, Player, SimEvent, Stance, Throwable } from './types';
 import { movePlayer, eyeHeight } from './movement';
@@ -40,6 +41,7 @@ export class Sim {
   players: Player[] = [];
   items: Item[] = [];
   chests: Chest[] = [];
+  train: Train | null = null;
   bullets: Bullet[] = [];
   throwables: Throwable[] = [];
   fires: { x: number; y: number; z: number; r: number; t: number; owner: number }[] = [];
@@ -94,6 +96,14 @@ export class Sim {
     // loot
     for (const g of world.groundLoot) if (this.rng.chance(0.7)) this.addItem(randomItem(this, g.x, g.y, g.z));
     for (const ch of world.chests) this.chests.push({ id: this.nextId++, x: ch.x, y: ch.y, z: ch.z, opened: false, legendary: this.rng.chance(0.06) });
+    // the freight train, starting at a random point on its loop, with its loot caches
+    world.col.dyn = world.col.dyn.filter((d) => d.kind !== 'train'); // the world object is shared between matches
+    const rp = (world.extra as any).railPath as Float32Array | undefined;
+    if (rp && rp.length > 30) {
+      this.train = new Train(this, rp, this.rng.range(0, 1e5));
+      for (const [ci, lx, lz, leg] of Train.CACHES) { const ch: any = { id: this.nextId++, x: 0, y: 0, z: 0, opened: false, legendary: leg, train: [ci, lx, lz] }; this.chests.push(ch); }
+      this.train.update(0);
+    }
     for (const b of world.buyStations) { const p = this.snapToFree(b.x, b.z); if (p) this.buyStations.push({ id: this.nextId++, ...p }); }
     for (const c2 of world.contracts) { const p = this.snapToFree(c2.x, c2.z); if (p) this.contracts.push({ id: this.nextId++, kind: this.rng.pick(['bounty', 'scavenger', 'recon'] as const), ...p, taken: false }); }
     this.spawnVehicles();
@@ -237,6 +247,7 @@ export class Sim {
     this.time += dt;
     if (wasWarm && !this.inWarmup) this.endWarmup();
     if (this.inWarmup) for (const p of this.players) if ((p as any).respawnAt !== undefined && this.time >= (p as any).respawnAt) this.warmupSpawn(p);
+    this.train?.update(dt);
     this.rebuildPlayerGrid();
     this.updatePlane(dt);
     // bots think in staggered slices (10 Hz each)
