@@ -49,7 +49,10 @@ function styleFor(rng: Rng, kind: 'house' | 'block' | 'tower' | 'industrial' | '
 }
 
 export interface Tree { x: number; y: number; z: number; s: number; kind: 0 | 1 | 2 } // 0 pine, 1 birch/leafy, 2 bush
+/** A hinged door: its collision structure and closed angle. */
+export interface DoorRec { sid: number; base: number; w: number; h: number }
 export interface WorldData {
+  doors: DoorRec[];
   hf: Heightfield;
   extra: TerrainExtras;
   col: CollisionWorld;
@@ -121,6 +124,7 @@ export function generateWorld(masks: MapMasks, seed = 1): WorldData {
   }
   // the freight line and a margin either side are off-limits too
   { const rp = extra.railPath; for (let i = 0; i < rp.length; i += 3) { const x = rp[i], z = rp[i + 2]; for (let dz = -8; dz <= 8; dz += occ.cell) for (let dx = -8; dx <= 8; dx += occ.cell) { const oi = Math.floor((x + dx) / occ.cell), oj = Math.floor((z + dz) / occ.cell); if (oi >= 0 && oj >= 0 && oi < occ.res && oj < occ.res) occ.g[oj * occ.res + oi] = 3; } } }
+  const doors: DoorRec[] = [];
   const ctx: GenContext = {
     rng, hf, extra, masks, col, occ,
     buyStations: [], chests: [], contracts: [], vehicleSpawns: [], wires: [], balloons: [],
@@ -157,7 +161,14 @@ export function generateWorld(masks: MapMasks, seed = 1): WorldData {
       if (opts.mark !== false) occ.mark(wx, wz, angle, w, d, opts.pad ?? 1.5, 1);
       const st = makeStructure(0, kind, x, y, z, angle, b.parts, b.ramps, b.loot);
       st.poi = opts.poi; st.style = opts.style; st.lodColor = opts.lodColor;
-      return col.add(st);
+      const added = col.add(st);
+      // hinged door leaves: each its own small structure pivoting on its hinge
+      for (const d of (b as any).doors ?? []) {
+        const hx = x + d.x * c + d.z * s, hz = z - d.x * s + d.z * c, a = angle + d.angle;
+        const ds = makeStructure(0, 'door', hx, y + d.y, hz, a, [{ x0: 0, y0: 0, z0: -0.025, x1: d.w, y1: d.h, z1: 0.025, mat: Mat.Wood, color: 0x6b5238 }]);
+        col.add(ds); doors.push({ sid: ds.id, base: a, w: d.w, h: d.h });
+      }
+      return added;
     },
   };
 
@@ -249,7 +260,7 @@ export function generateWorld(masks: MapMasks, seed = 1): WorldData {
       }
     }
   }
-  return { hf, extra, col, trees, masks, buyStations: ctx.buyStations, chests: ctx.chests, contracts: ctx.contracts, groundLoot: groundLoot.filter((g) => !ctx.chests.includes(g as any)), vehicleSpawns: ctx.vehicleSpawns, wires: Float32Array.from(ctx.wires), balloons: ctx.balloons };
+  return { doors, hf, extra, col, trees, masks, buyStations: ctx.buyStations, chests: ctx.chests, contracts: ctx.contracts, groundLoot: groundLoot.filter((g) => !ctx.chests.includes(g as any)), vehicleSpawns: ctx.vehicleSpawns, wires: Float32Array.from(ctx.wires), balloons: ctx.balloons };
 }
 
 import { VERDANSK } from '../data/verdansk';

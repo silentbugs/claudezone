@@ -205,6 +205,7 @@ function ground(sim: Sim, p: Player, dt: number) {
   const ox = p.x, oz = p.z;
   p.x += p.vx * dt; p.z += p.vz * dt;
   clampToWorld(sim, p);
+  sim.doors?.pushBy(p, MOVE.radius, tx, tz);
   col.pushOut(p.x, p.y, p.z, h, MOVE.radius, MOVE.step, push);
   p.x = push.x; p.z = push.z;
   if (push.hit) {

@@ -186,7 +186,7 @@ export class StructureMesh {
     const bufs: { d: GeoBuf; g: GeoBuf; l: GeoBuf }[] = Array.from({ length: n * n }, () => ({ d: new GeoBuf(), g: new GeoBuf(), l: new GeoBuf() }));
     const em = new Emitter();
     for (const s of structures) {
-      if (s.kind === 'tree') continue;
+      if (s.kind === 'tree' || s.kind === 'door') continue; // doors are drawn (and swung) by DoorMeshes
       const ci = Math.min(n - 1, Math.max(0, Math.floor(s.z / CHUNK))) * n + Math.min(n - 1, Math.max(0, Math.floor(s.x / CHUNK)));
       const B = bufs[ci];
       for (const p of s.parts) {

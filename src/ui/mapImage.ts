@@ -28,7 +28,7 @@ export function renderTacMap(w: WorldData, size = 1620): HTMLCanvasElement {
   // buildings: footprints of tall parts
   g.lineWidth = Math.max(1, size / 1620);
   for (const s of w.col.structures) {
-    if (s.kind === 'tree' || s.kind === 'gulag' || s.kind === 'prop') continue;
+    if (s.kind === 'tree' || s.kind === 'gulag' || s.kind === 'prop' || s.kind === 'door') continue;
     const c = s.cos, sn = s.sin;
     const k = 1 / S;
     const draw = (x0: number, z0: number, x1: number, z1: number) => {

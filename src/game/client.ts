@@ -11,6 +11,7 @@ import { Characters } from '../render/characters';
 import { Soldiers } from '../render/soldiers';
 import { Ambient } from '../render/ambient';
 import { TrainMeshes } from '../render/trainMesh';
+import { DoorMeshes } from '../render/doorMesh';
 import { ViewModel } from '../render/viewmodel';
 import { Effects } from '../render/effects';
 import { VehicleMeshes } from '../render/vehicles';
@@ -34,6 +35,7 @@ export class Match {
   private frustum = new THREE.Frustum(); private projView = new THREE.Matrix4();
   ambient!: Ambient;
   trainMesh: TrainMeshes | null = null;
+  doorMesh: DoorMeshes | null = null;
   vm = new ViewModel();
   fx: Effects;
   vehMeshes = new VehicleMeshes();
@@ -68,6 +70,7 @@ export class Match {
     this.fx = new Effects(this.sim, sm.scene);
     sm.scene.add(this.chars.group); sm.scene.add(this.soldiers.group);
     this.ambient = new Ambient(world, seed, this.fx.smoke, this.fx.add); sm.scene.add(this.ambient.group);
+    if (this.sim.doors) { this.doorMesh = new DoorMeshes(this.sim.doors, world); sm.scene.add(this.doorMesh.group); }
     if (this.sim.train) { this.trainMesh = new TrainMeshes(this.sim.train, (world.extra as any).railPath); sm.scene.add(this.trainMesh.group); }
     sm.scene.add(this.vehMeshes.group);
     this.loot = new LootMeshes(this.sim); sm.scene.add(this.loot.group);
@@ -81,7 +84,7 @@ export class Match {
   }
 
   dispose() {
-    this.sm.scene.remove(this.chars.group); this.sm.scene.remove(this.soldiers.group); this.sm.scene.remove(this.ambient.group); if (this.trainMesh) this.sm.scene.remove(this.trainMesh.group); this.sm.scene.remove(this.fx.group); this.sm.scene.remove(this.vehMeshes.group); this.sm.scene.remove(this.loot.group);
+    this.sm.scene.remove(this.chars.group); this.sm.scene.remove(this.soldiers.group); this.sm.scene.remove(this.ambient.group); if (this.trainMesh) this.sm.scene.remove(this.trainMesh.group); if (this.doorMesh) this.sm.scene.remove(this.doorMesh.group); this.sm.scene.remove(this.fx.group); this.sm.scene.remove(this.vehMeshes.group); this.sm.scene.remove(this.loot.group);
     this.hud.root.remove(); this.pauseEl?.remove(); this.fpsEl.remove(); this.closeSettings(); this.input.onUnlock = () => {};
     audio.stopLoops();
   }
@@ -213,6 +216,7 @@ export class Match {
       case 'buy': if (e.p === 0) audio.play('uiBuy', { ui: true, vol: 0.6 }); if (sim.players[e.p].squad === me.squad) { if (e.item === 'uav') {} else if (e.item === 'loadout') audio.say('Loadout drop inbound.'); } break;
       case 'uav': audio.say(e.squad === me.squad ? 'UAV online.' : 'Enemy UAV overhead.'); break;
       case 'eping': if (e.squad === me.squad) { audio.play('beep', { vol: 0.45, rate: 1.35 }); if (e.by === this.me.id) audio.say('Enemy spotted.'); } break;
+      case 'door': if (d(e.x, e.y, e.z) < 40) audio.play(e.loud ? 'doorSlam' : e.open ? 'doorOpen' : 'doorClose', { x: e.x, y: e.y, z: e.z, range: e.loud ? 14 : 6, vol: e.loud ? 1 : 0.6 }); break;
       case 'cuav': audio.say(e.squad === me.squad ? 'Counter UAV online.' : 'Enemy Counter UAV deployed.'); break;
       case 'gas': if (e.p === 0 && Math.random() < 0.35) audio.play('cough', { vol: 0.55, throttle: 1.2 }); break;
       case 'throw': if (e.p === 0) { audio.play('pin', { vol: 0.4 }); audio.play('throw', { vol: 0.5 }); } break;
@@ -352,6 +356,7 @@ export class Match {
     this.chars.update(sim.players, a, cam.position, dt, me.squad);
     this.ambient.update(dt, cam.position);
     this.trainMesh?.update(a);
+    this.doorMesh?.update(cam.position);
     this.fx.viewId = this.viewId();
     this.fx.update(dt, a, cam.position, time, cam.fov);
     this.vehMeshes.update(sim.vehicles, a, dt, cam.position);

@@ -30,7 +30,7 @@ export class NavGrid {
     }
     // structures: mark cells covered by ground-level collidable parts taller than a crouch
     for (const s of col.structures) {
-      if (s.kind === 'tree' || s.kind === 'lamp' || s.kind === 'pole' || s.kind === 'gulag') continue;
+      if (s.kind === 'tree' || s.kind === 'lamp' || s.kind === 'pole' || s.kind === 'gulag' || s.kind === 'door') continue; // doors get pushed open
       for (const p of s.parts) {
         if (p.noCollide || p.y1 - Math.max(p.y0, 0) < 1.2 || p.y0 > 1.4) continue;
         const w = p.x1 - p.x0, d = p.z1 - p.z0;

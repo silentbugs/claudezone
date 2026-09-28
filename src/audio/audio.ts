@@ -18,7 +18,7 @@ export type SoundName =
   | 'step_dirt' | 'step_concrete' | 'step_metal' | 'step_wood' | 'land' | 'jump' | 'slide' | 'gear'
   | 'pickup' | 'cash' | 'chute' | 'chuteCut' | 'explosion' | 'explosionFar' | 'whiz' | 'impact' | 'impactMetal' | 'impactWood' | 'impactGlass' | 'impactWater'
   | 'musicInfil' | 'musicVictory' | 'musicDefeat'
-  | 'uiOpen' | 'uiHover' | 'uiBuy' | 'uiDeny' | 'downed' | 'cough' | 'heartbeat' | 'breath' | 'beep' | 'revive' | 'crate' | 'stinger' | 'flag' | 'rock';
+  | 'uiOpen' | 'uiHover' | 'uiBuy' | 'uiDeny' | 'downed' | 'cough' | 'heartbeat' | 'breath' | 'doorOpen' | 'doorClose' | 'doorSlam' | 'beep' | 'revive' | 'crate' | 'stinger' | 'flag' | 'rock';
 
 type Loop = 'engine' | 'wind' | 'gas' | 'chute' | 'vehicle' | 'heli' | 'tinnitus';
 
@@ -416,6 +416,13 @@ export class Audio {
     // low health: a thumping heartbeat (replaced by the recording when loaded) and a pained in/out breath
     const beat = (sd: number) => tone(0.35, (t) => Math.sin(2 * Math.PI * 48 * t) * Math.exp(-t * 18)).mix(tone(0.35, (t) => t < 0.16 ? 0 : Math.sin(2 * Math.PI * 44 * (t - 0.16)) * Math.exp(-(t - 0.16) * 20)), 0.7).mix(N(0.35, sd).filter('lp', 120).env((t) => Math.exp(-t * 20)), 0.4);
     this.add('heartbeat', beat(2500));
+    // doors: a latch click + hinge creak; closing ends in a thud; a slam is a loud wooden bang
+    const creak = (sd: number, f0: number) => tone(0.45, (t) => Math.sin(2 * Math.PI * (f0 + 40 * Math.sin(t * 25)) * t) * 0.25 * Math.sin(Math.min(1, t / 0.45) * Math.PI)).mix(N(0.45, sd).filter('bp', 1800, 4).env((t) => Math.sin(Math.min(1, t / 0.45) * Math.PI) * 0.3), 1);
+    const latch = (sd: number) => N(0.05, sd).filter('bp', 3200, 3).env((t) => Math.exp(-t * 90));
+    const thud = (sd: number) => tone(0.3, (t) => Math.sin(2 * Math.PI * 95 * t) * Math.exp(-t * 22)).mix(N(0.3, sd).filter('lp', 700).env((t) => Math.exp(-t * 25)), 0.8);
+    this.add('doorOpen', latch(2700).mix(creak(2701, 420), 0.8, 0.04), latch(2702).mix(creak(2703, 360), 0.8, 0.04));
+    this.add('doorClose', creak(2704, 380).mix(thud(2705), 1, 0.35).mix(latch(2706), 1, 0.38));
+    this.add('doorSlam', thud(2707).mix(N(0.25, 2708).filter('bp', 900, 1.2).env((t) => Math.exp(-t * 18)), 1).mix(thud(2709), 0.6, 0.02));
     const breath = (sd: number) => N(1.5, sd).filter('bp', 900, 0.8).mix(N(1.5, sd + 1).filter('bp', 2400, 1.2), 0.35).env((t) => t < 0.55 ? Math.sin((t / 0.55) * Math.PI) * 0.8 : t > 0.7 ? Math.sin(((t - 0.7) / 0.8) * Math.PI) * 0.55 : 0);
     this.add('breath', breath(2600), breath(2610), breath(2620));
     this.add('revive', tone(0.6, (t) => Math.sin(2 * Math.PI * (500 + t * 700) * t) * Math.exp(-t * 5)).mix(N(0.3, 2400).filter('hp', 2500).env((t) => Math.exp(-t * 10)), 0.3));

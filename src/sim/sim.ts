@@ -11,6 +11,7 @@ import { MAP_SIZE, POIS } from '../world/mapdata';
 import { GULAG_POS, GULAG_SPAWNS, GULAG_BALCONY_Z, GULAG_ARENAS, gulagArena } from '../world/landmarks';
 import { WEAPON, AMMO_MAX, AmmoType } from '../data/weapons';
 import { Train } from './train';
+import { Doors } from './doors';
 import { PLAYERS, SQUAD_SIZE, HEALTH, DEPLOY, DOWNED, GAS, CIRCLES, INITIAL_RADIUS, GULAG, PRICES, CONTRACT } from './config';
 import { Bullet, Chest, emptyIntent, Explosion, Item, ItemKind, Phase, Player, SimEvent, Stance, Throwable } from './types';
 import { movePlayer, eyeHeight } from './movement';
@@ -42,6 +43,8 @@ export class Sim {
   items: Item[] = [];
   chests: Chest[] = [];
   train: Train | null = null;
+  doors: Doors | null = null;
+  private doorTmp: any[] = [];
   bullets: Bullet[] = [];
   throwables: Throwable[] = [];
   fires: { x: number; y: number; z: number; r: number; t: number; owner: number }[] = [];
@@ -96,6 +99,7 @@ export class Sim {
     // loot
     for (const g of world.groundLoot) if (this.rng.chance(0.7)) this.addItem(randomItem(this, g.x, g.y, g.z));
     for (const ch of world.chests) this.chests.push({ id: this.nextId++, x: ch.x, y: ch.y, z: ch.z, opened: false, legendary: this.rng.chance(0.06) });
+    this.doors = new Doors(this);
     // the freight train, starting at a random point on its loop, with its loot caches
     world.col.dyn = world.col.dyn.filter((d) => d.kind !== 'train'); // the world object is shared between matches
     const rp = (world.extra as any).railPath as Float32Array | undefined;
@@ -248,6 +252,7 @@ export class Sim {
     if (wasWarm && !this.inWarmup) this.endWarmup();
     if (this.inWarmup) for (const p of this.players) if ((p as any).respawnAt !== undefined && this.time >= (p as any).respawnAt) this.warmupSpawn(p);
     this.train?.update(dt);
+    this.doors?.update(dt);
     this.rebuildPlayerGrid();
     this.updatePlane(dt);
     // bots think in staggered slices (10 Hz each)
@@ -338,7 +343,7 @@ export class Sim {
   }
 
   /** What the player is looking at to interact with (for prompts and for the action). */
-  interactTarget(p: Player): { kind: 'revive' | 'chest' | 'item' | 'buy' | 'contract' | 'crate' | 'vehicle' | 'exit' | 'balloon' | 'box' | 'turret' | 'unman'; id: number; label: string } | null {
+  interactTarget(p: Player): { kind: 'door' | 'revive' | 'chest' | 'item' | 'buy' | 'contract' | 'crate' | 'vehicle' | 'exit' | 'balloon' | 'box' | 'turret' | 'unman'; id: number; label: string } | null {
     if (p.turret >= 0) return { kind: 'unman', id: p.turret, label: 'Leave Shield Turret' };
     if ((p as any).vehicle !== undefined) return { kind: 'exit', id: (p as any).vehicle, label: 'Exit vehicle' };
     for (const q of this.playersNear(p.x, p.z, 2.5)) if (q.squad === p.squad && q.id !== p.id && q.phase === Phase.Downed) return { kind: 'revive', id: q.id, label: `Revive ${q.name}` };
@@ -361,6 +366,12 @@ export class Sim {
     for (const t of this.turrets) if (t.user < 0 && Math.abs(t.x - p.x) < 3 && Math.abs(t.z - p.z) < 3) consider('turret', t.id, 'Use Shield Turret', t.x, t.y + 1, t.z, 2.8, -0.3);
     this.world.balloons.forEach((b, i) => { if (Math.abs(b.x - p.x) < 4 && Math.abs(b.z - p.z) < 4) consider('balloon', i, 'Use Redeploy Balloon', b.x, b.y + 1.2, b.z, 3.5, -0.5); });
     for (const cr of this.crates) if (cr.squad === p.squad && this.time >= cr.land && !cr.taken.has(p.id) && Math.abs(cr.x - p.x) < 3 && Math.abs(cr.z - p.z) < 3) consider('crate', cr.id, 'Open Loadout Drop', cr.x, cr.y + 0.6, cr.z, 3);
+    // doors (lowest priority: only when nothing else is in reach)
+    if (!best && this.doors) for (const st of this.world.col.near(p.x, p.z, 2.4, this.doorTmp)) {
+      if (st.kind !== 'door') continue; const i = this.doors.byStructure.get(st.id); if (i === undefined) continue;
+      const w = this.world.doors[i].w, open = Math.abs(this.doors.open[i]) > 0.15;
+      consider('door', i, open ? 'Close Door' : p.ads > 0.5 ? 'Crack Door' : 'Open Door', st.x + st.cos * w / 2, st.y + 1.1, st.z - st.sin * w / 2, 2.2, 0.55);
+    }
     return best ? { kind: (best as any).kind, id: (best as any).id, label: (best as any).label } : null;
   }
 
@@ -371,6 +382,7 @@ export class Sim {
     if (!press) return;
     if (t.kind === 'chest') { const c = this.chests.find((c2) => c2.id === t.id)!; c.opened = true; for (const itm of chestContents(this, c.x, c.y, c.z, c.legendary)) this.addItem(itm); this.emit({ t: 'chest', p: p.id, x: c.x, y: c.y, z: c.z }); }
     else if (t.kind === 'item') { const itm = this.itemById.get(t.id); if (itm) tryPickup(this, p, itm, true); }
+    else if (t.kind === 'door') this.doors?.interact(t.id, p);
     else if (t.kind === 'buy') { if (!p.bot) this.emit({ t: 'announce', text: '__buy__', squad: p.squad }); else (p as any).atBuy = t.id; }
     else if (t.kind === 'contract') this.acceptContract(p, t.id);
     else if (t.kind === 'vehicle') { const v = this.vehicles.find((q) => q.id === t.id); if (v) enterVehicle(this, p, v); }

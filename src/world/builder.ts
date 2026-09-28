@@ -9,12 +9,15 @@ import { Rng } from '../core/rng';
 export const FLOOR_H = 3.2;
 export const WALL_T = 0.25;
 
-export interface Opening { u0: number; u1: number; v0: number; v1: number; glass?: boolean }
+export interface Opening { u0: number; u1: number; v0: number; v1: number; glass?: boolean; /** no door leaf (arches, garages, shop fronts) */ open?: boolean }
+/** A hinged door leaf in builder-local space: hinge at (x, z), closed leaf runs along +angle direction. */
+export interface DoorDef { x: number; z: number; y: number; angle: number; w: number; h: number }
 
 export class Builder {
   parts: Part[] = [];
   ramps: RampPart[] = [];
   loot: [number, number, number][] = [];
+  doors: DoorDef[] = [];
   box(x0: number, y0: number, z0: number, x1: number, y1: number, z1: number, mat: Mat, extra?: Partial<Part>): Part {
     const p: Part = { x0: Math.min(x0, x1), y0: Math.min(y0, y1), z0: Math.min(z0, z1), x1: Math.max(x0, x1), y1: Math.max(y0, y1), z1: Math.max(z0, z1), mat, ...extra };
     if (p.x1 - p.x0 < 1e-3 || p.y1 - p.y0 < 1e-3 || p.z1 - p.z0 < 1e-3) return p;
@@ -42,6 +45,19 @@ export class Builder {
       void e;
     }
     const ops = openings.filter((o) => o.u1 > 0 && o.u0 < len).sort((p, q) => p.u0 - q.u0);
+    // hinged doors in door-sized, floor-level openings (single ~1 m, double ~1.8 m as two leaves)
+    for (const o of ops) {
+      const ow = o.u1 - o.u0, oh = o.v1 - o.v0;
+      if (o.open || o.glass || o.v0 > 0.05 || oh < 1.9 || oh > 2.8 || ow < 0.7 || ow > 2.3) continue;
+      const leaves = ow > 1.45 ? 2 : 1, lw = ow / leaves - 0.02;
+      for (let k = 0; k < leaves; k++) {
+        // hinge at the jamb; leaf direction along the wall toward the other jamb (or the centre for doubles)
+        const hu = k === 0 ? o.u0 + 0.01 : o.u1 - 0.01, dir = k === 0 ? 1 : -1;
+        const hx = axis === 0 ? a + hu : c, hz = axis === 0 ? c : a + hu;
+        const ang = axis === 0 ? (dir > 0 ? 0 : Math.PI) : (dir > 0 ? -Math.PI / 2 : Math.PI / 2);
+        this.doors.push({ x: hx, z: hz, y: y0 + o.v0, angle: ang, w: lw, h: Math.min(oh - 0.03, 2.2) });
+      }
+    }
     const seg = (u0: number, u1: number, v0: number, v1: number, m: Mat) => {
       if (u1 - u0 < 0.02 || v1 - v0 < 0.02) return;
       if (axis === 0) this.box(a + u0, y0 + v0, c - t / 2, a + u1, y0 + v1, c + t / 2, m, color !== undefined ? { color } : undefined);
