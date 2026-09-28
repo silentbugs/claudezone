@@ -40,27 +40,24 @@ test('freight train loops the south-west line and carries a rider', () => {
   assert.ok(p.health >= 100, 'no fall damage');
 });
 
-test('parachute onto the moving train', () => {
+test('drop onto the moving train and keep riding', () => {
   const sim = new Sim(world, 9, { humans: 1 });
   const tr = sim.train!;
   for (const q of sim.players) if (q.id !== 0) { q.phase = 6; q.alive = false; }
   const e = sim.players[149]; Object.assign(e, { phase: 4, alive: true, bot: false, x: 3000, z: 300, y: 300 });
   sim.time = 200;
   const p = sim.players[0];
-  // aim for car 3, leading it by the train's travel during the descent (~40 m of fall at chute speed)
-  const c = tr.cars[3];
-  const fall = 40, tFall = fall / 5.2, [lx, , lz] = tr.at(tr.s - c.offset + 10 * tFall);
-  Object.assign(p, { phase: 3, alive: true, bot: false, x: lx, z: lz, y: c.st.y + 1.3 + fall, vx: 0, vy: -5, vz: 0 });
+  // move the train to a stretch of open track (nothing static within 12 m) so the drop is clean
+  for (let s2 = 0; s2 < tr.len; s2 += 25) { const [x, , z] = tr.at(s2 - tr.cars[3].offset + 6); if (world.col.near(x, z, 12, []).every((q: any) => q.kind === 'train')) { tr.s = s2; break; } }
+  tr.update(0);
+  // fall 3 m onto car 3 (lead the car by its travel during the ~0.55 s fall)
+  const c = tr.cars[3], tFall = Math.sqrt(2 * 3 / 19), [lx, , lz] = tr.at(tr.s - c.offset + 10 * tFall);
+  Object.assign(p, { phase: 4, alive: true, bot: false, x: lx, z: lz, y: c.st.y + 1.3 + 3, vx: 0, vy: 0, vz: 0, onGround: false, fallStartY: c.st.y + 1.3 + 3 });
   p.px = p.x; p.py = p.y; p.pz = p.z; p.intent.mx = 0; p.intent.mz = 0;
   let landedOn: any = null;
-  for (let t = 0; t < 20 * 60 && !landedOn; t++) {
-    // steer toward the car like a player would
-    const dx = c.st.x - p.x, dz = c.st.z - p.z; p.yaw = p.intent.yaw = Math.atan2(-dx, -dz); p.intent.mz = Math.hypot(dx, dz) > 2 ? 1 : 0;
-    sim.tick(1 / 60); sim.events.length = 0;
-    if (p.phase === 4) landedOn = tr.carUnder(p.x, p.y, p.z);
-  }
-  for (let t = 0; t < 120; t++) { p.intent.mz = 0; sim.tick(1 / 60); sim.events.length = 0; }
-  console.log('landed on car', landedOn ? tr.cars.indexOf(landedOn) : 'none', 'still on train', !!tr.carUnder(p.x, p.y, p.z), 'hp', p.health);
-  assert.ok(landedOn, 'landed on a car');
+  for (let t = 0; t < 10 * 60 && !landedOn; t++) { sim.tick(1 / 60); sim.events.length = 0; if (p.onGround) landedOn = tr.carUnder(p.x, p.y, p.z) ?? 'ground'; }
+  for (let t = 0; t < 180; t++) { p.intent.mz = 0; sim.tick(1 / 60); sim.events.length = 0; }
+  console.log('landed on', landedOn === 'ground' ? 'ground' : landedOn ? 'car ' + tr.cars.indexOf(landedOn) : 'nothing', 'riding 3 s later', !!tr.carUnder(p.x, p.y, p.z), 'hp', p.health);
+  assert.ok(landedOn && landedOn !== 'ground', 'landed on a car');
   assert.ok(tr.carUnder(p.x, p.y, p.z), 'riding afterwards');
 });

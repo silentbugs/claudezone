@@ -253,8 +253,21 @@ export function generateWorld(masks: MapMasks, seed = 1): WorldData {
   }
   // supply chests: a share of the loot spots become chests
   for (const g of groundLoot) if (rng.chance(0.16)) ctx.chests.push({ x: g.x, y: g.y, z: g.z });
-  col.finalize();
   void placed; void props;
+  // street furniture that landed on the line: nudge it off to the side
+  {
+    const rp = extra.railPath;
+    for (const st of col.structures) {
+      if (st.kind !== 'lamp' && st.kind !== 'prop' && st.kind !== 'pole') continue;
+      let bd = Infinity, bi = 0;
+      for (let i = 0; i < rp.length; i += 3) { const d = (rp[i] - st.x) ** 2 + (rp[i + 2] - st.z) ** 2; if (d < bd) { bd = d; bi = i; } }
+      const d = Math.sqrt(bd), need = 3.2 + st.radius;
+      if (d >= need) continue;
+      const ox = d > 0.01 ? (st.x - rp[bi]) / d : 1, oz = d > 0.01 ? (st.z - rp[bi + 2]) / d : 0;
+      st.x = rp[bi] + ox * (need + 0.5); st.z = rp[bi + 2] + oz * (need + 0.5); st.y = hf.at(st.x, st.z);
+    }
+  }
+  col.finalize();
   // restore the track bed where later footprints (the Train Station, pads nearby) moved the ground under it
   {
     const rp = extra.railPath, n = hf.res, sp = hf.step, R = Math.ceil(4.5 / sp);

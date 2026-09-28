@@ -72,6 +72,7 @@ function air(sim: Sim, p: Player, dt: number, chute: boolean) {
     p.y = Math.max(g2, w - 1.0);
     const hard = !chute && p.vy < -25;
     p.phase = Phase.Alive; p.onGround = true; p.vy = 0; p.vx *= 0.3; p.vz *= 0.3; p.fallStartY = p.y;
+    if (sim.train?.carUnder(p.x, p.y, p.z)) { p.vx = 0; p.vz = 0; } // landed on the train: the car carries us from here
     sim.emit({ t: 'land', p: p.id, hard });
     if (hard) sim.damage(p, 999, -1, 'fall', false, true);
   }

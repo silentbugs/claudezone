@@ -96,7 +96,7 @@ export class Train {
       const st = c.st, dx = x - st.x, dz = z - st.z;
       if (dx * dx + dz * dz > (c.len / 2 + 1) ** 2) continue;
       const lx = dx * st.cos - dz * st.sin, lz = dx * st.sin + dz * st.cos, ly = y - st.y;
-      for (const p of st.parts) if (lx >= p.x0 - 0.2 && lx <= p.x1 + 0.2 && lz >= p.z0 - 0.2 && lz <= p.z1 + 0.2 && Math.abs(ly - p.y1) < 0.25) return c;
+      for (const p of st.parts) if (lx >= p.x0 - 0.4 && lx <= p.x1 + 0.4 && lz >= p.z0 - 0.4 && lz <= p.z1 + 0.4 && ly > p.y1 - 0.15 && ly < p.y1 + 0.45) return c; // within a body radius of the edge
     }
     return null;
   }

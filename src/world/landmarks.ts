@@ -312,9 +312,20 @@ function hospital(ctx: GenContext) {
 }
 
 function trainStation(ctx: GenContext) {
-  const p = poi('train_station');
+  const p0 = poi('train_station');
   const rng = ctx.rng;
-  const ang = -0.52; // long axis SW -> NE
+  // align with the freight line: long axis along the track, the live line in the slot between the platforms (local z = 31)
+  let ang = -0.52, p = { ...p0 };
+  const rp = ctx.extra.railPath;
+  if (rp && rp.length > 6) {
+    let bi = 0, bd = Infinity;
+    for (let i = 0; i < rp.length; i += 3) { const d = (rp[i] - p0.x) ** 2 + (rp[i + 2] - p0.z) ** 2; if (d < bd) { bd = d; bi = i; } }
+    const j = (bi + 3 * 8) % rp.length, k = (bi - 3 * 8 + rp.length) % rp.length;
+    const tx = rp[j] - rp[k], tz = rp[j + 2] - rp[k + 2], tl = Math.hypot(tx, tz);
+    ang = Math.atan2(-tz / tl, tx / tl);
+    const nx = Math.sin(ang), nz = Math.cos(ang);
+    p = { ...p0, x: rp[bi] - nx * 31, z: rp[bi + 2] - nz * 31 };
+  }
   const st = { wall: Mat.Concrete, wallColor: 0xcfc6b2, trim: 0, roof: Mat.Roof, roofColor: 0x5a5048 };
   ctx.place(apartment(rng, 90, 20, 2, st, { glassBands: true }), 'station', p.x, p.z, ang, { poi: 'train_station', lodColor: 0xcfc6b2 });
   // platforms + canopy + parked trains
@@ -325,7 +336,7 @@ function trainStation(ctx: GenContext) {
     b.box(-80, 6, zz - 5, 80, 6.3, zz + 5, Mat.Metal, { color: 0x6c7176 });
     b.addLoot(-40, 1.1, zz); b.addLoot(30, 1.1, zz);
   }
-  for (const zz of [31, 49]) for (let k = 0; k < 4; k++) {
+  for (const zz of [49]) for (let k = 0; k < 4; k++) { // a parked train on the far track (the near one is the live line)
     const x0 = -70 + k * 24;
     b.box(x0, 0.4, zz - 1.6, x0 + 22, 4.4, zz + 1.6, Mat.Metal, { color: k === 0 ? 0x8a3a2a : 0x4f6a5a });
   }
