@@ -49,6 +49,12 @@ and the mountain rim are also there.
 - **Buy stations** at 2020 prices: Armor Plate Bundle, Gas Mask, Self-Revive Kit, UAV, Cluster Strike, Precision Airstrike, Shield Turret, Munitions Box, Armor Box, Loadout Drop and Squad Buyback.
 - **Contracts.** Bounty, Scavenger and Recon.
 
+**Train and buildings.**
+- The freight train loops the south-west line at about 10 m/s (a lap takes ~6 minutes). You can parachute onto it, ride it, fight from it, and loot its caches.
+- About 14,000 hinged doors: walk into one to push it open, sprint to slam it, press Use to open or close it, and aim while pressing Use to crack it open.
+- Shops and warehouses have exterior roof ladders.
+- Village houses sit on raised plinths with steps, and many have a lean-to annex you can climb to reach the roof.
+
 **Vehicles.** ATV, Tactical Rover, SUV, Cargo Truck and a light helicopter.
 - Seats: passengers can shoot, drivers can't.
 - Vehicles take damage and explode.
@@ -63,7 +69,7 @@ and the mountain rim are also there.
 
 ## Controls
 
-Every key is rebindable in **Settings → Key bindings** (from the main menu or **Esc** in a match). Crouch, prone, aim, sprint, tactical sprint and plating each have hold/toggle options; there are also sensitivity, ADS multiplier, FOV, graphics preset, render scale, foliage density, volume buses and an announcer toggle.
+Movement speeds, weapon swap times, sprint-to-fire, mantle timings and health regen use data-mined Warzone 2020 values (see `.harness/ref/wz_numbers.md` if present). Every key is rebindable in **Settings → Key bindings** (from the main menu or **Esc** in a match). Crouch, prone, aim, sprint, tactical sprint and plating each have hold/toggle options; there are also sensitivity, ADS multiplier, FOV, graphics preset, ambient occlusion, draw distance, render scale, foliage density, volume buses and an announcer toggle.
 
 | Default key | Action |
 |---|---|
