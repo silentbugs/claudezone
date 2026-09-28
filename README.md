@@ -1,7 +1,7 @@
 # Verdansk — a Warzone (2020) rebuild
 
-A browser rebuild of the original 2020 Warzone Battle Royale on Verdansk: a 150-player trios
-match against 149 bots, on a map traced from the 2020 tac map. Everything you see and hear is
+A browser rebuild of the original 2020 Warzone Battle Royale on Verdansk: a 150-player match in
+Solos, Duos or Trios against 149 bots, on a map traced from the 2020 tac map. Everything you see and hear is
 generated in code or comes from CC0 asset libraries (no ripped assets): terrain, buildings, vehicles and
 fallback sounds are generated; soldiers, guns, photo textures and most sounds are CC0 downloads.
 
@@ -81,7 +81,7 @@ Every key is rebindable in **Settings → Key bindings** (from the main menu or 
 | G / Q | Lethal / tactical |
 | 5 / X | Killstreak / field upgrade |
 | Q (while parachuting) | Hold for third person |
-| MMB / Left Alt | Ping (your squad moves to it) |
+| MMB / Left Alt | Ping: on an enemy it marks them for your squad (red), otherwise a location your squad moves to |
 | M | Tac map |
 | Esc | Pause menu and settings |
 
@@ -102,5 +102,5 @@ Every key is rebindable in **Settings → Key bindings** (from the main menu or 
 
 - **Sound effects:** recorded CC0 / public-domain clips from Freesound, BigSoundBank and Kenney (113 files in `public/sfx`; per-file sources in `public/sfx/CREDITS.md`). Anything missing falls back to the in-code synthesizer.
 - **Materials and sky lighting:** CC0 photo-scanned textures and an HDRI from [Poly Haven](https://polyhaven.com) (`public/tex`, resized to 512 px).
-- **3D models:** CC0 models by Quaternius (rigged soldier + Universal Animation Library clips, props), Pichuliru (guns and attachments) and others (`public/models`; per-file sources in `public/models/CREDITS.md`). Guns without a matching model, melee weapons and the crossbow fall back to procedural geometry.
+- **3D models:** CC0 models by Quaternius (rigged soldier + Universal Animation Library clips, props), Pichuliru, nisu, loafbrr_1, Lucian Pavel and SirDraco65 (guns and attachments), plus eight guns under **CC-BY 3.0** by austincford, Kristian, Dark and PuKkBuMXDD, whose attribution must be kept (`public/models`; per-file sources and the required attributions in `public/models/CREDITS.md`). Guns without a matching model, melee weapons and the crossbow fall back to procedural geometry.
 - Nothing is taken from Call of Duty itself. The HUD was laid out against 2020 screenshots, but no Activision art is shipped.
