@@ -86,6 +86,9 @@ function ground(sim: Sim, p: Player, dt: number) {
   const it = p.intent, col = sim.world.col;
   const downed = p.phase === Phase.Downed;
   const def = p.weapons[p.cur] ? WEAPON[p.weapons[p.cur]!.id] : null;
+  // --- ladders
+  if (downed) (p as any).ladder = -1;
+  else if (ladder(sim, p, dt)) return;
   // --- mantle in progress
   if (p.mantleT > 0) {
     p.mantleT -= dt;
@@ -295,4 +298,49 @@ function tryMantle(sim: Sim, p: Player): boolean {
     }
   }
   return false;
+}
+
+const CLIMB = 3.0; // m/s up/down a ladder
+/**
+ * Exterior ladders: walk into one facing it to grab on; forward climbs, back descends, strafe/jump lets
+ * go. At the top you pull yourself onto the roof (a short mantle); at the bottom you step off.
+ */
+function ladder(sim: Sim, p: Player, dt: number): boolean {
+  const P = p as any, it = p.intent, L = sim.world.ladders;
+  if (!L || !L.length) return false;
+  const fx = -Math.sin(p.yaw), fz = -Math.cos(p.yaw);
+  if (P.ladder === undefined || P.ladder < 0) {
+    // grab: close to a ladder, facing its wall, pushing forward, feet within its span
+    if (it.mz < 0.5 || p.mantleT > 0 || p.stance === Stance.Prone || p.swimming) return false;
+    for (const i of sim.laddersNear(p.x, p.z)) {
+      const l = L[i];
+      const rx = p.x - l.x, rz = p.z - l.z, out = rx * l.nx + rz * l.nz, lat = Math.abs(rx * -l.nz + rz * l.nx);
+      if (out < 0 || out > 0.9 || lat > 0.5 || p.y < l.y0 - 0.4 || p.y > l.y1 - 0.6) continue;
+      if (fx * -l.nx + fz * -l.nz < 0.55) continue;
+      P.ladder = i; p.sprinting = false; p.tacSprint = 0; p.slideT = 0; p.stance = Stance.Stand; p.ads = 0;
+      sim.emit({ t: 'jump', p: p.id });
+      break;
+    }
+    if (P.ladder === undefined || P.ladder < 0) return false;
+  }
+  const l = L[P.ladder];
+  // hug the ladder
+  p.x += (l.x + l.nx * 0.45 - p.x) * Math.min(1, dt * 12); p.z += (l.z + l.nz * 0.45 - p.z) * Math.min(1, dt * 12);
+  p.vx = p.vz = p.vy = 0; p.onGround = false; p.fallStartY = p.y; p.sprinting = false;
+  const climb = it.mz > 0.3 ? 1 : it.mz < -0.3 ? -1 : 0;
+  p.y += climb * CLIMB * dt;
+  P.climbT = (P.climbT ?? 0) + Math.abs(climb) * dt;
+  if (it.jump || Math.abs(it.mx) > 0.8) { // let go / hop off backwards
+    it.jump = false; P.ladder = -1; p.vx = l.nx * 2; p.vz = l.nz * 2; return true;
+  }
+  if (p.y >= l.y1 - 0.15 && climb > 0) {
+    // over the top onto the roof (reuse the two-phase mantle)
+    P.ladder = -1;
+    const tx = l.x - l.nx * 0.7, tz = l.z - l.nz * 0.7, t = 0.55;
+    p.mantleT = t; p.mantleY = l.y1 + 0.02; P.mantleDur = t; P.mantleY0 = p.y; P.mantleX0 = p.x; P.mantleZ0 = p.z; P.mantleX1 = tx; P.mantleZ1 = tz;
+    return true;
+  }
+  if (p.y <= l.y0 && climb < 0) { p.y = sim.world.col.groundAt(p.x, p.z, p.y + 0.5); P.ladder = -1; p.onGround = true; }
+  if (p.y < l.y0) p.y = l.y0;
+  return true;
 }

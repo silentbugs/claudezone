@@ -11,6 +11,7 @@ export const WALL_T = 0.25;
 
 export interface Opening { u0: number; u1: number; v0: number; v1: number; glass?: boolean; /** no door leaf (arches, garages, shop fronts) */ open?: boolean }
 /** A hinged door leaf in builder-local space: hinge at (x, z), closed leaf runs along +angle direction. */
+export interface LadderDef { x: number; z: number; nx: number; nz: number; y0: number; y1: number }
 export interface DoorDef { x: number; z: number; y: number; angle: number; w: number; h: number }
 
 export class Builder {
@@ -18,6 +19,18 @@ export class Builder {
   ramps: RampPart[] = [];
   loot: [number, number, number][] = [];
   doors: DoorDef[] = [];
+  ladders: LadderDef[] = [];
+  /**
+   * Exterior ladder against a wall face. (x, z) is on the wall face, (nx, nz) the outward normal (axis-aligned).
+   * Rails and rungs are visual only; climbing is handled by movement.
+   */
+  ladder(x: number, z: number, nx: number, nz: number, y0: number, y1: number) {
+    this.ladders.push({ x, z, nx, nz, y0, y1 });
+    const ox = x + nx * 0.18, oz = z + nz * 0.18, tx = -nz, tz = nx; // tangent along the wall
+    const col = 0x6f7478, top = y1 + 1.0; // rails run up past the roof edge to grab
+    for (const s of [-0.24, 0.24]) this.box(ox + tx * s - 0.025, y0, oz + tz * s - 0.025, ox + tx * s + 0.025, top, oz + tz * s + 0.025, Mat.Metal, { color: col, noCollide: true });
+    for (let y = y0 + 0.3; y < y1 + 0.2; y += 0.3) this.box(ox - Math.abs(tx) * 0.24 - Math.abs(nx) * 0.015, y, oz - Math.abs(tz) * 0.24 - Math.abs(nz) * 0.015, ox + Math.abs(tx) * 0.24 + Math.abs(nx) * 0.015, y + 0.03, oz + Math.abs(tz) * 0.24 + Math.abs(nz) * 0.015, Mat.Metal, { color: col, noCollide: true });
+  }
   box(x0: number, y0: number, z0: number, x1: number, y1: number, z1: number, mat: Mat, extra?: Partial<Part>): Part {
     const p: Part = { x0: Math.min(x0, x1), y0: Math.min(y0, y1), z0: Math.min(z0, z1), x1: Math.max(x0, x1), y1: Math.max(y0, y1), z1: Math.max(z0, z1), mat, ...extra };
     if (p.x1 - p.x0 < 1e-3 || p.y1 - p.y0 < 1e-3 || p.z1 - p.z0 < 1e-3) return p;
@@ -275,6 +288,7 @@ export function warehouse(rng: Rng, w: number, d: number, h: number, st: Style, 
     b.block(cx, cz, rng.range(1.2, 2.4), rng.range(1.2, 2.4), 0.1, 0.1 + rng.pick([1.2, 1.2, 2.4]), rng.chance(0.5) ? Mat.Wood : Mat.Container, { color: rng.pick([0x7a5a38, 0x5e6e44, 0x6a4a30]) });
   }
   b.slab(-hw - 0.2, -hd - 0.2, hw + 0.2, hd + 0.2, h + 0.1, 0.3, st.roof);
+  b.ladder(hw + 0.15, -hd + 2.2, 1, 0, 0.1, h + 0.1); // roof ladder on the side (2020: warehouses reach the roof by exterior ladder)
   b.addLoot(-hw + 2, 0.1, -hd + 2); b.addLoot(hw - 2, 0.1, -hd + 2); b.addLoot(0, 0.1, 0);
   return b;
 }
@@ -290,6 +304,7 @@ export function shop(rng: Rng, w: number, d: number, st: Style): Builder {
   // counter/shelves
   b.block(0, hd * 0.3, w * 0.5, 0.8, 0.1, 1.1, Mat.Wood, { color: 0x6b4a2f });
   b.slab(-hw - 0.3, -hd - 0.3, hw + 0.3, hd + 0.3, h + 0.1, 0.3, st.roof);
+  b.ladder(hw - 1.2, hd + 0.125, 0, 1, 0.1, h + 0.1); // roof ladder at the back
   // signage band
   b.box(-hw - 0.05, h - 0.6, -hd - 0.35, hw + 0.05, h + 0.4, -hd - 0.25, Mat.Trim, { color: rng.pick([0xb03a2e, 0x2e5eaa, 0xd8a31a, 0x2f8a4a]), noCollide: true });
   b.addLoot(-hw + 1.2, 0.1, hd - 1.2); b.addLoot(hw - 1.2, 0.1, 0);

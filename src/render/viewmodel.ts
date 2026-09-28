@@ -86,7 +86,7 @@ export class ViewModel {
   private mag = new THREE.Mesh(new RoundedBoxGeometry(0.028, 0.13, 0.06, 2, 0.008), new THREE.MeshStandardMaterial({ color: 0x1d1e1f, roughness: 0.6, metalness: 0.3 }));
   private guardAt = new THREE.Vector3(); private gripZ = 0.085; private pistolArms = false;
   private reloadTotal = 0; private reloadEmpty = false;
-  private mantleHand = 0; private mantleU = 0;
+  private mantleHand = 0; private mantleU = 0; private climbK = 0;
   muzzle = 0.6; sight = 0.06; scope = false; optic = false; private opticZ = 0;
   private swayX = 0; swayY = 0; private bobT = 0; private kick = 0; private kickRot = 0; private flashT = 0;
   private swap = 0; private lastCur = -1; private lastId = '';
@@ -247,6 +247,9 @@ export class ViewModel {
     this.mag.visible = magVis;
     this.plate.visible = p.plateT > 0;
     if (p.plateT > 0) { pos.y -= 0.18; rx -= 0.4; const t = 1 - p.plateT / 1.25; this.plate.position.set(-0.08, 0.06 - t * 0.08, -0.1 + t * 0.12); this.plate.rotation.set(0.6, 0.3, 0); }
+    // climbing a ladder: weapon lowered out of view
+    this.climbK += ((((p as any).ladder ?? -1) >= 0 ? 1 : 0) - this.climbK) * Math.min(1, dt * 8);
+    if (this.climbK > 0.01) { pos.y -= 0.45 * this.climbK; rx -= 0.9 * this.climbK; }
     if (this.swap > 0) { const e = this.swap * this.swap * (3 - 2 * this.swap); pos.y -= e * 0.3; rx -= e * 0.7; rz += e * 0.25; }
     // mantle: weapon tucked down and away, left hand reaches out and plants on the ledge
     if (p.mantleT > 0) {

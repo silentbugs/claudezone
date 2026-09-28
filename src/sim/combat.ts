@@ -41,6 +41,7 @@ export function weaponTick(sim: Sim, p: Player, dt: number) {
   if (p.stunT > 0) p.stunT -= dt;
   // swapping
   if (p.swapT > 0) { p.swapT -= dt; return; }
+  if (((p as any).ladder ?? -1) >= 0) { p.ads = Math.max(0, p.ads - dt * 6); return; } // hands on the ladder
   const wantSlot = it.swap ? (p.cur === 0 ? 1 : 0) : it.slot ? it.slot - 1 : -1;
   it.swap = false; it.slot = 0;
   if (wantSlot >= 0 && wantSlot !== p.cur && p.weapons[wantSlot]) { beginSwap(sim, p, wantSlot); return; }

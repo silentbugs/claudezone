@@ -44,6 +44,14 @@ export class Sim {
   chests: Chest[] = [];
   train: Train | null = null;
   doors: Doors | null = null;
+  private ladderGrid = new Map<number, number[]>();
+  private ladderOut: number[] = [];
+  laddersNear(x: number, z: number): number[] {
+    const o = this.ladderOut; o.length = 0;
+    const cx = Math.floor(x / 32), cz = Math.floor(z / 32);
+    for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) { const a = this.ladderGrid.get((cx + i) * 4096 + cz + j); if (a) for (const v of a) o.push(v); }
+    return o;
+  }
   private doorTmp: any[] = [];
   bullets: Bullet[] = [];
   throwables: Throwable[] = [];
@@ -100,6 +108,8 @@ export class Sim {
     for (const g of world.groundLoot) if (this.rng.chance(0.7)) this.addItem(randomItem(this, g.x, g.y, g.z));
     for (const ch of world.chests) this.chests.push({ id: this.nextId++, x: ch.x, y: ch.y, z: ch.z, opened: false, legendary: this.rng.chance(0.06) });
     this.doors = new Doors(this);
+    // ladder lookup grid (32 m cells)
+    (world.ladders ?? []).forEach((l, i) => { const k = Math.floor(l.x / 32) * 4096 + Math.floor(l.z / 32); const a = this.ladderGrid.get(k); if (a) a.push(i); else this.ladderGrid.set(k, [i]); });
     // the freight train, starting at a random point on its loop, with its loot caches
     world.col.dyn = world.col.dyn.filter((d) => d.kind !== 'train'); // the world object is shared between matches
     const rp = (world.extra as any).railPath as Float32Array | undefined;

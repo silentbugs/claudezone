@@ -188,3 +188,25 @@ test('jumping indoors (floors, stairs) never goes through the ceiling', () => {
   assert.ok(tries > 50);
   assert.equal(bad, 0, 'never through the ceiling above the start point');
 });
+
+test('climb a shop roof ladder', () => {
+  const sim = new Sim(world, 1, { humans: 1 });
+  const p = freshPlayer(sim);
+  const L = world.ladders;
+  console.log('ladders', L.length);
+  assert.ok(L.length > 100);
+  let ok = 0, tried = 0;
+  for (const l of L.slice(0, 12)) {
+    const sx = l.x + l.nx * 1.4, sz = l.z + l.nz * 1.4;
+    const g = world.col.groundAt(sx, sz, l.y0 + 1.5);
+    if (Math.abs(g - l.y0) > 0.6) continue;
+    tried++;
+    Object.assign(p, { x: sx, z: sz, y: g, vx: 0, vy: 0, vz: 0, onGround: true, fallStartY: g, mantleT: 0, stance: 0 }); (p as any).ladder = -1;
+    p.yaw = p.intent.yaw = Math.atan2(l.nx, l.nz); // face the wall
+    for (let t = 0; t < 6 * 60; t++) { p.intent.mz = 1; p.intent.mx = 0; sim.tick(1 / 60); sim.events.length = 0; }
+    if (p.y > l.y1 - 0.2 && p.onGround && p.health >= 100) ok++;
+    else console.log('ladder fail: y', (p.y - l.y0).toFixed(2), 'top', (l.y1 - l.y0).toFixed(2), 'on', (p as any).ladder);
+  }
+  console.log('ladder climbs', ok, '/', tried);
+  assert.ok(tried >= 5 && ok >= tried - 1, 'climbed onto the roof');
+});
