@@ -63,6 +63,10 @@ export class Hud {
   private banner = el('div', 'banner');
   private note = el('div', 'note');
   private dmg = el('div', 'dmg');
+  private low = el('div', 'lowhp'); private lowPulse = 0;
+  /** 0..1 low-health overlay strength */
+  setLowHealth(k: number) { this.lowPulse = Math.max(0, this.lowPulse - 0.03); const a = Math.min(1, k * (0.75 + 0.25 * this.lowPulse)); this.low.style.opacity = a < 0.01 ? '0' : a.toFixed(3); }
+  beat(k: number) { this.lowPulse = 1; void k; }
   private vig = el('div', 'vig');
   private scope = el('div', 'scope');
   private flash = el('div', 'flash');
@@ -89,7 +93,7 @@ export class Hud {
     this.fmCanvas = document.createElement('canvas'); this.fmCanvas.width = this.fmCanvas.height = 1200;
     this.fullmap.append(this.fmCanvas, el('div', 'legend', '<b style="color:#fff;font-size:18px">TAC MAP</b><br>White ring: next safe zone<br>Red: gas<br>Coloured arrows: your squad<br>Dashed line: C-130 route<br>Red dots: enemies (UAV / gunfire)<br>Orange carts: buy stations<br><br>Click to place a marker — your squad will head there'));
     this.fmCanvas.addEventListener('mousedown', (e) => { const r = this.fmCanvas.getBoundingClientRect(); const x = ((e.clientX - r.left) / r.width) * MAP_SIZE, z = ((e.clientY - r.top) / r.height) * MAP_SIZE; this.pings = [{ x, z, t: 999 }]; (this.sim.players[this.localId] as any).ping = { x, z }; });
-    this.root.append(this.vig, this.scope, mmw, this.circ, this.compass, this.cpings, this.heading, this.loc, this.counters, this.feed, this.squad, this.inv, this.fu, this.weap, this.xh, this.hm, this.tags, this.lcard, this.hold, this.prog, this.ctx, this.alt, this.banner, this.note, this.dmg, this.flash, this.dot, this.fullmap);
+    this.root.append(this.low, this.vig, this.scope, mmw, this.circ, this.compass, this.cpings, this.heading, this.loc, this.counters, this.feed, this.squad, this.inv, this.fu, this.weap, this.xh, this.hm, this.tags, this.lcard, this.hold, this.prog, this.ctx, this.alt, this.banner, this.note, this.dmg, this.flash, this.dot, this.fullmap);
     this.buildCompass();
   }
 
@@ -241,7 +245,6 @@ export class Hud {
     let vig = '';
     if (view.phase === Phase.Downed) vig = 'radial-gradient(circle, transparent 30%, rgba(120,0,0,0.6))';
     else if (inGas) vig = 'radial-gradient(circle, rgba(170,150,30,0.22) 20%, rgba(150,140,20,0.55))';
-    else if (view.health < 60 && view.alive) vig = `radial-gradient(circle, transparent 45%, rgba(140,0,0,${0.55 * (1 - view.health / 60)}))`;
     if (this.last.vig !== vig) { this.last.vig = vig; this.vig.style.background = vig; }
     const fo = parseFloat(this.flash.style.opacity || '0'); if (fo > 0) this.flash.style.opacity = String(Math.max(0, fo - dt * (view.flashT > 0 ? 0.25 : 1.5)));
     for (const a of this.dmgArcs) { a.t -= dt; a.e.style.opacity = String(Math.min(1, a.t)); a.e.style.transform = `rotate(${((Math.PI - a.a + camYaw) * 180) / Math.PI}deg)`; if (a.t <= 0) a.e.remove(); }

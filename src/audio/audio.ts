@@ -18,7 +18,7 @@ export type SoundName =
   | 'step_dirt' | 'step_concrete' | 'step_metal' | 'step_wood' | 'land' | 'jump' | 'slide' | 'gear'
   | 'pickup' | 'cash' | 'chute' | 'chuteCut' | 'explosion' | 'explosionFar' | 'whiz' | 'impact' | 'impactMetal' | 'impactWood' | 'impactGlass' | 'impactWater'
   | 'musicInfil' | 'musicVictory' | 'musicDefeat'
-  | 'uiOpen' | 'uiHover' | 'uiBuy' | 'uiDeny' | 'downed' | 'cough' | 'beep' | 'revive' | 'crate' | 'stinger' | 'flag' | 'rock';
+  | 'uiOpen' | 'uiHover' | 'uiBuy' | 'uiDeny' | 'downed' | 'cough' | 'heartbeat' | 'breath' | 'beep' | 'revive' | 'crate' | 'stinger' | 'flag' | 'rock';
 
 type Loop = 'engine' | 'wind' | 'gas' | 'chute' | 'vehicle' | 'heli' | 'tinnitus';
 
@@ -170,7 +170,7 @@ export class Audio {
     set('shot_marksman', group('shot_sniper')); set('shotIn_marksman', group('shot_sniper'));
     const far = group('far');
     set('far_rifle', far); set('far_light', far); set('far_heavy', far.length ? far : group('explosionFar'));
-    const direct: [SoundName, string][] = [['explosion', 'explosion'], ['explosionFar', 'explosionFar'], ['impact', 'impact'], ['impactMetal', 'impactMetal'], ['impactWood', 'impactWood'], ['impactGlass', 'impactGlass'], ['impactWater', 'impactWater'], ['whiz', 'whiz'], ['magOut', 'magOut'], ['magIn', 'magIn'], ['bolt', 'bolt'], ['swap', 'swap'], ['dry', 'dry'], ['step_dirt', 'step_dirt'], ['step_concrete', 'step_concrete'], ['step_metal', 'step_metal'], ['step_wood', 'step_wood'], ['land', 'land'], ['chute', 'chute'], ['cough', 'cough'], ['uiBuy', 'uiBuy'], ['crate', 'crate'], ['hitArmor', 'armorTink'], ['armorBreak', 'armorBreak'], ['selfArmorBreak', 'armorBreak'], ['gear', 'cloth'], ['uiHover', 'uiClick']];
+    const direct: [SoundName, string][] = [['explosion', 'explosion'], ['explosionFar', 'explosionFar'], ['impact', 'impact'], ['impactMetal', 'impactMetal'], ['impactWood', 'impactWood'], ['impactGlass', 'impactGlass'], ['impactWater', 'impactWater'], ['whiz', 'whiz'], ['magOut', 'magOut'], ['magIn', 'magIn'], ['bolt', 'bolt'], ['swap', 'swap'], ['dry', 'dry'], ['step_dirt', 'step_dirt'], ['step_concrete', 'step_concrete'], ['step_metal', 'step_metal'], ['step_wood', 'step_wood'], ['land', 'land'], ['chute', 'chute'], ['cough', 'cough'], ['uiBuy', 'uiBuy'], ['crate', 'crate'], ['hitArmor', 'armorTink'], ['armorBreak', 'armorBreak'], ['selfArmorBreak', 'armorBreak'], ['gear', 'cloth'], ['uiHover', 'uiClick'], ['heartbeat', 'heartbeat']];
     for (const [n, k] of direct) set(n, group(k).filter((b) => !(n === 'explosion' && b.duration < 0.6)));
     // plate insert: recorded velcro + clack laid out like the real sequence
     const vel = group('velcro')[0], clack = group('plateClack')[0];
@@ -413,6 +413,11 @@ export class Audio {
     this.add('downed', tone(1.2, (t) => Math.sin(2 * Math.PI * 62 * t) * Math.exp(-t * 2.5)).mix(N(1.2, 2000).filter('lp', 300).env((t) => Math.exp(-t * 3)), 0.5));
     const cough = (sd: number) => { const s = S(0.9); for (let k = 0; k < 3; k++) s.mix(N(0.16, sd + k).filter('bp', 520 + k * 60, 3).mix(N(0.16, sd + 10 + k).filter('bp', 1650, 4), 0.6).env((t) => Math.min(1, t * 120) * Math.exp(-t * 18)), 1 - k * 0.2, k * 0.24); return s; };
     this.add('cough', cough(2100), cough(2200), cough(2300));
+    // low health: a thumping heartbeat (replaced by the recording when loaded) and a pained in/out breath
+    const beat = (sd: number) => tone(0.35, (t) => Math.sin(2 * Math.PI * 48 * t) * Math.exp(-t * 18)).mix(tone(0.35, (t) => t < 0.16 ? 0 : Math.sin(2 * Math.PI * 44 * (t - 0.16)) * Math.exp(-(t - 0.16) * 20)), 0.7).mix(N(0.35, sd).filter('lp', 120).env((t) => Math.exp(-t * 20)), 0.4);
+    this.add('heartbeat', beat(2500));
+    const breath = (sd: number) => N(1.5, sd).filter('bp', 900, 0.8).mix(N(1.5, sd + 1).filter('bp', 2400, 1.2), 0.35).env((t) => t < 0.55 ? Math.sin((t / 0.55) * Math.PI) * 0.8 : t > 0.7 ? Math.sin(((t - 0.7) / 0.8) * Math.PI) * 0.55 : 0);
+    this.add('breath', breath(2600), breath(2610), breath(2620));
     this.add('revive', tone(0.6, (t) => Math.sin(2 * Math.PI * (500 + t * 700) * t) * Math.exp(-t * 5)).mix(N(0.3, 2400).filter('hp', 2500).env((t) => Math.exp(-t * 10)), 0.3));
     this.add('rock', N(0.1, 2500).filter('bp', 1300, 1.2).env((t) => Math.exp(-t * 70)).mix(tone(0.06, (t) => Math.sin(2 * Math.PI * 330 * t) * Math.exp(-t * 90)), 0.7));
     // ---- loops (edges crossfaded so they loop seamlessly over 90% of their length)

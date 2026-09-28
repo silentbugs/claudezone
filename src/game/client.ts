@@ -29,6 +29,7 @@ export class Match {
   hud: Hud;
   chars = new Characters();
   soldiers = new Soldiers();
+  private lowState = false; private lowK = 0; private beatT = 0; private breathT = 0;
   private frustum = new THREE.Frustum(); private projView = new THREE.Matrix4();
   ambient!: Ambient;
   vm = new ViewModel();
@@ -314,9 +315,27 @@ export class Match {
     audio.loop('tinnitus', vp.flashT > 0 || vp.stunT > 0 ? 0.2 : 0);
     // environment: indoors if there's a roof overhead; the world muffles in gas, when downed or stunned
     const roof = sim.world.col.ceilingAt(cam.position.x, cam.position.z, cam.position.y + 0.5, 0.2);
-    audio.setEnvironment(roof - cam.position.y < 12 && vp.phase === Phase.Alive, vp.phase === Phase.Downed ? 0.45 : sim.inGas(vp) ? (vp.hasMask ? 0.2 : 0.35) : vp.flashT > 0 || vp.stunT > 0 ? 0.6 : 0);
+    audio.setEnvironment(roof - cam.position.y < 12 && vp.phase === Phase.Alive, vp.phase === Phase.Downed ? 0.45 : sim.inGas(vp) ? (vp.hasMask ? 0.2 : 0.35) : vp.flashT > 0 || vp.stunT > 0 ? 0.6 : this.lowK * 0.3);
     if (this.reloadCue && vp === me) { if (me.reloadT <= 0) this.reloadCue = null; else if (sim.time >= this.reloadCue.at) { audio.play('magIn', { vol: 0.55 }); this.reloadCue.at = Infinity; } else if (sim.time >= this.reloadCue.bolt) { audio.play('bolt', { vol: 0.45 }); this.reloadCue = null; } }
-    if (this.sm.grade) { const u = this.sm.grade.uniforms; u.uGas.value += ((sim.inGas(vp) ? 1 : 0) - u.uGas.value) * Math.min(1, dt * 3); u.uLow.value += ((vp.phase === Phase.Downed ? 0.6 : vp.health < 35 && vp.alive ? 0.35 : 0) - u.uLow.value) * Math.min(1, dt * 4); }
+    // low health (Warzone 2020: state starts below 55 HP, ends above 80 HP): grey-out, dark red edges,
+    // heartbeat + pained breathing, muffled sound. Intensity follows health, so regen / a stim fades it smoothly.
+    {
+      const hp = vp.health, alive = vp.phase === Phase.Alive || vp.phase === Phase.Gulag;
+      if (!alive || hp >= 80) this.lowState = false; else if (hp < 55) this.lowState = true;
+      const target = vp.phase === Phase.Downed ? 1 : this.lowState ? Math.min(1, Math.max(0.15, (80 - hp) / 60)) : 0;
+      this.lowK += (target - this.lowK) * Math.min(1, dt * (target > this.lowK ? 6 : 1.6));
+      const k = this.lowK;
+      if (k > 0.05 && vp.phase !== Phase.Dead) {
+        const period = 1.15 - 0.45 * k; // faster heartbeat when closer to death
+        this.beatT -= dt;
+        if (this.beatT <= 0) { this.beatT = period; audio.play('heartbeat', { ui: true, vol: 0.25 + 0.55 * k }); this.hud.beat(k); }
+        this.breathT -= dt;
+        if (this.breathT <= 0) { this.breathT = 1.7; if (k > 0.25) audio.play('breath', { ui: true, vol: 0.15 + 0.3 * k }); }
+      } else { this.beatT = 0; this.breathT = 0.4; }
+      this.hud.setLowHealth(k);
+      if (this.sm.grade) { const u = this.sm.grade.uniforms; u.uGas.value += ((sim.inGas(vp) ? 1 : 0) - u.uGas.value) * Math.min(1, dt * 3); u.uLow.value = k * 0.8; }
+      else this.sm.renderer.domElement.style.filter = k > 0.02 ? `grayscale(${(k * 0.75).toFixed(2)})` : '';
+    }
     if (Math.abs(cam.fov - fov) > 0.01) { cam.fov += (fov - cam.fov) * Math.min(1, dt * 18); cam.updateProjectionMatrix(); }
     // listener
     const fwd = new THREE.Vector3(); cam.getWorldDirection(fwd);

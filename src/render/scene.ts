@@ -24,7 +24,7 @@ const GradeShader = {
       c = 0.18 * pow(max(c, vec3(0.0)) / 0.18, vec3(1.07));
       c *= mix(vec3(0.96, 0.99, 1.05), vec3(1.04, 1.0, 0.95), smoothstep(0.05, 0.6, l));
       c = mix(c, c * vec3(1.25, 0.95, 0.55) + vec3(0.06, 0.04, 0.0), uGas * 0.6);
-      c = mix(c, vec3(l) * vec3(1.0, 0.85, 0.85), uLow);
+      c = mix(c, vec3(l) * vec3(0.96, 0.96, 0.98), uLow);
       vec2 d = vUv - 0.5; c *= 1.0 - uVig * dot(d, d) * 2.2;
       gl_FragColor = vec4(c, t.a); }`,
 };
