@@ -89,8 +89,13 @@ function ground(sim: Sim, p: Player, dt: number) {
   // --- mantle in progress
   if (p.mantleT > 0) {
     p.mantleT -= dt;
-    const k = Math.min(1, dt / Math.max(0.01, p.mantleT + dt));
-    p.y += (p.mantleY - p.y) * k; p.x += p.vx * dt; p.z += p.vz * dt;
+    // two phases so the body never cuts through the edge: pull up (small forward creep), then over
+    const M = p as any, T = M.mantleDur ?? 0.3, u = Math.min(1, 1 - Math.max(0, p.mantleT) / T);
+    const up = Math.min(1, u / 0.55), over = Math.max(0, (u - 0.45) / 0.55);
+    const eu = 1 - (1 - up) * (1 - up), eo = over * over * (3 - 2 * over);
+    const fwd = 0.12 * up + 0.88 * eo;
+    p.y = M.mantleY0 + (p.mantleY - M.mantleY0) * eu;
+    p.x = M.mantleX0 + (M.mantleX1 - M.mantleX0) * fwd; p.z = M.mantleZ0 + (M.mantleZ1 - M.mantleZ0) * fwd;
     if (p.mantleT <= 0) {
       p.y = p.mantleY; p.fallStartY = p.y;
       if ((p as any).vaulting) { p.vx *= 0.45; p.vz *= 0.45; p.onGround = false; (p as any).vaulting = false; }
@@ -255,6 +260,8 @@ function tryMantle(sim: Sim, p: Player): boolean {
     const x = p.x + fx * d, z = p.z + fz * d;
     const top = col.groundAt(x, z, reach + 0.05, 0.12);
     if (top <= p.y + 0.3 || top <= base + MOVE.step || top > reach) continue;
+    // headroom: we rise in place first, so nothing may be overhead (stair landings, the floor above)
+    if (col.ceilingAt(p.x, p.z, p.y + 0.3, MOVE.radius * 0.7) < top + 0.95) continue;
     // what is behind the obstacle's top surface?
     let drop = -1, deep = false;
     for (const e of [0.3, 0.5, 0.75]) {
@@ -264,6 +271,7 @@ function tryMantle(sim: Sim, p: Player): boolean {
     }
     const go = (tx: number, tz: number, y: number, t: number, vault: boolean) => {
       p.mantleT = t; p.mantleY = y;
+      const M = p as any; M.mantleDur = t; M.mantleY0 = p.y; M.mantleX0 = p.x; M.mantleZ0 = p.z; M.mantleX1 = tx; M.mantleZ1 = tz;
       p.vx = (tx - p.x) / t; p.vz = (tz - p.z) / t; p.vy = 0;
       p.onGround = false; p.slideT = 0; p.sprinting = false;
       (p as any).vaulting = vault; (p as any).mantleCd = sim.time + t + 0.35;

@@ -152,3 +152,39 @@ test('vault in and out through a house window; jump spam never reaches the roof'
   console.log('jump spam max height', maxY.toFixed(2), 'eaves', s.by1.toFixed(1));
   assert.ok(maxY < win.floor - s.y + 2.0, 'never climbed onto the upper floor / roof');
 });
+
+test('jumping indoors (floors, stairs) never goes through the ceiling', () => {
+  const sim = new Sim(world, 1, { humans: 1 });
+  const p = freshPlayer(sim);
+  const kinds = new Map<string, any[]>(); for (const q of world.col.structures) if (q.ramps.some((r) => r.mat !== 8)) { const l = kinds.get(q.kind) ?? []; if (l.length < 4) l.push(q); kinds.set(q.kind, l); }
+  const cands = [...kinds.values()].flat();
+  let bad = 0, tries = 0;
+  for (const s of cands) {
+    // stand on each stair ramp's middle and on the ground floor next to it, jump-spam in 8 directions
+    for (const r of s.ramps.filter((q) => q.mat !== 8 /* roof slopes */).slice(0, 4)) {
+      for (const [lx, lz] of [[(r.x0 + r.x1) / 2, (r.z0 + r.z1) / 2], [(r.x0 + r.x1) / 2 + 1.2, (r.z0 + r.z1) / 2]]) {
+        for (let dir = 0; dir < 8; dir++) {
+          const [wx, wz] = toWorld(s, lx, lz);
+          const y0 = world.col.groundAt(wx, wz, s.y + ((r.y0 + r.y1) / 2) + 0.5);
+          if (!world.col.fits(wx, y0 + 0.02, wz, 1.8, 0.3)) continue;
+          const ceil = world.col.ceilingAt(wx, wz, y0 + 0.3, 0.2);
+          p.x = wx; p.z = wz; p.y = y0; p.vx = p.vy = p.vz = 0; p.stance = 0; p.onGround = true; p.fallStartY = y0; p.mantleT = 0; (p as any).mantleCd = 0;
+          p.yaw = p.intent.yaw = dir * Math.PI / 4;
+          tries++;
+          void ceil;
+          for (let t = 0; t < 90; t++) {
+            const ox = p.x, oy = p.y, oz = p.z;
+            p.intent.mz = 1; if (t % 9 === 0) p.intent.jump = true; sim.tick(1 / 60); sim.events.length = 0;
+            // body moved through solid geometry this tick (checked at knee and chest height)
+            const clear = (x: number, y: number, z: number) => world.col.fits(x, y + 0.1, z, 1.0, 0.15);
+            const thru = clear(ox, oy, oz) && clear(p.x, p.y, p.z) && [1.2].some((hh) => !world.col.los(ox, oy + hh, oz, p.x, p.y + hh, p.z));
+            if (thru) { bad++; if (bad <= 8) console.log('try', tries, 'through', s.kind, 'dy', (p.y - oy).toFixed(2), 'mantle', p.mantleT.toFixed(2), 'from y', (oy - s.y).toFixed(2), 'to', (p.y - s.y).toFixed(2)); break; }
+          }
+        }
+      }
+    }
+  }
+  console.log('indoor jump tries', tries, 'went through a ceiling', bad);
+  assert.ok(tries > 50);
+  assert.equal(bad, 0, 'never through the ceiling above the start point');
+});
