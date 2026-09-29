@@ -83,3 +83,21 @@ test('Hospital: foyer -> west stair -> 3F -> skybridge -> tower ascender to the 
   console.log('cafeteria -> east stair -> roof', r2);
   assert.ok(typeof r2 === 'number' && Math.abs(r2 - 12) < 0.5, 'reached the roof');
 });
+
+test('Airport control tower: courtyard door, ascender to the office level, stairs into the cab', () => {
+  const sim = newSim(), f = frameOf('ctower', 8);
+  const r1 = walkRoute(sim, f, [0, 18], [[0, 12], [0, 7], [0, 5.9], [0, 4.6], [0, 1.9]]);
+  console.log('into the tower base', r1);
+  assert.ok(typeof r1 === 'number' && Math.abs(r1) < 0.3, 'inside the base');
+  const p: any = sim.players[0];
+  p.intent.mz = 0; p.yaw = p.intent.yaw = 0; // face the lift (north, -z)
+  const t = sim.interactTarget(p);
+  assert.equal(t?.kind, 'ascender');
+  p.intent.interact = true; sim.tick(1 / 60); p.intent.interact = false; sim.events.length = 0;
+  for (let i = 0; i < 10 * 60; i++) { sim.tick(1 / 60); sim.events.length = 0; }
+  console.log('office level', (p.y - f.y).toFixed(2));
+  assert.ok(Math.abs(p.y - f.y - 42) < 0.4, 'at the office level');
+  const r2 = walkRoute(sim, f, [0, 1.8, 42], [[2.5, 2.5], [2.5, -5.2], [4.4, -5.2], [4.4, 3.8], [4.4, 5.5], [0, 6.5]]);
+  console.log('into the cab', r2);
+  assert.ok(typeof r2 === 'number' && Math.abs(r2 - 46) < 0.4, 'in the cab');
+});

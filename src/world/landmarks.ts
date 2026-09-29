@@ -6,7 +6,7 @@
 import { Mat } from './collision';
 import { Builder, apartment, warehouse, garageRow, house, shop, FLOOR_H } from './builder';
 import { poi } from './mapdata';
-import { tvStation2020, trainStation2020, hospital2020, sub } from './landmarks2020';
+import { tvStation2020, trainStation2020, hospital2020, controlTower2020, sub } from './landmarks2020';
 import type { GenContext } from './mapgen';
 import { Rng } from '../core/rng';
 
@@ -137,18 +137,8 @@ function airport(ctx: GenContext) {
   const tx = 800, tz = 1440;
   const term = apartment(rng, 150, 34, 2, { wall: Mat.Concrete, wallColor: 0xc9c5bb, trim: 0, roof: Mat.Roof, roofColor: 0x5a5d62 }, { glassBands: true });
   ctx.place(term, 'terminal', tx, tz, Math.PI, { poi: 'airport', lodColor: 0xc9c5bb });
-  // control tower at the terminal's north-east corner: shaft + cab
-  const ctb = new Builder();
-  stairTower(ctb, 0, 0, 7, 7, 10, Mat.Concrete, 0xd4d0c6, 3.6);
-  const top = 36;
-  ctb.box(-7, top, -7, 7, top + 0.4, 7, Mat.Concrete, { color: 0xd4d0c6 });
-  ctb.wall(0, -7, 7, -7, top + 0.4, 4, 0.2, Mat.Metal, [{ u0: 0.5, u1: 13.5, v0: 1, v1: 3.6, glass: true }], 0x808890);
-  ctb.wall(0, -7, 7, 7, top + 0.4, 4, 0.2, Mat.Metal, [{ u0: 0.5, u1: 13.5, v0: 1, v1: 3.6, glass: true }], 0x808890);
-  ctb.wall(1, -7, 7, -7, top + 0.4, 4, 0.2, Mat.Metal, [{ u0: 0.5, u1: 13.5, v0: 1, v1: 3.6, glass: true }], 0x808890);
-  ctb.wall(1, -7, 7, 7, top + 0.4, 4, 0.2, Mat.Metal, [{ u0: 0.5, u1: 13.5, v0: 1, v1: 3.6, glass: true }], 0x808890);
-  ctb.box(-7.5, top + 4.4, -7.5, 7.5, top + 5, 7.5, Mat.Roof, { color: 0x3a3d42 });
-  ctb.addLoot(3, top + 0.4, 3); ctb.addLoot(-3, top + 0.4, -3);
-  ctx.place(ctb, 'tower', 880, 1395, 0, { poi: 'airport', lodColor: 0xd4d0c6 });
+  // control tower: horseshoe admin building round the base, ascender up the shaft, open-air cab
+  controlTower2020(ctx, 880, 1395);
   // hangars east of the terminal along the apron
   for (let i = 0; i < 4; i++) {
     const hb = warehouse(rng, 42, 34, 12, { wall: Mat.Metal, wallColor: rng.pick([0x8a8f94, 0x7d8388, 0x9a9da0]), trim: 0, roof: Mat.Roof, roofColor: 0x5d6166 }, { hangar: true });

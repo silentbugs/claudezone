@@ -460,3 +460,86 @@ export function hospital2020(ctx: GenContext) {
   }
   ctx.buyStations.push({ x: p.x - 55, y: 0, z: p.z + 10, a: 0 });
 }
+
+/**
+ * Airport control tower (Zone 2A). A horseshoe-shaped two-storey admin building (white corrugated siding,
+ * roof not reachable from the ground) wraps the tower base. The tower's ground floor is a corridor around
+ * the lift shaft; the only way up is the ascender, which stops at the office level (~42 m). From there a
+ * stair climbs into the open-air cab (windows blown out) with a balcony round it; the small roof above is
+ * only reachable by parachute.
+ */
+export function controlTower2020(ctx: GenContext, x: number, z: number) {
+  const f = frame(ctx, 'airport', x, z, 0, 48, 32, 'ctower', 0xd4d0c6, 4);
+  const white = 0xd9dbd6, grey = 0xd4d0c6, H = 3.75;
+  // ---- horseshoe admin building (open to the south, around the tower): north bar + west and east bars
+  const a = new Builder();
+  a.box(-22.2, -1.5, -16.2, 22.2, 0.05, 12.2, Mat.Concrete, { color: 0x9a968f });
+  type Bar = { x0: number; z0: number; x1: number; z1: number; doors: { side: 'n' | 's' | 'w' | 'e'; u: number }[] };
+  const bars: Bar[] = [
+    { x0: -22, z0: -16, x1: 22, z1: -8, doors: [{ side: 'n', u: 21.1 }, { side: 's', u: 21.1 }, { side: 'w', u: 3.1 }, { side: 'e', u: 3.1 }] },
+    { x0: -22, z0: -8, x1: -10, z1: 12, doors: [{ side: 'w', u: 14 }, { side: 'e', u: 12 }, { side: 's', u: 5 }] },
+    { x0: 10, z0: -8, x1: 22, z1: 12, doors: [{ side: 'e', u: 14 }, { side: 'w', u: 12 }, { side: 's', u: 5 }] },
+  ];
+  for (const B of bars) {
+    const len = B.x1 - B.x0, dep = B.z1 - B.z0;
+    for (const [y, h, lvl] of [[0.05, H - 0.05, 0], [H, H, 1]] as [number, number, number][]) {
+      const ops = (L: number, side: string) => { const d = lvl ? [] : B.doors.filter((q) => q.side === side).map((q) => ({ u0: q.u, u1: q.u + 1.8, v0: 0, v1: 2.3 })); const o: any[] = [...d]; for (let u = 2; u < L - 2; u += 4) if (!d.some((q) => u + 1.6 > q.u0 - 0.3 && u < q.u1 + 0.3)) o.push({ u0: u, u1: u + 1.6, v0: 1, v1: 2.6, glass: true }); return o; };
+      // shared walls between bars are built once (the north bar's south wall stops at the side bars)
+      a.wall(0, B.x0, B.x1, B.z0, y, h, 0.25, Mat.Metal, B.z0 === -8 ? [] : ops(len, 'n'), white, -1);
+      if (B.z1 === -8) { a.wall(0, -10, 10, -8, y, h, 0.25, Mat.Metal, ops(20, 's').map((o: any) => ({ ...o, u0: o.u0 - 12, u1: o.u1 - 12 })).filter((o: any) => o.u0 > 0 && o.u1 < 20), white, 1); }
+      else a.wall(0, B.x0, B.x1, B.z1, y, h, 0.25, Mat.Metal, ops(len, 's'), white, 1);
+      a.wall(1, B.z0, B.z1, B.x0, y, h, 0.25, Mat.Metal, ops(dep, 'w'), white, -1);
+      a.wall(1, B.z0, B.z1, B.x1, y, h, 0.25, Mat.Metal, ops(dep, 'e'), white, 1);
+    }
+    a.slab(B.x0, B.z0, B.x1, B.z1, H, 0.25, Mat.Concrete, B.x1 === -10 ? [[-21.8, -6.2, -19.4, 6]] : []);
+    a.slab(B.x0 - 0.3, B.z0 - 0.3, B.x1 + 0.3, B.z1 + 0.3, 2 * H, 0.3, Mat.Roof, []);
+    for (let lx = B.x0 + 3; lx < B.x1; lx += 6) for (let lz = B.z0 + 2.5; lz < B.z1; lz += 6) { a.light(lx, H - 0.1, lz); a.light(lx, 2 * H - 0.1, lz); }
+  }
+  // partitions, reception, the stair (west bar) to 2F
+  a.wall(0, -19.3, -10.1, 8.5, 0.05, H - 0.05, 0.15, Mat.Plaster, [{ u0: 4, u1: 5, v0: 0, v1: 2.2 }], 0xe8e2d2);
+  a.wall(0, 10.1, 21.9, 2, 0.05, H - 0.05, 0.15, Mat.Plaster, [{ u0: 5, u1: 6, v0: 0, v1: 2.2 }], 0xe8e2d2);
+  a.wall(1, -15.9, -8.1, 0, 0.05, H - 0.05, 0.15, Mat.Plaster, [{ u0: 3, u1: 4, v0: 0, v1: 2.2 }], 0xe8e2d2);
+  a.ramp(-21.8, 0.05, -6, -19.6, H, 6, 1, 1, Mat.Concrete);
+  a.block(-6, -12, 5, 1, 0.05, 1.1, Mat.Wood, { color: 0x6b4a2f });
+  for (const [lx, lz, y] of [[-16, 8, 0.05], [16, -4, 0.05], [-5, -12, H], [16, 8, H], [-15, -12, 0.05]]) a.addLoot(lx, y, lz);
+  sub(ctx, f, 0, 0, 0, a);
+  // ---- the tower
+  const t = new Builder(), R = 5.5, TOP = 42, CAB = 46;
+  t.box(-R - 0.2, -1.5, -R - 0.2, R + 0.2, 0.05, R + 0.2, Mat.Concrete, { color: 0x9a968f });
+  // shaft walls up to the office level; the ground floor opens south into the U's courtyard
+  t.wall(0, -R, R, R, 0.05, TOP, 0.35, Mat.Concrete, [{ u0: R - 0.9, u1: R + 0.9, v0: 0, v1: 2.4 }], grey, 1);
+  t.wall(0, -R, R, -R, 0.05, TOP, 0.35, Mat.Concrete, [], grey, -1);
+  t.wall(1, -R, R, -R, 0.05, TOP, 0.35, Mat.Concrete, [], grey, -1);
+  t.wall(1, -R, R, R, 0.05, TOP, 0.35, Mat.Concrete, [], grey, 1);
+  for (const [fx, fz] of [[-R, -R], [R, -R], [-R, R], [R, R]]) t.box(fx - 0.6, 0.05, fz - 0.6, fx + 0.6, TOP + 0.5, fz + 0.6, Mat.Concrete, { color: 0xc6c2b8 }); // corner fins
+  // lift shaft in the middle, opening south at the bottom and at the office level; corridor wraps it
+  const lx = 1.4;
+  t.wall(0, -lx, lx, -lx, 0.05, TOP + 3, 0.2, Mat.Concrete, [], 0x8a8680);
+  t.wall(1, -lx, lx, -lx, 0.05, TOP + 3, 0.2, Mat.Concrete, [], 0x8a8680);
+  t.wall(1, -lx, lx, lx, 0.05, TOP + 3, 0.2, Mat.Concrete, [], 0x8a8680);
+  t.wall(0, -lx, lx, lx, 0.05, TOP + 3, 0.2, Mat.Concrete, [{ u0: 0.8, u1: 2.0, v0: 0, v1: 2.2, open: true }, { u0: 0.8, u1: 2.0, v0: TOP, v1: TOP + 2.2, open: true }], 0x8a8680);
+  t.ascender(0, 0, 0, 1, 0.05, TOP, [0.05]);
+  for (const [px, pz] of [[-3.5, 3.5], [3.5, 3.5], [-3.5, -3.5], [3.5, -3.5]]) t.light(px, 3.4, pz);
+  t.slab(-R + 0.2, -R + 0.2, R - 0.2, R - 0.2, 3.8, 0.2, Mat.Concrete, [[-lx, -lx, lx, lx]]); // ground-floor ceiling (the shaft above is sealed)
+  // office / server level: a ring of rooms round the lift, windows all round
+  t.slab(-R - 0.8, -R - 0.8, R + 0.8, R + 0.8, TOP, 0.3, Mat.Concrete, [[-lx, -lx, lx, lx]]);
+  const ow = [{ u0: 1.5, u1: 4.5, v0: 1, v1: 2.6, glass: false }, { u0: 7, u1: 10, v0: 1, v1: 2.6, glass: false }];
+  t.wall(0, -R - 0.8, R + 0.8, -R - 0.8, TOP, 3.8, 0.3, Mat.Concrete, ow, grey); t.wall(0, -R - 0.8, R + 0.8, R + 0.8, TOP, 3.8, 0.3, Mat.Concrete, ow, grey);
+  t.wall(1, -R - 0.8, R + 0.8, -R - 0.8, TOP, 3.8, 0.3, Mat.Concrete, ow, grey); t.wall(1, -R - 0.8, R + 0.8, R + 0.8, TOP, 3.8, 0.3, Mat.Concrete, ow, grey);
+  t.block(-4, -4, 1.2, 0.6, TOP, TOP + 2, Mat.Metal, { color: 0x2a2d30 }); t.block(-2.5, -4, 1.2, 0.6, TOP, TOP + 2, Mat.Metal, { color: 0x2a2d30 }); // server racks
+  t.light(0, TOP + 3.6, 3.5); t.light(-3.5, TOP + 3.6, -3.5);
+  // stairs up the east side into the cab (hole in the cab floor above)
+  t.ramp(3.2, TOP, -4.5, 5.6, CAB, 4.2, 1, 1, Mat.Metal);
+  // the cab: wider, open-air (windows blown out), balcony ring, roof above
+  const C = 8;
+  t.slab(-C - 1.2, -C - 1.2, C + 1.2, C + 1.2, CAB, 0.4, Mat.Concrete, [[3.1, -4.6, 5.7, 4.3]]);
+  for (const [x0, z0, x1, z1] of [[-C - 1.2, -C - 1.2, C + 1.2, -C - 1.1], [-C - 1.2, C + 1.1, C + 1.2, C + 1.2], [-C - 1.2, -C - 1.2, -C - 1.1, C + 1.2], [C + 1.1, -C - 1.2, C + 1.2, C + 1.2]]) t.box(x0, CAB, z0, x1, CAB + 1.1, z1, Mat.Metal, { color: 0x9aa0a4 }); // balcony rail
+  for (const [x0, z0, x1, z1] of [[-C, -C, C, -C + 0.2], [-C, C - 0.2, C, C], [-C, -C, -C + 0.2, C], [C - 0.2, -C, C, C]]) t.box(x0, CAB, z0, x1, CAB + 1.0, z1, Mat.Metal, { color: 0x5a6066 }); // console sill
+  for (const [px, pz] of [[-C, -C], [C, -C], [-C, C], [C, C], [0, -C], [0, C], [-C, 0], [C, 0]]) t.box(px - 0.15, CAB, pz - 0.15, px + 0.15, CAB + 3.6, pz + 0.15, Mat.Metal, { color: 0x3a3d42 }); // mullions
+  t.wall(0, -C, C, C - 0.1, CAB + 1, 2.6, 0.1, Mat.Metal, [{ u0: 0.4, u1: 2 * C - 0.4, v0: 0.05, v1: 2.5 }], 0x3a3d42); // blown-out window frame, one side
+  t.box(-C - 0.6, CAB + 3.6, -C - 0.6, C + 0.6, CAB + 4.0, C + 0.6, Mat.Roof, { color: 0x3a3d42 });
+  t.block(-3, 0, 4, 1, CAB, CAB + 1.1, Mat.Metal, { color: 0x4a4f55 }); // control desk
+  t.light(0, CAB + 3.5, 0);
+  t.addLoot(2, CAB, -3); t.addLoot(-5, TOP, 3); t.addLoot(0, 0.05, -4); t.addLoot(-6, CAB + 4, 0);
+  sub(ctx, f, 0, 0, 0, t);
+}
