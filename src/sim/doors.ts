@@ -25,7 +25,7 @@ export class Doors {
     recs.forEach((d, i) => {
       const st = sim.world.col.structures[d.sid]; this.sts.push(st); this.byStructure.set(d.sid, i);
       // 2020 Verdansk: plenty of doors left open or ajar by earlier squads; most start closed
-      const r = sim.rng.next();
+      const r = d.locked ? 0 : sim.rng.next();
       this.open[i] = this.target[i] = r < 0.55 ? 0 : r < 0.8 ? (sim.rng.chance(0.5) ? OPEN : -OPEN) : (sim.rng.chance(0.5) ? CRACK : -CRACK);
       this.apply(i);
     });
@@ -55,6 +55,7 @@ export class Doors {
 
   /** Use: open away from the player (cracked if aiming) or close. */
   interact(i: number, p: Player) {
+    if (this.sim.world.doors[i].locked) return;
     if (Math.abs(this.open[i]) > 0.15 || Math.abs(this.target[i]) > 0.15) { this.swing(i, 0, 5, p, false); return; }
     const crack = p.ads > 0.5;
     this.swing(i, this.awaySign(i, p.x, p.z) * (crack ? CRACK : OPEN), crack ? 1.6 : 5, p, false);
@@ -65,7 +66,7 @@ export class Doors {
     const col = this.sim.world.col, near = col.near(p.x, p.z, 1.6, this.tmp);
     for (const st of near) {
       if (st.kind !== 'door') continue;
-      const i = this.byStructure.get(st.id); if (i === undefined) continue;
+      const i = this.byStructure.get(st.id); if (i === undefined || this.sim.world.doors[i].locked) continue;
       if (p.y > st.y + 1.5 || p.y + 1.7 < st.y) continue;
       const dx = p.x - st.x, dz = p.z - st.z;
       const lx = dx * st.cos - dz * st.sin, lz = dx * st.sin + dz * st.cos, w = this.sim.world.doors[i].w;

@@ -9,11 +9,11 @@ import { Rng } from '../core/rng';
 export const FLOOR_H = 3.2;
 export const WALL_T = 0.25;
 
-export interface Opening { u0: number; u1: number; v0: number; v1: number; glass?: boolean; /** no door leaf (arches, garages, shop fronts) */ open?: boolean }
+export interface Opening { u0: number; u1: number; v0: number; v1: number; glass?: boolean; /** no door leaf (arches, garages, shop fronts) */ open?: boolean; /** door leaf that never opens (boarded flats, sealed stairwells) */ locked?: boolean }
 /** A hinged door leaf in builder-local space: hinge at (x, z), closed leaf runs along +angle direction. */
 export interface AscenderDef { x: number; z: number; nx: number; nz: number; y0: number; y1: number; stops: number[] }
 export interface LadderDef { x: number; z: number; nx: number; nz: number; y0: number; y1: number }
-export interface DoorDef { x: number; z: number; y: number; angle: number; w: number; h: number }
+export interface DoorDef { x: number; z: number; y: number; angle: number; w: number; h: number; locked?: boolean }
 
 export class Builder {
   parts: Part[] = [];
@@ -83,7 +83,7 @@ export class Builder {
         const hu = k === 0 ? o.u0 + 0.01 : o.u1 - 0.01, dir = k === 0 ? 1 : -1;
         const hx = axis === 0 ? a + hu : c, hz = axis === 0 ? c : a + hu;
         const ang = axis === 0 ? (dir > 0 ? 0 : Math.PI) : (dir > 0 ? -Math.PI / 2 : Math.PI / 2);
-        this.doors.push({ x: hx, z: hz, y: y0 + o.v0, angle: ang, w: lw, h: Math.min(oh - 0.03, 2.2) });
+        this.doors.push({ x: hx, z: hz, y: y0 + o.v0, angle: ang, w: lw, h: Math.min(oh - 0.03, 2.2), locked: o.locked });
       }
     }
     const seg = (u0: number, u1: number, v0: number, v1: number, m: Mat) => {

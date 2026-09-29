@@ -6,6 +6,7 @@
 import { Rng, hash2 } from '../core/rng';
 import { clamp, smoothstep } from '../core/math';
 import { CollisionWorld, Heightfield, makeStructure, Mat, Structure, Part } from './collision';
+import { block2020 } from './blocks2020';
 import { Builder, house, apartment, tower, warehouse, shop, garageRow, Style } from './builder';
 import { MapMasks, MAP_SIZE, M_BUILT, M_ROAD, M_SNOW, POIS, Poi } from './mapdata';
 import { buildTerrain, riverQuery, TerrainExtras, waterSurfaceAt } from './terrain';
@@ -50,7 +51,7 @@ function styleFor(rng: Rng, kind: 'house' | 'block' | 'tower' | 'industrial' | '
 
 export interface Tree { x: number; y: number; z: number; s: number; kind: 0 | 1 | 2 } // 0 pine, 1 birch/leafy, 2 bush
 /** A hinged door: its collision structure and closed angle. */
-export interface DoorRec { sid: number; base: number; w: number; h: number }
+export interface DoorRec { sid: number; base: number; w: number; h: number; locked?: boolean }
 /** An exterior ladder in world space: base on the wall face, outward normal, bottom and roof heights. */
 export interface LadderRec { x: number; z: number; nx: number; nz: number; y0: number; y1: number }
 export interface AscenderRec { x: number; z: number; nx: number; nz: number; y0: number; y1: number; stops: number[] }
@@ -184,7 +185,7 @@ export function generateWorld(masks: MapMasks, seed = 1): WorldData {
       for (const d of (b as any).doors ?? []) {
         const hx = x + d.x * c + d.z * s, hz = z - d.x * s + d.z * c, a = angle + d.angle;
         const ds = makeStructure(0, 'door', hx, y + d.y, hz, a, [{ x0: 0, y0: 0, z0: -0.025, x1: d.w, y1: d.h, z1: 0.025, mat: Mat.Wood, color: 0x6b5238 }]);
-        col.add(ds); doors.push({ sid: ds.id, base: a, w: d.w, h: d.h });
+        col.add(ds); doors.push({ sid: ds.id, base: a, w: d.w, h: d.h, locked: !!d.locked });
       }
       return added;
     },
@@ -314,13 +315,13 @@ function sizeOptions(d: District, rng: Rng): [number, number][] {
 function makeBuilding(rng: Rng, d: District, w: number, dd: number, x: number, z: number): { b: Builder; kind: string; style: number; lod: number } | null {
   const big = w * dd;
   if (d === 'downtown') {
-    if (big > 380) { const st = styleFor(rng, 'tower'); return { b: tower(rng, w, dd, rng.int(5, 9), st), kind: 'tower', style: 2, lod: st.wallColor }; }
-    if (big > 150) { const st = styleFor(rng, 'block'); return { b: apartment(rng, w, dd, rng.int(3, 6), st, { groundShop: rng.chance(0.5) }), kind: 'block', style: 1, lod: st.wallColor }; }
+    if (big > 380) { const st = styleFor(rng, 'tower'); return { b: block2020(rng, w, dd, st, { kind: 'tower', floors: rng.int(7, 10), glass: true }), kind: 'tower', style: 2, lod: st.wallColor }; }
+    if (big > 150) { const st = styleFor(rng, 'block'); return { b: block2020(rng, w, dd, st, { kind: 'panel', floors: rng.int(4, 7) }), kind: 'block', style: 1, lod: st.wallColor }; }
     const st = styleFor(rng, 'shop'); return { b: shop(rng, w, dd, st), kind: 'shop', style: 3, lod: st.wallColor };
   }
   if (d === 'urban') {
-    if (big > 280) { const st = styleFor(rng, 'block'); return { b: apartment(rng, w, dd, rng.int(3, 5), st, { groundShop: rng.chance(0.3) }), kind: 'block', style: 1, lod: st.wallColor }; }
-    if (big > 110) { const st = styleFor(rng, rng.chance(0.5) ? 'shop' : 'block'); return rng.chance(0.5) ? { b: apartment(rng, w, dd, 2, st), kind: 'block', style: 1, lod: st.wallColor } : { b: shop(rng, w, dd, st), kind: 'shop', style: 3, lod: st.wallColor }; }
+    if (big > 280) { const st = styleFor(rng, 'block'); return { b: block2020(rng, w, dd, st, { kind: 'panel', floors: rng.int(3, 5) }), kind: 'block', style: 1, lod: st.wallColor }; }
+    if (big > 110) { const st = styleFor(rng, rng.chance(0.5) ? 'shop' : 'block'); return rng.chance(0.5) ? { b: block2020(rng, w, dd, st, { kind: 'walkup', floors: rng.int(2, 3) }), kind: 'block', style: 1, lod: st.wallColor } : { b: shop(rng, w, dd, st), kind: 'shop', style: 3, lod: st.wallColor }; }
     const st = styleFor(rng, 'house'); return { b: house(rng, w, dd, 2, st), kind: 'house', style: 0, lod: st.wallColor };
   }
   if (d === 'industrial' || d === 'airport') {
@@ -334,7 +335,7 @@ function makeBuilding(rng: Rng, d: District, w: number, dd: number, x: number, z
     return { b: apartment(rng, w, dd, 2, st), kind: 'barracks', style: 1, lod: st.wallColor };
   }
   const st = styleFor(rng, 'house');
-  if (d === 'suburb' && big > 130 && rng.chance(0.5)) { const s2 = styleFor(rng, 'block'); return { b: apartment(rng, w, dd, rng.int(2, 3), s2), kind: 'block', style: 1, lod: s2.wallColor }; }
+  if (d === 'suburb' && big > 130 && rng.chance(0.5)) { const s2 = styleFor(rng, 'block'); return { b: block2020(rng, w, dd, s2, { kind: 'walkup', floors: rng.int(2, 3) }), kind: 'block', style: 1, lod: s2.wallColor }; }
   if (big > 150) { const s2 = styleFor(rng, 'industrial'); return { b: warehouse(rng, w, dd, 6, s2), kind: 'barn', style: 4, lod: s2.wallColor }; }
   return { b: house(rng, w, dd, rng.chance(0.55) ? 2 : 1, st), kind: 'house', style: 0, lod: st.wallColor };
 }

@@ -381,7 +381,7 @@ export class Sim {
     (this.world.ascenders ?? []).forEach((a, i) => { if (Math.abs(a.x - p.x) < 2 && Math.abs(a.z - p.z) < 2 && p.y > a.y0 - 0.6 && p.y < a.y1 - 1) consider('ascender', i, 'Use Ascender', a.x, p.y + 1.2, a.z, 1.8, 0.2); });
     // doors (lowest priority: only when nothing else is in reach)
     if (!best && this.doors) for (const st of this.world.col.near(p.x, p.z, 2.4, this.doorTmp)) {
-      if (st.kind !== 'door') continue; const i = this.doors.byStructure.get(st.id); if (i === undefined) continue;
+      if (st.kind !== 'door') continue; const i = this.doors.byStructure.get(st.id); if (i === undefined || this.world.doors[i].locked) continue;
       const w = this.world.doors[i].w, open = Math.abs(this.doors.open[i]) > 0.15;
       consider('door', i, open ? 'Close Door' : p.ads > 0.5 ? 'Crack Door' : 'Open Door', st.x + st.cos * w / 2, st.y + 1.1, st.z - st.sin * w / 2, 2.2, 0.55);
     }

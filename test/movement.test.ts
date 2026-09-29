@@ -212,3 +212,25 @@ test('climb a shop roof ladder', () => {
   console.log('ladder climbs', ok, '/', tried);
   assert.ok(tried >= 5 && ok >= tried - 1, 'climbed onto the roof');
 });
+
+test('ride a tower ascender to the roof and step off', () => {
+  const sim = new Sim(world, 1, { humans: 1 });
+  const p = freshPlayer(sim);
+  const A = world.ascenders;
+  console.log('ascenders', A.length);
+  assert.ok(A.length > 5);
+  const a = A.reduce((m, q) => (q.y1 - q.y0 > m.y1 - m.y0 ? q : m));
+  // stand on the landing in front of the shaft, facing it
+  const sx = a.x + a.nx * 1.4, sz = a.z + a.nz * 1.4;
+  Object.assign(p, { x: sx, z: sz, y: a.y0 + 0.02, vx: 0, vy: 0, vz: 0, onGround: true, fallStartY: a.y0, mantleT: 0 });
+  p.yaw = p.intent.yaw = Math.atan2(a.nx, a.nz);
+  sim.time = 200;
+  const t = sim.interactTarget(p);
+  console.log('target', t?.kind, t?.label, 'height', (a.y1 - a.y0).toFixed(1));
+  assert.equal(t?.kind, 'ascender');
+  p.intent.interact = true; sim.tick(1 / 60); sim.events.length = 0; p.intent.interact = false;
+  for (let i = 0; i < 20 * 60; i++) { sim.tick(1 / 60); sim.events.length = 0; }
+  console.log('end y', (p.y - a.y0).toFixed(2), 'top', (a.y1 - a.y0).toFixed(2), 'onGround', p.onGround, 'hp', p.health);
+  assert.ok(Math.abs(p.y - a.y1) < 0.4 && p.onGround, 'standing at the top');
+  assert.ok(p.health >= 100);
+});
