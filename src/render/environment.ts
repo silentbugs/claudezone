@@ -60,9 +60,9 @@ INDOOR.map.minFilter = INDOOR.map.magFilter = THREE.NearestFilter; INDOOR.map.ne
 	{
 		float roofY = texture2D(indoorMap, vIndoorW.xz / indoorInfo.x).r;
 		float ind = smoothstep(roofY - 0.3, roofY - 1.0, vIndoorW.y) * indoorInfo.y;
-		reflectedLight.indirectDiffuse *= mix(1.0, 0.3, ind);
+		reflectedLight.indirectDiffuse *= mix(1.0, 0.24, ind);
 		reflectedLight.indirectSpecular *= mix(1.0, 0.15, ind);
-		reflectedLight.indirectDiffuse += diffuseColor.rgb * vec3(1.0, 0.85, 0.66) * 0.16 * ind;
+		reflectedLight.indirectDiffuse += diffuseColor.rgb * vec3(1.0, 0.85, 0.66) * 0.14 * ind;
 		#ifndef USE_SHADOWMAP
 		reflectedLight.directDiffuse *= mix(1.0, 0.12, ind); reflectedLight.directSpecular *= mix(1.0, 0.12, ind);
 		#endif
@@ -81,7 +81,7 @@ export function buildIndoorMap(structs: { kind: string; x: number; y: number; z:
       if (w < 2.2 || d < 2.2) continue; // walls, columns, posts
       if (p.noCollide && p.shape !== 'gable') continue;
       if (p.y1 < 1.8 && p.shape !== 'gable') continue; // floors / plinths are not roofs
-      const top = s.y + (p.shape === 'gable' ? p.y0 : p.y1);
+      const top = s.y + (p.shape === 'gable' ? p.y0 + (p.y1 - p.y0) * 0.85 : p.y1);
       const ins = 0.6, x0 = p.x0 + ins, x1 = p.x1 - ins, z0 = p.z0 + ins, z1 = p.z1 - ins;
       // walk the part in local space, stamp world cells
       for (let lz = z0; lz <= z1; lz += CELL * 0.7) for (let lx = x0; lx <= x1; lx += CELL * 0.7) {

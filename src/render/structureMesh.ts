@@ -82,6 +82,12 @@ class Emitter {
     this.quad([[x1, y0, z1], [x1, y1, zm], [x0, y1, zm], [x0, y0, z1]], [0, dz / l, h / l]);
     this.quad([[x1, y0, z0], [x1, y1, zm], [x1, y0, z1]], [1, 0, 0]);
     this.quad([[x0, y0, z1], [x0, y1, zm], [x0, y0, z0]], [-1, 0, 0]);
+    // inside faces (lofts, attics): the underside of the roof and the gable ends, seen from within
+    const ins = 0.12;
+    this.quad([[x1 - ins, y0, z0 + ins], [x1 - ins, y1 - ins, zm], [x0 + ins, y1 - ins, zm], [x0 + ins, y0, z0 + ins]], [0, -dz / l, h / l]);
+    this.quad([[x0 + ins, y0, z1 - ins], [x0 + ins, y1 - ins, zm], [x1 - ins, y1 - ins, zm], [x1 - ins, y0, z1 - ins]], [0, -dz / l, -h / l]);
+    this.quad([[x1 - ins, y0, z1 - ins], [x1 - ins, y1 - ins, zm], [x1 - ins, y0, z0 + ins]], [-1, 0, 0]);
+    this.quad([[x0 + ins, y0, z0 + ins], [x0 + ins, y1 - ins, zm], [x0 + ins, y0, z1 - ins]], [1, 0, 0]);
   }
   cyl(p: Part) {
     const dx = p.x1 - p.x0, dy = p.y1 - p.y0, dz = p.z1 - p.z0;

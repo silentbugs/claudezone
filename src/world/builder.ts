@@ -144,6 +144,7 @@ export interface Style { wall: Mat; wallColor: number; trim: number; roof: Mat; 
 export function house(rng: Rng, w: number, d: number, floors: number, st: Style): Builder {
   // 2020 village houses sit on a plinth ~0.5 m up, with a few concrete steps at every door
   const b = new Builder(), hw = w / 2, hd = d / 2, H = FLOOR_H, E = 0.45;
+  let lastPx = 0;
   b.box(-hw - 0.1, -1.5, -hd - 0.1, hw + 0.1, E + 0.05, hd + 0.1, Mat.Concrete, { color: 0x8a8580 }); // plinth + floor
   for (let f = 0; f < floors; f++) {
     const y = f * H + E + 0.05, wh = H - 0.05;
@@ -156,7 +157,7 @@ export function house(rng: Rng, w: number, d: number, floors: number, st: Style)
     b.wall(1, -hd + WALL_T / 2, hd - WALL_T / 2, -hw, y, wh, WALL_T, st.wall, windows(d, 3.4, 1.2, 0.95, 2.25), st.wallColor, -1, st.trim);
     b.wall(1, -hd + WALL_T / 2, hd - WALL_T / 2, hw, y, wh, WALL_T, st.wall, windows(d, 3.4, 1.2, 0.95, 2.25), st.wallColor, 1, st.trim);
     // interior partition across the depth with a doorway
-    const px = rng.range(-hw * 0.3, hw * 0.3);
+    const px = f === 0 ? (lastPx = rng.range(-hw * 0.3, hw * 0.3)) : rng.range(-hw * 0.3, hw * 0.3);
     if (w > 7) b.wall(1, -hd + WALL_T, hd - WALL_T, px, y, wh, 0.14, Mat.Plaster, [{ u0: d * 0.5 - 0.5, u1: d * 0.5 + 0.5, v0: 0, v1: 2.2 }], 0xd8d0c0);
     b.light((-hw + px) / 2, y + wh - 0.02, 0); b.light((hw + px) / 2, y + wh - 0.02, 0);
     b.addLoot(-hw + 1.2, y, -hd + 1.2); b.addLoot(hw - 1.2, y, hd - 1.2);
@@ -172,7 +173,16 @@ export function house(rng: Rng, w: number, d: number, floors: number, st: Style)
   }
   // roof
   const top = floors * H + E + 0.05;
-  b.slab(-hw - 0.3, -hd - 0.3, hw + 0.3, hd + 0.3, top, 0.25, st.roof);
+  // single-storey cottages: a loft under the ridge, reached by one straight stair (2020 atlas: "upstairs loft",
+  // "check its attic"); the stair runs along the ridge line where there's headroom, on the side away from the partition
+  const loft = floors === 1 && w >= 8;
+  const side = lastPx < 0 ? 1 : -1, sxLo = side * (hw - 0.4), sxHi = side * (hw - 4.6);
+  if (loft) {
+    b.ramp(Math.min(sxLo, sxHi), E + 0.05, -0.55, Math.max(sxLo, sxHi), top, 0.55, 0, side > 0 ? -1 : 1, Mat.Wood);
+    b.slab(-hw - 0.3, -hd - 0.3, hw + 0.3, hd + 0.3, top, 0.25, st.roof, [[Math.min(sxLo, sxHi) - 0.1, -0.65, Math.max(sxLo, sxHi) + 0.1, 0.65]]);
+    b.light(0, top + Math.min(2.6, d * 0.28) - 0.35, 0);
+    b.addLoot(-side * (hw - 1.5), top, 0);
+  } else b.slab(-hw - 0.3, -hd - 0.3, hw + 0.3, hd + 0.3, top, 0.25, st.roof);
   const ridge = Math.min(2.6, d * 0.28);
   b.box(-hw - 0.4, top, -hd - 0.4, hw + 0.4, top + ridge, hd + 0.4, st.roof, { shape: 'gable', noCollide: true, color: st.roofColor });
   b.ramp(-hw - 0.4, top, -hd - 0.4, hw + 0.4, top + ridge, 0, 1, 1, st.roof);
