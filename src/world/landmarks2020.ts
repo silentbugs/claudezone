@@ -818,8 +818,9 @@ export function terminal2020(ctx: GenContext, x: number, z: number) {
 
   // ---------------- double stairs up to the Security Checkpoint (x 0..8, rising north z 18 -> 6)
   B.ramp(-1, 0.05, 6, 3, F2, 18, 1, -1, Mat.Tile); B.ramp(4, 0.05, 6, 8, F2, 18, 1, -1, Mat.Tile);
-  B.box(3.05, 0.05, 6, 3.95, 1.0, 18, Mat.Metal, { color: 0x9aa0a4, noCollide: true });
-  B.box(-1.1, 0.05, 6, -1, F2 + 1, 18, Mat.Metal, { color: 0x9aa0a4, noCollide: true }); B.box(8, 0.05, 6, 8.1, F2 + 1, 18, Mat.Metal, { color: 0x9aa0a4, noCollide: true });
+  // solid balustrade walls along both sides (a rail you can't step through)
+  B.box(-1.25, 0.05, 6, -1, F2 + 1, 18, Mat.Plaster, { color: 0xd8d4cc }); B.box(8, 0.05, 6, 8.25, F2 + 1, 18, Mat.Plaster, { color: 0xd8d4cc });
+  B.box(3, 0.05, 17.2, 4, 1.0, 18, Mat.Metal, { color: 0x9aa0a4 }); // divider newel at the foot
   B.box(-1, F2 + 3.2, 5.6, 9, F2 + 4.4, 5.9, Mat.Metal, { color: 0x24384c, noCollide: true }); // SECURITY CHECKPOINT sign
 
   // ---------------- 2F: east-west concourse (runway side) + checkpoint concourse + east part
@@ -867,7 +868,7 @@ export function terminal2020(ctx: GenContext, x: number, z: number) {
   for (let lx = 4; lx <= 36; lx += 10) { B.light(lx, F2 - 0.15, -19); B.light(lx, F2 - 0.15, -4); }
   // east double stairs (x 48..57) from the 2F concourse down to the 1F east concourse (z -15 -> -3)
   B.ramp(48, 0.05, -15, 52.3, F2, -3, 1, -1, Mat.Tile); B.ramp(52.7, 0.05, -15, 57, F2, -3, 1, -1, Mat.Tile);
-  B.box(52.3, 0.05, -15, 52.7, 1, -3, Mat.Metal, { color: 0x9aa0a4, noCollide: true });
+  B.box(47.75, 0.05, -15, 48, F2 + 1, -3, Mat.Plaster, { color: 0xd8d4cc }); B.box(57, 0.05, -15, 57.25, F2 + 1, -3, Mat.Plaster, { color: 0xd8d4cc });
   // café express and tourist information (low rooms, roofs = low mezzanines)
   for (const [x0, x1, name] of [[40, 47, 'cafe'], [58, 66, 'tourist']] as [number, number, string][]) {
     B.wall(0, x0, x1, -2, 0.05, 3.8, 0.2, Mat.Plaster, [], 0xe0dad0);

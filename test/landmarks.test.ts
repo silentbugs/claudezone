@@ -28,6 +28,8 @@ function newSim() {
   for (const q of sim.players) if (q.id !== 0) { q.phase = 6; q.alive = false; }
   Object.assign(sim.players[149], { phase: 4, alive: true, bot: false, x: 3000, z: 300, y: 300 });
   sim.time = 200;
+  // doors start closed (their random open state shifts whenever the map gains a door); routes push them open
+  const d: any = sim.doors; d.open.fill(0); d.target.fill(0); for (let i = 0; i < d.count; i++) d.apply(i);
   return sim;
 }
 const frameOf = (kind: string, minR: number) => { const s = world.col.structures.find((q) => q.kind === kind && q.radius > minR)!; return { x: s.x, z: s.z, y: s.y, a: s.angle }; };

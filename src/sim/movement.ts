@@ -324,7 +324,7 @@ function ladder(sim: Sim, p: Player, dt: number): boolean {
     for (const i of sim.laddersNear(p.x, p.z)) {
       const l = L[i];
       const rx = p.x - l.x, rz = p.z - l.z, out = rx * l.nx + rz * l.nz, lat = Math.abs(rx * -l.nz + rz * l.nx);
-      if (out < 0 || out > 0.9 || lat > 0.5 || p.y < l.y0 - 0.4 || p.y > l.y1 - 0.6) continue;
+      if (out < 0 || out > 0.9 || lat > 0.5 || p.y < l.y0 - 1.0 || p.y > l.y1 - 0.6) continue;
       if (fx * -l.nx + fz * -l.nz < 0.55) continue;
       P.ladder = i; p.sprinting = false; p.tacSprint = 0; p.slideT = 0; p.stance = Stance.Stand; p.ads = 0;
       sim.emit({ t: 'jump', p: p.id });
