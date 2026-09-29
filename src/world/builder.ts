@@ -91,14 +91,23 @@ export class Builder {
       if (axis === 0) this.box(a + u0, y0 + v0, c - t / 2, a + u1, y0 + v1, c + t / 2, m, color !== undefined ? { color } : undefined);
       else this.box(c - t / 2, y0 + v0, a + u0, c + t / 2, y0 + v1, a + u1, m, color !== undefined ? { color } : undefined);
     };
-    let u = 0;
+    // openings sharing a column (a door with glass above, two window bands) are stacked vertically
+    const cols: { u0: number; u1: number; list: Opening[] }[] = [];
     for (const o of ops) {
-      const u0 = Math.max(0, o.u0), u1 = Math.min(len, o.u1);
-      seg(u, u0, 0, h, mat);
-      seg(u0, u1, 0, o.v0, mat);
-      seg(u0, u1, o.v1, h, mat);
-      if (o.glass) seg(u0, u1, o.v0, o.v1, Mat.Glass);
-      u = Math.max(u, u1);
+      const u0 = Math.max(0, o.u0), u1 = Math.min(len, o.u1), c = cols[cols.length - 1];
+      if (c && u0 < c.u1 - 1e-3) { c.u1 = Math.max(c.u1, u1); c.list.push(o); } else cols.push({ u0, u1, list: [o] });
+    }
+    let u = 0;
+    for (const c of cols) {
+      seg(u, c.u0, 0, h, mat);
+      let v = 0;
+      for (const o of c.list.sort((p, q) => p.v0 - q.v0)) {
+        seg(c.u0, c.u1, v, o.v0, mat);
+        if (o.glass) seg(c.u0, c.u1, o.v0, o.v1, Mat.Glass);
+        v = Math.max(v, o.v1);
+      }
+      seg(c.u0, c.u1, v, h, mat);
+      u = Math.max(u, c.u1);
     }
     seg(u, len, 0, h, mat);
   }
