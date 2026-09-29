@@ -117,6 +117,7 @@ export class Match {
 
   /** 2020 variable zoom: scoped weapons toggle between two magnifications while aiming */
   scopeLevel = 0;
+  private tugT = 0; private lastAirPhase = -1; private chuteRoll = 0;
   /** current ADS magnification, eased so a zoom toggle or optic swap doesn't snap */
   zoomNow = 1;
   private adsZoom() {
@@ -286,6 +287,7 @@ export class Match {
 
   private render(dt: number, time: number) {
     const sim = this.sim, me = this.me, a = this.clock.alpha, cam = this.sm.camera;
+    const meR = this.vm.interp(me, a, sim.time); // render-rate view of the local player's timers / ADS
     // spectate a squadmate when dead
     if (!me.alive && me.phase === Phase.Dead) {
       const sp = sim.players[this.spectate];
@@ -317,7 +319,13 @@ export class Match {
       const tx = x + Math.sin(this.camYaw) * Math.cos(cp) * this.tpDist, ty = y + 1.6 - Math.sin(cp) * this.tpDist + 1.5, tz = z + Math.cos(this.camYaw) * Math.cos(cp) * this.tpDist;
       const k = this.tpBlend;
       cam.position.set(fx + (tx - fx) * k, fy + (ty - fy) * k, fz + (tz - fz) * k);
-      cam.rotation.set(this.camPitch, this.camYaw, (phase === Phase.Chute ? -vp.intent.mx * 0.08 : 0) * (1 - k), 'YXZ');
+      // canopy opening tugs the view down and back up; steering banks the view smoothly
+      if (phase === Phase.Chute && this.lastAirPhase === Phase.Freefall) this.tugT = 0.8;
+      this.lastAirPhase = phase; this.tugT = Math.max(0, this.tugT - dt);
+      const tug = this.tugT > 0 ? Math.sin(Math.PI * (1 - this.tugT / 0.8)) * Math.exp(-2 * (1 - this.tugT / 0.8)) : 0;
+      this.chuteRoll += ((phase === Phase.Chute ? -vp.intent.mx * 0.08 : 0) - this.chuteRoll) * (1 - Math.exp(-dt * 4));
+      cam.position.y -= tug * 0.35 * (1 - k);
+      cam.rotation.set(this.camPitch - tug * 0.16 * (1 - k), this.camYaw, this.chuteRoll * (1 - k), 'YXZ');
       if (k > 0.01) { const q0 = cam.quaternion.clone(); cam.lookAt(x, y + 1.4, z); cam.quaternion.copy(q0.slerp(cam.quaternion, k)); }
       const sp = Math.hypot(vp.vx, vp.vy, vp.vz);
       audio.loop('engine', Math.max(0, 0.4 - Math.hypot(sim.plane.x - x, sim.plane.z - z) / 800), 1, 800);
@@ -345,9 +353,12 @@ export class Match {
       this.eye += (target - this.eye) * (1 - Math.exp(-dt * rate));
       this.roll += ((vp.slideT > 0 ? 0.055 : 0) - this.roll) * (1 - Math.exp(-dt * 10));
       cam.position.set(x, y + this.eye - this.landDip * 0.4, z);
-      cam.rotation.set(pitch, yaw, this.roll, 'YXZ');
+      // mantle: the head dips toward the ledge and rolls slightly as you haul yourself over
+      let mp = 0, mr = 0;
+      if (vp === me && meR.mantleT > 0) { const T = (me as any).mantleDur ?? 0.5, u = Math.min(1, 1 - meR.mantleT / T), w = Math.sin(Math.PI * u); mp = -0.11 * w; mr = 0.035 * w * ((me as any).vaulting ? -1 : 1); }
+      cam.rotation.set(pitch + mp, yaw, this.roll + mr, 'YXZ');
       if (vp.slideT > 0) fov += 4;
-      if (def && me.ads > 0 && (this.settings.adsFovAffected || def.scope)) fov = fov / (1 + (this.zoomNow - 1) * me.ads);
+      if (def && me.ads > 0 && (this.settings.adsFovAffected || def.scope)) fov = fov / (1 + (this.zoomNow - 1) * meR.ads);
       if (me.tacSprint > 0) fov += 6;
       const vv = vehicleOf(sim, vp);
       audio.loop('wind', 0); audio.loop('engine', 0); audio.loop('chute', 0);
@@ -404,7 +415,7 @@ export class Match {
     this.vm.updateAir(this.spectate < 0 ? me : null, dt, this.tpBlend < 0.35 && !this.debugCam);
     if ((phase === Phase.Freefall || phase === Phase.Chute) && this.tpBlend < 0.35 && !this.debugCam) this.vm.render(this.sm.renderer);
     if (fp && this.spectate < 0 && !this.debugCam) {
-      this.vm.update(me, dt, this.lastMouse.dx, this.lastMouse.dy, Math.hypot(me.vx, me.vz), me.sprinting);
+      this.vm.update(meR, dt, this.lastMouse.dx, this.lastMouse.dy, Math.hypot(me.vx, me.vz), me.sprinting);
       this.vm.render(this.sm.renderer);
     }
     // HUD

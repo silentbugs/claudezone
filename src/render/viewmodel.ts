@@ -122,7 +122,10 @@ export class ViewModel {
     const vfov = a >= ref ? base : (2 * Math.atan(Math.tan((base * Math.PI) / 360) * ref / a) * 180) / Math.PI;
     this.camera.aspect = a; this.camera.fov = Math.min(95, vfov); this.camera.updateProjectionMatrix();
   }
-  fire() { this.kick = 1; this.kickRot = 1; this.flashT = 0.05; this.flash.rotation.z = Math.random() * 3; }
+  /** recoil is a damped spring: each shot is an impulse, so automatic fire stacks and settles like MW's */
+  fire() { this.kickVel += 26; this.kickRotVel += 22; this.flashT = 0.05; this.flash.rotation.z = Math.random() * 3; }
+  private kickVel = 0; private kickRotVel = 0;
+  private sprintK = 0; private tacK = 0; private crawlK = 0; private slideK = 0; private idleT = 0;
 
   /** Hands on the parachute toggles / spread in freefall (first-person infil view). */
   private air = new THREE.Group();
@@ -144,21 +147,38 @@ export class ViewModel {
     this.risers.frustumCulled = false;
     this.canopy.add(canopy, this.risers); this.scene.add(this.canopy);
   }
+  private chuteK = 0; private steerS = 0; private airInit = false;
+  private tq = new THREE.Quaternion(); private te = new THREE.Euler();
+  /** ease an arm toward its pose (snaps on the first frame the arms are shown) */
+  private poseAir(m: THREE.Object3D, x: number, y: number, z: number, rx: number, ry: number, rz: number, dt: number) {
+    const k = this.airInit ? 1 - Math.exp(-dt * 9) : 1;
+    m.position.x += (x - m.position.x) * k; m.position.y += (y - m.position.y) * k; m.position.z += (z - m.position.z) * k;
+    this.tq.setFromEuler(this.te.set(rx, ry, rz)); m.quaternion.slerp(this.tq, k);
+    if (m === this.airR) this.airInit = true;
+  }
   private canopy = new THREE.Group(); private risers!: THREE.LineSegments; private canopyMesh!: THREE.Mesh;
   updateAir(p: Player | null, dt: number, show: boolean) {
     if (!this.airBuilt) this.buildAir();
     this.air.visible = !!p && show && (p.phase === Phase.Chute || p.phase === Phase.Freefall);
     this.canopy.visible = this.air.visible && p!.phase === Phase.Chute;
     if (p && (p.phase === Phase.Plane || p.phase === Phase.Freefall || p.phase === Phase.Chute)) this.root.visible = false;
-    if (!this.air.visible || !p) return;
+    if (!this.air.visible || !p) { this.chuteK = 0; this.airInit = false; return; }
     this.bobT += dt;
-    const chute = p.phase === Phase.Chute, steer = p.intent.mx, pull = Math.max(0, -p.intent.mz);
+    const chute = p.phase === Phase.Chute, pull = Math.max(0, -p.intent.mz);
+    // steering and the deploy are eased: toggles are pulled, not teleported
+    this.steerS += (p.intent.mx - this.steerS) * (1 - Math.exp(-dt * 6)); const steer = this.steerS;
+    this.chuteK = chute ? Math.min(1, this.chuteK + dt / 0.85) : 0;
     if (chute) {
       // hands up on the toggles; pulling one side steers
-      this.airL.position.set(-0.34, -0.3 + (steer < 0 ? -0.07 : 0) - pull * 0.05, -0.42); this.airL.rotation.set(0.2, 0, 0.35);
-      this.airR.position.set(0.34, -0.3 + (steer > 0 ? -0.07 : 0) - pull * 0.05, -0.42); this.airR.rotation.set(0.2, 0, -0.35);
+      // the deploy: reach up and grab the toggles as the canopy blossoms open above with a small overshoot
+      const k = this.chuteK, grab = Math.min(1, k / 0.35);
+      this.poseAir(this.airL, -0.34 - 0.08 * (1 - grab), -0.3 + Math.max(0, -steer) * -0.07 - pull * 0.05 + 0.1 * (1 - grab), -0.42, 0.2, 0, 0.35, dt);
+      this.poseAir(this.airR, 0.34 + 0.08 * (1 - grab), -0.3 + Math.max(0, steer) * -0.07 - pull * 0.05 + 0.1 * (1 - grab), -0.42, 0.2, 0, -0.35, dt);
+      const c1 = 1.6, c3 = c1 + 1, open = k >= 1 ? 1 : 1 + c3 * Math.pow(k - 1, 3) + c1 * Math.pow(k - 1, 2);
+      this.canopyMesh.scale.set(0.25 + 0.75 * open, 0.4 + 0.6 * Math.min(1, k * 1.6), 0.25 + 0.75 * open);
+      this.canopyMesh.position.y = 1.62 - 0.9 * (1 - Math.min(1, k * 1.3));
       // canopy sways a little and banks with steering; risers run from each fist up to the canopy edge
-      this.canopy.rotation.set(Math.sin(this.bobT * 0.9) * 0.02, 0, -steer * 0.06 + Math.sin(this.bobT * 0.6) * 0.015);
+      this.canopy.rotation.set(Math.sin(this.bobT * 0.9) * 0.02 - 0.12 * (1 - this.chuteK), 0, -steer * 0.06 + Math.sin(this.bobT * 0.6) * 0.015);
       this.air.updateMatrixWorld(true); this.canopy.updateMatrixWorld(true);
       const pos = this.risers.geometry.attributes.position as THREE.BufferAttribute, v = new THREE.Vector3();
       let i = 0;
@@ -174,10 +194,26 @@ export class ViewModel {
     } else {
       // freefall: arms spread, fluttering in the wind
       const f = Math.sin(this.bobT * 17) * 0.02;
-      this.airL.position.set(-0.46, -0.36 + f, -0.3); this.airL.rotation.set(-0.6, 0, 1.1 + steer * 0.2);
-      this.airR.position.set(0.46, -0.36 - f, -0.3); this.airR.rotation.set(-0.6, 0, -1.1 + steer * 0.2);
+      this.poseAir(this.airL, -0.46, -0.36 + f, -0.3, -0.6, 0, 1.1 + steer * 0.2, dt);
+      this.poseAir(this.airR, 0.46, -0.36 - f, -0.3, -0.6, 0, -1.1 + steer * 0.2, dt);
     }
   }
+
+  /**
+   * The sim runs at 60 Hz; the screen may not. Everything the viewmodel animates from (swap, reload,
+   * mantle, plate and stance timers, ADS) is read through this view of the player: count-down timers are
+   * advanced to the render instant and ADS is blended between the last two ticks, so a swap or an ADS
+   * raise moves every frame instead of stepping at the tick rate.
+   */
+  interp(p: Player, alpha: number, simTime: number): Player {
+    if (simTime !== this.tickT) { this.tickT = simTime; this.adsPrev = this.adsLast; this.adsLast = p.ads; }
+    const q = Object.create(p) as Player, T = alpha / 60;
+    const down = (v: number) => (v > 0 ? Math.max(1e-4, v - T) : v);
+    q.swapT = down(p.swapT); q.reloadT = down(p.reloadT); q.mantleT = down(p.mantleT); q.plateT = down(p.plateT); q.stanceT = down(p.stanceT); q.meleeCd = down(p.meleeCd);
+    q.ads = this.adsPrev + (this.adsLast - this.adsPrev) * alpha;
+    return q;
+  }
+  private tickT = -1; private adsPrev = 0; private adsLast = 0;
 
   update(p: Player, dt: number, mouseDX: number, mouseDY: number, speed: number, sprinting: boolean) {
     // during the drop half of a swap we still hold the old weapon
@@ -224,13 +260,29 @@ export class ViewModel {
     this.bobT += dt * (speed > 0.5 ? 2 + speed * 1.1 : 0.8);
     const bobA = (speed > 0.5 ? 0.012 + speed * 0.0022 : 0.003) * (1 - ads * 0.9);
     const bx = Math.sin(this.bobT) * bobA, by = -Math.abs(Math.cos(this.bobT)) * bobA;
-    this.kick = Math.max(0, this.kick - dt * 14); this.kickRot = Math.max(0, this.kickRot - dt * 10);
+    for (let i = 0, h = Math.min(dt, 1 / 20) / 2; i < 2; i++) {
+      const K = 420, C = 2 * Math.sqrt(K) * 0.72;
+      this.kickVel += (-K * this.kick - C * this.kickVel) * h; this.kick += this.kickVel * h;
+      this.kickRotVel += (-K * 0.7 * this.kickRot - C * 0.85 * this.kickRotVel) * h; this.kickRot += this.kickRotVel * h;
+    }
+    // discrete states blend in and out instead of snapping
+    const ease = (k: number, t: number, r: number) => k + (t - k) * (1 - Math.exp(-dt * r));
+    this.sprintK = ease(this.sprintK, sprinting ? 1 : 0, 11); this.tacK = ease(this.tacK, sprinting && p.tacSprint > 0 ? 1 : 0, 9);
+    this.crawlK = ease(this.crawlK, p.stance === 2 && speed > 0.3 ? 1 : 0, 8); this.slideK = ease(this.slideK, p.slideT > 0 ? 1 : 0, 12);
+    this.idleT += dt;
     const S = 0.7, pistol = WEAPON[w!.id].cls === 'pistol';
     const g = !!this.glb;
     const hip = pistol ? new THREE.Vector3(0.1, g ? -0.11 : -0.13, g ? -0.42 : -0.48) : new THREE.Vector3(g ? 0.13 : 0.12, g ? -0.15 : -0.14, g ? -0.4 : -0.36), aim = new THREE.Vector3(0, -this.sight * S, pistol ? (g ? -0.4 : -0.5) : g && this.optic ? -0.1 - this.opticZ * S : g ? -0.3 : -0.36);
     const pos = hip.clone().lerp(aim, ads);
     let rx = 0, ry = 0, rz = 0;
-    if (sprinting) { const s = p.tacSprint > 0 ? 1 : 0.7; pos.x -= 0.05 * s; pos.y -= 0.06 * s; rx -= 0.35 * s; ry += 0.75 * s; rz += 0.25 * s; if (p.tacSprint > 0) { rx = 0.9; ry = 0.2; pos.y += 0.02; } }
+    if (this.sprintK > 0.001) {
+      // sprint: carried across the chest, muzzle left and down; tactical sprint: raised, muzzle up
+      const s = this.sprintK * 0.7, t = this.tacK;
+      pos.x -= 0.05 * s; pos.y -= 0.06 * s; rx -= 0.35 * s; ry += 0.75 * s; rz += 0.25 * s;
+      if (t > 0.001) { rx += (0.9 - rx) * t; ry += (0.2 - ry) * t; pos.y += (0.02 + 0.06 * s) * t; }
+    }
+    // breathing idle
+    { const b = 1 - ads * 0.75; pos.y += Math.sin(this.idleT * 1.7) * 0.0016 * b; rz += Math.sin(this.idleT * 0.85) * 0.005 * b; rx += Math.sin(this.idleT * 1.7 + 1) * 0.004 * b; }
     // reload: track the reload's length when it starts (empty reloads also rack the bolt / slide)
     if (p.reloadT > 0 && this.reloadTotal === 0) { this.reloadTotal = p.reloadT; this.reloadEmpty = w!.mag === 0; }
     if (p.reloadT <= 0) this.reloadTotal = 0;
@@ -259,7 +311,13 @@ export class ViewModel {
     // climbing a ladder: weapon lowered out of view
     this.climbK += ((((p as any).ladder ?? -1) >= 0 || ((p as any).asc ?? -1) >= 0 ? 1 : 0) - this.climbK) * Math.min(1, dt * 8);
     if (this.climbK > 0.01) { pos.y -= 0.45 * this.climbK; rx -= 0.9 * this.climbK; }
-    if (this.swap > 0) { const e = this.swap * this.swap * (3 - 2 * this.swap); pos.y -= e * 0.3; rx -= e * 0.7; rz += e * 0.25; }
+    if (this.swap > 0) {
+      // drop: accelerate down and roll out; raise: come up with a small overshoot and settle (MW swap feel)
+      let e: number;
+      if (dropping) e = this.swap * this.swap;
+      else { const r = 1 - this.swap, c1 = 1.9, c3 = c1 + 1; e = 1 - (1 + c3 * Math.pow(r - 1, 3) + c1 * Math.pow(r - 1, 2)); }
+      pos.y -= e * 0.28; pos.x += e * 0.05; rx -= e * 0.8; rz += e * 0.35; ry -= e * 0.15;
+    }
     // mantle: weapon tucked down and away, left hand reaches out and plants on the ledge
     if (p.mantleT > 0) {
       const T = P.mantleDur ?? 0.5, u = 1 - p.mantleT / T, k = Math.sin(Math.min(1, u) * Math.PI);
@@ -268,13 +326,13 @@ export class ViewModel {
     } else this.mantleHand = 0;
     // stance changes dip the weapon; prone crawling lowers and rocks it
     if (p.stanceT > 0) { const k = Math.min(1, p.stanceT / 0.45); pos.y -= 0.08 * k; rx -= 0.3 * k; rz += 0.15 * k; }
-    if (p.stance === 2 && speed > 0.3) { pos.y -= 0.06; rz += Math.sin(this.bobT * 0.9) * 0.12; rx -= 0.25; }
-    if (p.slideT > 0) { rz += 0.18; pos.x -= 0.02; }
+    if (this.crawlK > 0.001) { const c = this.crawlK; pos.y -= 0.06 * c; rz += Math.sin(this.bobT * 0.9) * 0.12 * c; rx -= 0.25 * c; }
+    if (this.slideK > 0.001) { rz += 0.18 * this.slideK; pos.x -= 0.02 * this.slideK; }
     // melee swing
     if (p.meleeCd > 0.35) { const t = (0.7 - p.meleeCd) / 0.35; pos.x -= Math.sin(t * Math.PI) * 0.12; pos.z -= Math.sin(t * Math.PI) * 0.12; ry += Math.sin(t * Math.PI) * 0.9; }
-    pos.z += this.kick * (0.02 + (1 - ads) * 0.02);
+    pos.z += this.kick * (0.024 + (1 - ads) * 0.014); pos.y += this.kickRot * 0.004;
     this.root.position.set(pos.x + bx + this.swayX, pos.y + by + this.swayY, pos.z);
-    this.root.rotation.set(rx + this.kickRot * 0.05 + this.swayY * 2, ry + this.swayX * 3, rz + this.swayX * 1.5, 'YXZ');
+    this.root.rotation.set(rx + this.kickRot * 0.06 + this.swayY * 2, ry + this.swayX * 3, rz + this.swayX * 1.5, 'YXZ');
     if (this.mantleHand > 0.01) {
       // the planted hand lives in view space: reach up-left, grab the ledge, then sink as we pull up over it
       const u = this.mantleU, reach = Math.min(1, u / 0.3), push = Math.max(0, (u - 0.35) / 0.65);
