@@ -1004,3 +1004,109 @@ export function grassHangar(): Builder {
   b.addLoot(-3, R - 1.6, 0);
   return b;
 }
+
+// ---------------------------------------------------------------------------------------------
+/**
+ * Zordaya Prison (Zone 5E), the round fortress. The outer ring is itself a 3-level building: an arcade of
+ * arches on the courtyard side, rooms behind it and on the upper floors, a walkable crenellated rampart on
+ * top. Six turrets on the outside hold stairwells from the arcade up to the ramparts, with a ladder on to
+ * each turret top. The north gate is a tunnel through the ring and the barbican (gabled block between two
+ * big round towers), reached over a stone bridge. Courtyard: raised helipad deck, fuel tanks, water tower
+ * with a ladder, metal cover roofs.
+ */
+export function prison2020(ctx: GenContext, cx: number, cz: number) {
+  const f = frame(ctx, 'prison', cx, cz - 12, 0, 176, 200, 'prisonwall', 0x8d877c, 4);
+  f.z = cz; // frame origin at the ring centre (the flattened area extends north for the bridge)
+  const stone = 0x9a8e7c, dark = 0x847a6a, Ro = 70, Ri = 59, D = Ro - Ri, Hr = 15, N = 48, dt = (Math.PI * 2) / N;
+  const L = 2 * Ro * Math.sin(dt / 2) + 0.3, Li = 2 * (Ri + 0.4) * Math.sin(dt / 2) + 0.35;
+  const stairs = new Set([4, 12, 20, 28, 36, 44]);
+  const h2 = D / 2;
+  for (let i = 0; i < N; i++) {
+    const t = -Math.PI / 2 + i * dt, b = new Builder(), gate = i === 0, st = stairs.has(i);
+    // outer wall (thick, slit windows on the upper floors), inner courtyard wall (arcade arch on 1F)
+    const slits = gate ? [{ u0: L / 2 - 3, u1: L / 2 + 3, v0: 0, v1: 7, open: true }] : [{ u0: L / 2 - 0.4, u1: L / 2 + 0.4, v0: 6.2, v1: 7.6, open: true }, { u0: L / 2 - 0.4, u1: L / 2 + 0.4, v0: 11.2, v1: 12.6, open: true }];
+    b.wall(0, -L / 2, L / 2, h2 - 0.6, 0.05, Hr, 1.2, Mat.Rock, slits, stone);
+    const arch = gate ? { u0: Li / 2 - 3, u1: Li / 2 + 3, v0: 0, v1: 7, open: true } : { u0: Li / 2 - 1.7, u1: Li / 2 + 1.7, v0: 0, v1: 4.2, open: true };
+    b.wall(0, -Li / 2, Li / 2, -h2 + 0.4, 0.05, Hr, 0.8, Mat.Rock, [arch, ...(gate ? [] : [{ u0: Li / 2 - 0.6, u1: Li / 2 + 0.6, v0: 6.5, v1: 8.2, open: true }, { u0: Li / 2 - 0.6, u1: Li / 2 + 0.6, v0: 11.5, v1: 13.2, open: true }])], stone);
+    if (gate) {
+      // gate tunnel through the ring: side walls and a vaulted ceiling
+      b.box(-3.3, 0.05, -h2, -3, 7.5, h2, Mat.Rock, { color: dark }); b.box(3, 0.05, -h2, 3.3, 7.5, h2, Mat.Rock, { color: dark });
+      b.box(-3.3, 7.5, -h2, 3.3, 8, h2, Mat.Rock, { color: dark });
+      b.box(-L / 2, 9.75, -h2 + 0.8, L / 2, 10, h2 - 1.2, Mat.Wood, { color: 0x6a5a44 }); // guard room floor above the gate
+      b.light(0, 7.2, 0);
+    } else {
+      // arcade back wall (rooms behind, a door in every other bay; the stair bays open onto their landing)
+      const Lb = 2 * (Ri + h2 - 1.1) * Math.sin(dt / 2) + 0.3; // chord at this radius (longer walls poke into the next bay)
+      const doorOp = st ? [{ u0: Lb / 2 - L / 2 + 0.6, u1: Lb / 2 - L / 2 + 1.8, v0: 0, v1: 2.3, open: true }] : i % 2 === 0 ? [{ u0: Lb / 2 - 0.55, u1: Lb / 2 + 0.55, v0: 0, v1: 2.3, locked: i % 6 === 2 }] : [];
+      b.wall(0, -Lb / 2, Lb / 2, -1.1, 0.05, 4.95, 0.3, Mat.Plaster, doorOp, 0xb0a490);
+      const holes: [number, number, number, number][] = st ? [[-L / 2 + 1.4, -1, L / 2, 4.9]] : [];
+      b.slab(-L / 2, -h2 + 0.8, L / 2, h2 - 1.2, 5, 0.3, Mat.Wood, holes);
+      b.slab(-L / 2, -h2 + 0.8, L / 2, h2 - 1.2, 10, 0.3, Mat.Wood, holes);
+      if (i % 4 === 2) for (const y of [0.05, 5, 10]) b.wall(1, -1.1, h2 - 1.2, -L / 2 + 0.15, y, 4.95, 0.25, Mat.Plaster, [{ u0: 2.2, u1: 3.3, v0: 0, v1: 2.2 }], 0xb0a490); // room partitions
+      for (const y of [0.05, 5, 10]) b.light(0, y + 4.6, 1.8);
+      if (i % 3 === 0) b.addLoot(0.5, 0.05, 2); if (i % 3 === 1) b.addLoot(-0.5, 5, 2); if (i % 5 === 0) b.addLoot(0, 10, 1);
+      b.light(0, 4.6, -3.3);
+    }
+    if (st) {
+      // stairwell across the bay (flights along the tangent), 1F -> rampart
+      const x0 = -L / 2 + 0.1, x1 = L / 2 - 0.1, za = -1, zb = 1.9, zc = 4.8, Lf = 1.3, Lh = 1.3;
+      for (let k = 0; k < 3; k++) {
+        const y = 0.05 + k * 5, mid = y + 2.5, top = k === 2 ? Hr : y + 5;
+        b.ramp(x0 + Lf, y, za, x1 - Lh, mid, zb - 0.05, 0, 1, Mat.Rock);
+        b.ramp(x0 + Lf, mid, zb + 0.05, x1 - Lh, top, zc, 0, -1, Mat.Rock);
+        b.box(x1 - Lh, mid - 0.25, za, x1, mid, zc, Mat.Rock, { color: dark });
+        b.box(x0 + Lf + 0.5, y, zb - 0.05, x1 - Lh - 0.4, y + 5, zb + 0.05, Mat.Plaster, { color: 0xb0a490 });
+      }
+      // the turret outside it (standable top, crenellated), ladder up its face from the rampart
+      // (centred over the top landing so its ladder is reached from the landing, not across the stair well)
+      const tx = -L / 2 + 2.2;
+      b.box(tx - 4.5, 0.05, h2, tx + 4.5, Hr + 5, h2 + 9, Mat.Rock, { color: dark, shape: 'cyl' });
+      for (let k = 0; k < 8; k++) { const a = (k / 8) * Math.PI * 2; b.box(tx + Math.cos(a) * 3.8 - 0.6, Hr + 5, h2 + 4.5 + Math.sin(a) * 3.8 - 0.6, tx + Math.cos(a) * 3.8 + 0.6, Hr + 6.2, h2 + 4.5 + Math.sin(a) * 3.8 + 0.6, Mat.Rock, { color: dark }); }
+      b.ladder(-L / 2 + 0.7, h2 - 0.15, 0, -1, Hr, Hr + 5);
+      b.addLoot(tx, Hr + 5, h2 + 4.5);
+    }
+    // rampart deck, crenellated outer parapet (gap at the turret ladders), low inner parapet
+    b.slab(-L / 2, -h2, L / 2, h2, Hr, 0.5, Mat.Rock, st ? [[-L / 2 + 1.4, -1, L / 2, 4.8]] : []);
+    for (let x = -L / 2 + 0.3; x < L / 2 - 0.5; x += 2.3) if (!(st && x < -L / 2 + 1.8)) b.box(x, Hr, h2 - 1.2, x + 1.2, Hr + 1.5, h2, Mat.Rock, { color: stone });
+    if (!st) b.box(-L / 2, Hr, h2 - 1.2, L / 2, Hr + 0.8, h2, Mat.Rock, { color: stone });
+    else b.box(-L / 2 + 1.7, Hr, h2 - 1.2, L / 2, Hr + 0.8, h2, Mat.Rock, { color: stone }); // gap at the turret ladder
+    b.box(-Li / 2, Hr, -h2, Li / 2, Hr + 0.9, -h2 + 0.5, Mat.Rock, { color: stone });
+    if (i % 8 === 6) b.addLoot(0, Hr, 0);
+    const rm = (Ro + Ri) / 2;
+    sub(ctx, f, Math.cos(t) * rm, Math.sin(t) * rm, Math.atan2(Math.cos(t), Math.sin(t)), b, st ? 'prisonturret' : 'prisonwall');
+  }
+  // barbican: gabled block over the gate tunnel between two big round towers, then the stone bridge
+  {
+    const b = new Builder(), bz = 7;
+    b.box(-9, 0.05, -bz, -3.3, 20, bz, Mat.Rock, { color: stone }); b.box(3.3, 0.05, -bz, 9, 20, bz, Mat.Rock, { color: stone });
+    b.box(-3.3, 7.5, -bz, 3.3, 20, bz, Mat.Rock, { color: stone });
+    b.box(-9.2, 20, -bz - 0.2, 9.2, 25, bz + 0.2, Mat.Roof, { color: 0x5a524a, shape: 'gable' });
+    b.box(-3, 0.05, -bz, -2.9, 7.5, bz, Mat.Rock, { color: dark }); b.box(2.9, 0.05, -bz, 3, 7.5, bz, Mat.Rock, { color: dark });
+    for (const s of [-1, 1]) {
+      b.box(s * 13 - 5.5, 0.05, -5.5, s * 13 + 5.5, 26, 5.5, Mat.Rock, { color: stone, shape: 'cyl' });
+      for (let k = 0; k < 10; k++) { const a = (k / 10) * Math.PI * 2; b.box(s * 13 + Math.cos(a) * 4.8 - 0.7, 26, Math.sin(a) * 4.8 - 0.7, s * 13 + Math.cos(a) * 4.8 + 0.7, 27.4, Math.sin(a) * 4.8 + 0.7, Mat.Rock, { color: stone }); }
+    }
+    // bridge (paved deck with parapets and piers)
+    b.box(-3.6, -0.5, bz, 3.6, 0.05, bz + 30, Mat.Rock, { color: 0x8a8070 });
+    b.box(-4, 0.05, bz, -3.6, 1.1, bz + 30, Mat.Rock, { color: stone }); b.box(3.6, 0.05, bz, 4, 1.1, bz + 30, Mat.Rock, { color: stone });
+    b.light(0, 7.2, 0); b.addLoot(0, 26, 0);
+    sub(ctx, f, 0, -(Ro + bz), Math.PI, b, 'barbican');
+  }
+  // courtyard (bailey)
+  {
+    const b = new Builder();
+    b.box(-9, 0.05, -7, 9, 2.2, 7, Mat.Metal, { color: 0x7a7e76 }); // raised helipad deck
+    b.ramp(9, 0.05, -1.5, 14, 2.2, 1.5, 0, -1, Mat.Metal);
+    b.box(-8, 2.2, -0.2, 8, 2.21, 0.2, Mat.Trim, { color: 0xe8e8e0, noCollide: true });
+    for (const z of [-3, 3]) b.box(-30, 0.05, 20 + z - 1.4, -18, 2.8, 20 + z + 1.4, Mat.Metal, { color: 0xb8b8b0, shape: 'cyl' }); // fuel tanks (lying)
+    // water tower with a ladder
+    for (const [x, z] of [[27, -27], [31, -27], [27, -23], [31, -23]]) b.box(x - 0.2, 0.05, z - 0.2, x + 0.2, 9, z + 0.2, Mat.Metal, { color: 0x5a524a });
+    b.box(26.5, 9, -27.5, 31.5, 9.3, -22.5, Mat.Wood, { color: 0x6a5a44 });
+    b.box(27, 9.3, -27, 31, 13, -23, Mat.Wood, { color: 0x6a5a44, shape: 'cyl' });
+    b.ladder(29, -22.4, 0, 1, 0.05, 9.3);
+    // metal cover roofs on posts
+    for (const [x, z] of [[18, 22], [-22, -20]]) { b.box(x - 5, 3, z - 3, x + 5, 3.2, z + 3, Mat.Metal, { color: 0x6d7378 }); for (const [dx, dz] of [[-4.8, -2.8], [4.6, -2.8], [-4.8, 2.6], [4.6, 2.6]]) b.box(x + dx, 0.05, z + dz, x + dx + 0.2, 3, z + dz + 0.2, Mat.Metal, { color: 0x5a6066 }); }
+    b.addLoot(0, 2.2, 0); b.addLoot(-24, 0.05, 20); b.addLoot(29, 9.3, -25); b.addLoot(18, 0.05, 22);
+    sub(ctx, f, 0, 0, 0, b, 'prisonyard');
+  }
+}

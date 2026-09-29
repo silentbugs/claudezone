@@ -143,7 +143,9 @@ test('Warehouse (2020 K): side door -> west gantry stair -> mezzanine office; ex
   const sim = newSim();
   const ws = world.col.structures.filter((q) => q.kind === 'warehouse' && q.ramps.length >= 3);
   assert.ok(ws.length > 0, 'warehouses with gantries exist');
-  const s = ws[0], f = { x: s.x, z: s.z, y: s.y, a: s.angle };
+  // one on level ground (the exterior gantry foot sits outside the flattened footprint)
+  const level = (q: any) => { const e = q.ramps.reduce((m: any, r: any) => (r.x0 > m.x0 ? r : m)); const [wx, wz] = [q.x + e.x0 * q.cos + (e.z0 - 1) * q.sin, q.z - e.x0 * q.sin + (e.z0 - 1) * q.cos]; return Math.abs(world.hf.at(wx, wz) - q.y) < 0.15; };
+  const s = ws.find(level) ?? ws[0], f = { x: s.x, z: s.z, y: s.y, a: s.angle };
   const ext = s.ramps.reduce((m, r) => (r.x0 > m.x0 ? r : m));
   const hw = ext.x0 - 0.2, hd = ext.z1 + 4.4, mz = hd - 5, run = 5.2, my = 3.6;
   const ow = Math.min(10, hw * 2 - 8) / 2, oz = mz + 0.6;
@@ -196,7 +198,8 @@ test('Military base: tent compound (through a wall gap into a tent, up to the up
 
 test('Tenement (2020 D): front door -> west stairwell -> up 3 floors -> roof hut -> roof; 1F zig-zag corridor to the east stairwell', () => {
   const sim = newSim();
-  const s = world.col.structures.find((q) => q.kind === 'tenement')!;
+  const flatFront = (q: any) => { const hw = q.parts[0].x1 - 0.1, hd = q.parts[0].z1 - 0.1, lx = -hw + 5.3, lz = -hd - 2.5; return Math.abs(world.hf.at(q.x + lx * q.cos + lz * q.sin, q.z - lx * q.sin + lz * q.cos) - q.y) < 0.25; };
+  const s = world.col.structures.find((q) => q.kind === 'tenement' && flatFront(q)) ?? world.col.structures.find((q) => q.kind === 'tenement')!;
   assert.ok(s, 'tenements placed');
   const f = { x: s.x, z: s.z, y: s.y, a: s.angle };
   const hw = s.parts[0].x1 - 0.1, hd = s.parts[0].z1 - 0.1, c = -hw + 4.5, ce = hw - 4.5, E = 0.45, H = 3.2, zc = -hd + 0.15 + 7.2;
@@ -208,4 +211,28 @@ test('Tenement (2020 D): front door -> west stairwell -> up 3 floors -> roof hut
   const r2 = walkRoute(sim, f, [c + 0.8, -hd - 2.5], [[c + 0.8, -hd - 0.6], [c + 0.8, -hd + 0.9], [c + 3, -hd + 0.9], [c + 6.5, -hd + 0.9], [c + 6.5, 0], [0, 0], [ce - 6.5, 0], [ce - 6.5, -hd + 0.9], [ce - 1, -hd + 0.9]]);
   console.log('1F corridor W -> E stairwell', r2);
   assert.ok(typeof r2 === 'number' && Math.abs(r2 - E) < 0.3, 'reached the east stairwell landing');
+});
+
+test('Prison: bridge -> barbican tunnel -> gate -> courtyard; arcade -> turret stairwell -> rampart -> turret top', () => {
+  const sim = newSim();
+  const bb = world.col.structures.find((q) => q.kind === 'barbican')!;
+  assert.ok(bb, 'barbican');
+  const fb = { x: bb.x, z: bb.z, y: bb.y, a: bb.angle };
+  const r1 = walkRoute(sim, fb, [0, 34], [[0, 20], [0, 0], [0, -8], [0, -18.5], [0, -26]]);
+  console.log('bridge -> courtyard', r1);
+  assert.ok(typeof r1 === 'number' && Math.abs(r1) < 0.4, 'in the courtyard');
+  const tu = world.col.structures.find((q) => q.kind === 'prisonturret')!;
+  const f = { x: tu.x, z: tu.z, y: tu.y, a: tu.angle };
+  const L = 2 * 70 * Math.sin(Math.PI / 48) + 0.3, x0 = -L / 2;
+  const up: number[][] = [];
+  for (let k = 0; k < 3; k++) up.push([x0 + 0.8, 0.4], [-x0 - 0.7, 0.4], [-x0 - 0.7, 3.4], [x0 + 0.7, 3.4]);
+  const r2 = walkRoute(sim, f, [0, -12], [[0.8, -7], [0.8, -3], [x0 + 1.2, -3], [x0 + 1.2, -0.5], [x0 + 0.8, -0.3], ...up, [x0 + 0.7, 4.6]]);
+  console.log('arcade -> rampart', r2);
+  assert.ok(typeof r2 === 'number' && Math.abs(r2 - 15) < 0.4, 'on the rampart');
+  const p: any = sim.players[0];
+  p.yaw = p.intent.yaw = f.a + Math.PI; // face local +z (outward, the turret ladder)
+  for (let t = 0; t < 6 * 60; t++) { p.intent.mz = 1; sim.tick(1 / 60); sim.events.length = 0; if (p.y - f.y > 19.8 && p.onGround && p.mantleT <= 0) break; }
+  p.intent.mz = 0;
+  console.log('turret top', (p.y - f.y).toFixed(2));
+  assert.ok(Math.abs(p.y - f.y - 20) < 0.4, 'on the turret top');
 });

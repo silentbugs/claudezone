@@ -6,7 +6,7 @@
 import { Mat } from './collision';
 import { Builder, apartment, warehouse, garageRow, house, shop, FLOOR_H } from './builder';
 import { poi } from './mapdata';
-import { tvStation2020, trainStation2020, hospital2020, controlTower2020, superstore2020, terminal2020, barracksCompound, grassHangar, fireStation, gasStation, placeNear, sub } from './landmarks2020';
+import { tvStation2020, trainStation2020, hospital2020, controlTower2020, superstore2020, terminal2020, prison2020, barracksCompound, grassHangar, fireStation, gasStation, placeNear, sub } from './landmarks2020';
 import type { GenContext } from './mapgen';
 import { Rng } from '../core/rng';
 
@@ -240,33 +240,10 @@ function tvStation(ctx: GenContext) {
 
 function prison(ctx: GenContext) {
   const p = poi('prison');
-  const cx = p.x, cz = p.z - 10, R = 70, H = 14;
-  const base = ctx.footprintHeights(cx, cz, 0, R * 2, R * 2).avg;
-  ctx.flatten(cx, cz, 0, R * 2 + 6, R * 2 + 6, base, 20);
-  const N = 28;
-  for (let i = 0; i < N; i++) {
-    const t0 = (i / N) * Math.PI * 2, t1 = ((i + 1) / N) * Math.PI * 2, tm = (t0 + t1) / 2;
-    const x0 = Math.cos(t0) * R, z0 = Math.sin(t0) * R, x1 = Math.cos(t1) * R, z1 = Math.sin(t1) * R;
-    const len = Math.hypot(x1 - x0, z1 - z0) + 1;
-    const ang = Math.atan2(-(z1 - z0), x1 - x0);
-    const b = new Builder();
-    const gate = i === 7; // north gate faces the causeway road
-    b.wall(0, -len / 2, len / 2, 0, 0, H, 3, Mat.Rock, gate ? [{ u0: len / 2 - 3, u1: len / 2 + 3, v0: 0, v1: 5 }] : [], 0x8d877c);
-    b.box(-len / 2, H, -1.5, len / 2, H + 1.4, -0.9, Mat.Rock, { color: 0x8d877c }); // battlement
-    // wall-walk access on some segments
-    if (i % 7 === 3) { b.ramp(-len / 2 + 1, 0, 1.6, -len / 2 + 3, H, 8, 1, -1); }
-    if (i % 4 === 0) { b.box(-3.5, 0, -3.5, 3.5, H + 6, 3.5, Mat.Rock, { color: 0x847e73, shape: 'cyl' }); } // towers
-    ctx.place(b, 'prisonwall', cx + Math.cos(tm) * R, cz + Math.sin(tm) * R, ang, { y: base, flatten: false, poi: 'prison', lodColor: 0x8d877c });
-  }
-  // central keep + cell blocks
-  const keep = apartment(ctx.rng, 30, 24, 4, { wall: Mat.Rock, wallColor: 0x958e80, trim: 0, roof: Mat.Roof, roofColor: 0x5a4a42 });
-  ctx.place(keep, 'keep', cx, cz, 0, { y: base, poi: 'prison', lodColor: 0x958e80 });
-  for (const [dx, dz, a] of [[-35, 0, Math.PI / 2], [35, 0, Math.PI / 2], [0, 35, 0]] as const) {
-    const cb = apartment(ctx.rng, 34, 11, 2, { wall: Mat.Concrete, wallColor: 0xa9a393, trim: 0, roof: Mat.Roof, roofColor: 0x555 });
-    ctx.place(cb, 'cellblock', cx + dx, cz + dz, a, { y: base, poi: 'prison', lodColor: 0xa9a393 });
-  }
-  ctx.occ.markCircle(cx, cz, R + 4, 1);
-  ctx.contracts.push({ x: cx, y: 0, z: cz - R - 25 });
+  const cx = p.x, cz = p.z - 10, R = 70;
+  prison2020(ctx, cx, cz);
+  ctx.occ.markCircle(cx, cz, R + 10, 1);
+  ctx.contracts.push({ x: cx + 30, y: 0, z: cz - R - 45 });
 }
 
 function superstore(ctx: GenContext) {
