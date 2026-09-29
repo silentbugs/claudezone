@@ -12,7 +12,7 @@ export const WALL_T = 0.25;
 export interface Opening { u0: number; u1: number; v0: number; v1: number; glass?: boolean; /** no door leaf (arches, garages, shop fronts) */ open?: boolean; /** door leaf that never opens (boarded flats, sealed stairwells) */ locked?: boolean }
 /** A hinged door leaf in builder-local space: hinge at (x, z), closed leaf runs along +angle direction. */
 export interface AscenderDef { x: number; z: number; nx: number; nz: number; y0: number; y1: number; stops: number[] }
-export interface LadderDef { x: number; z: number; nx: number; nz: number; y0: number; y1: number }
+export interface LadderDef { x: number; z: number; nx: number; nz: number; y0: number; y1: number; /** interior ladder through a floor hatch: step off on the ladder's side */ hatch?: boolean }
 export interface DoorDef { x: number; z: number; y: number; angle: number; w: number; h: number; locked?: boolean }
 
 export class Builder {
@@ -39,8 +39,8 @@ export class Builder {
    * Exterior ladder against a wall face. (x, z) is on the wall face, (nx, nz) the outward normal (axis-aligned).
    * Rails and rungs are visual only; climbing is handled by movement.
    */
-  ladder(x: number, z: number, nx: number, nz: number, y0: number, y1: number) {
-    this.ladders.push({ x, z, nx, nz, y0, y1 });
+  ladder(x: number, z: number, nx: number, nz: number, y0: number, y1: number, hatch = false) {
+    this.ladders.push({ x, z, nx, nz, y0, y1, hatch });
     const ox = x + nx * 0.18, oz = z + nz * 0.18, tx = -nz, tz = nx; // tangent along the wall
     const col = 0x6f7478, top = y1 + 1.0; // rails run up past the roof edge to grab
     for (const s of [-0.24, 0.24]) this.box(ox + tx * s - 0.025, y0, oz + tz * s - 0.025, ox + tx * s + 0.025, top, oz + tz * s + 0.025, Mat.Metal, { color: col, noCollide: true });

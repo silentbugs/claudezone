@@ -112,3 +112,26 @@ test('Superstore: front doors, SW stairwell to the 2F offices and out onto the a
   console.log('east gantry -> balcony', r2);
   assert.ok(typeof r2 === 'number' && Math.abs(r2 - 4.2) < 0.4, 'on the balcony');
 });
+
+test('Fire station: garage, stair to the crew quarters, hose tower ladder to the lookout; gas station roof and canopy', () => {
+  const sim = newSim(), f = frameOf('firestation', 5);
+  const r = walkRoute(sim, f, [-10, 7], [[-8, 7], [-4, 7], [6.2, 7], [6.2, 0.9], [3.5, 0.9], [3.5, -2.5], [-5.8, -2.5], [-5.8, -0.9], [2.8, -0.9], [4.5, -2], [6.5, -5], [8.2, -5], [10, -6.3]]);
+  console.log('fire station -> tower base (2F)', r);
+  assert.ok(typeof r === 'number' && Math.abs(r - 3.25) < 0.4, 'in the tower at 2F');
+  const p: any = sim.players[0];
+  const c = Math.cos(f.a), s = Math.sin(f.a);
+  p.yaw = p.intent.yaw = f.a - Math.PI / 2; // face +x (the ladder's wall)
+  for (let t = 0; t < 6 * 60; t++) { p.intent.mz = 1; sim.tick(1 / 60); sim.events.length = 0; if (p.y - f.y > 10.8 && p.onGround && p.mantleT <= 0) break; }
+  p.intent.mz = 0;
+  console.log('after ladder', (p.y - f.y).toFixed(2)); void c; void s;
+  assert.ok(Math.abs(p.y - f.y - 11) < 0.5, 'in the lookout room');
+  const g = frameOf('gasstation', 5);
+  const r2 = walkRoute(sim, g, [3.5, 9], [[3.5, 8.2], [3.5, 7.6]]);
+  void r2;
+  const q: any = sim.players[0];
+  q.yaw = q.intent.yaw = g.a; // face local -z (the rear wall and its ladder)
+  for (let t = 0; t < 5 * 60; t++) { q.intent.mz = 1; sim.tick(1 / 60); sim.events.length = 0; if (q.y - g.y > 3.5 && q.onGround && q.mantleT <= 0) break; }
+  q.intent.mz = 0;
+  console.log('gas station roof', (q.y - g.y).toFixed(2));
+  assert.ok(q.y - g.y > 3.5, 'up the rear ladder');
+});

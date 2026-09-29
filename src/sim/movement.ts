@@ -340,7 +340,8 @@ function ladder(sim: Sim, p: Player, dt: number): boolean {
   if (p.y >= l.y1 - 0.15 && climb > 0) {
     // over the top onto the roof (reuse the two-phase mantle)
     P.ladder = -1;
-    const tx = l.x - l.nx * 0.7, tz = l.z - l.nz * 0.7, t = 0.55;
+    const k = l.hatch ? -1.25 : 0.7; // hatch: step off onto the floor beside the hole; wall: over the top onto the roof
+    const tx = l.x - l.nx * k, tz = l.z - l.nz * k, t = 0.55;
     p.mantleT = t; p.mantleY = l.y1 + 0.02; P.mantleDur = t; P.mantleY0 = p.y; P.mantleX0 = p.x; P.mantleZ0 = p.z; P.mantleX1 = tx; P.mantleZ1 = tz;
     return true;
   }

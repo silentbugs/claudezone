@@ -207,7 +207,7 @@ test('climb a shop roof ladder', () => {
     tried++;
     Object.assign(p, { x: sx, z: sz, y: g, vx: 0, vy: 0, vz: 0, onGround: true, fallStartY: g, mantleT: 0, stance: 0 }); (p as any).ladder = -1;
     p.yaw = p.intent.yaw = Math.atan2(l.nx, l.nz); // face the wall
-    for (let t = 0; t < 6 * 60; t++) { p.intent.mz = 1; p.intent.mx = 0; sim.tick(1 / 60); sim.events.length = 0; }
+    for (let t = 0; t < 6 * 60; t++) { p.intent.mz = 1; p.intent.mx = 0; sim.tick(1 / 60); sim.events.length = 0; if (p.y > l.y1 - 0.2 && p.onGround && p.mantleT <= 0) break; }
     if (p.y > l.y1 - 0.2 && p.onGround && p.health >= 100) ok++;
     else console.log('ladder fail: y', (p.y - l.y0).toFixed(2), 'top', (l.y1 - l.y0).toFixed(2), 'on', (p as any).ladder);
   }

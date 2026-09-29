@@ -644,3 +644,89 @@ export function superstore2020(ctx: GenContext) {
   ctx.buyStations.push({ x: p.x + 40, y: 0, z: p.z + 45, a: 0 });
   ctx.contracts.push({ x: p.x - 70, y: 0, z: p.z + 30 });
 }
+
+/** Fire station (one prefab reused across Verdansk: Stations 20, 36, 57, 74...). Street end at local -x. */
+export function fireStation(): Builder {
+  const b = new Builder(), red = 0xa33a2a, brick = 0x9a5a44, cream = 0xd8cdb4;
+  b.box(-7.2, -1.2, -7.2, 11.2, 0.05, 10.2, Mat.Concrete, { color: 0x8e8c86 });
+  // garage hall x -7..7, z 0..10, walls 5 m, gable roof along x (ridge ~8 m); two arched bays on the street end
+  b.wall(1, 0, 10, -7, 0.05, 4.95, 0.3, Mat.Brick, [{ u0: 0.8, u1: 4.4, v0: 0, v1: 4.2, open: true }, { u0: 5.6, u1: 9.2, v0: 0, v1: 4.2, open: true }], brick, -1);
+  b.wall(1, 0, 10, 7, 0.05, 4.95, 0.3, Mat.Brick, [{ u0: 4, u1: 5, v0: 0, v1: 2.2 }], brick, 1);
+  b.wall(0, -7, 7, 10, 0.05, 4.95, 0.3, Mat.Brick, [{ u0: 3, u1: 5, v0: 2.4, v1: 3.8, glass: false }, { u0: 9, u1: 11, v0: 2.4, v1: 3.8, glass: false }], brick, 1);
+  b.box(-7.4, 5, -0.4, 7.4, 8, 10.4, Mat.Roof, { shape: 'gable', noCollide: true, color: red });
+  b.ramp(-7.4, 5, -0.4, 7.4, 8, 5, 1, 1, Mat.Roof); b.ramp(-7.4, 5, 5, 7.4, 8, 10.4, 1, -1, Mat.Roof);
+  b.box(-5.5, 0.05, 1.5, 5.5, 2.8, 4.2, Mat.Metal, { color: 0xb3261e }); // fire engine
+  b.light(-2, 4.8, 5); b.light(3, 4.8, 5);
+  b.addLoot(-3, 0.05, 7); b.addLoot(4, 0.05, 8);
+  // two-storey wing x -7..7, z -7..0 (6.5 m, flat roof): reception + lockers down, crew quarters up
+  for (const [y, h, lvl] of [[0.05, 3.2, 0], [3.25, 3.25, 1]] as [number, number, number][]) {
+    b.wall(1, -7, 0, -7, y, h, 0.3, Mat.Plaster, lvl ? [{ u0: 2.5, u1: 4.5, v0: 0.9, v1: 2.3 }] : [{ u0: 3, u1: 4, v0: 0, v1: 2.2 }], cream, -1);
+    b.wall(0, -7, 7, -7, y, h, 0.3, Mat.Plaster, [{ u0: 2, u1: 3.4, v0: 0.9, v1: 2.3 }, { u0: 9, u1: 10.4, v0: 0.9, v1: 2.3 }], cream, -1);
+    b.wall(1, -7, 0, 7, y, h, 0.3, Mat.Plaster, lvl ? [{ u0: 1.5, u1: 2.5, v0: 0, v1: 2.2 }] : [], cream, 1); // 2F: door into the hose tower (z -5.5..-4.5)
+    // partition with the garage: a door down, windows up (crew quarters overlook the garage)
+    b.wall(0, -7, 7, 0, y, h, 0.25, Mat.Plaster, lvl ? [{ u0: 5, u1: 9, v0: 0.9, v1: 2.2, glass: true }] : [{ u0: 10, u1: 11, v0: 0, v1: 2.2 }], cream);
+    b.light(-3, y + h - 0.1, -3.5); b.light(3, y + h - 0.1, -3.5);
+  }
+  for (let k = 0; k < 2; k++) b.box(-7.3 - 0.35 * (2 - k), 0, -4.2, -7.15, (k + 1) * 0.05 + 0.02, -2.6, Mat.Concrete, { color: 0x9a968f }); // steps
+  b.ramp(-4.6, 0.05, -1.5, 2.4, 3.25, -0.35, 0, 1, Mat.Wood); // straight stair against the partition
+  b.slab(-7, -7, 7, 0, 3.25, 0.25, Mat.Concrete, [[-4.7, -1.6, 2.5, -0.2]]);
+  b.slab(-7.2, -7.2, 7.2, 0, 6.5, 0.3, Mat.Roof, []);
+  b.box(-5, 0.05, -6.5, -3, 1.9, -5.9, Mat.Metal, { color: 0x6a7076 }); b.box(-2.5, 0.05, -6.5, -0.5, 1.9, -5.9, Mat.Metal, { color: 0x6a7076 }); // lockers
+  for (let k = 0; k < 3; k++) b.block(-4 + k * 3, -5, 0.9, 2, 3.25, 3.75, Mat.Wood, { color: 0x6b5238 }); // bunks
+  b.addLoot(-5, 0.05, -2); b.addLoot(4, 3.25, -4); b.addLoot(-2, 3.25, -5.5);
+  b.ladder(4.5, -7.15, 0, -1, 0.05, 6.5); // wing -> roof (garage roof reachable from it)
+  // hose / lookout tower x 7..11, z -7..-3, to 13 m; floor at 2F level, ladder up to the lookout room
+  for (const [y, h] of [[0.05, 3.2], [3.25, 7.75], [11, 2.4]] as [number, number][]) {
+    const top = y > 10;
+    const w = top ? [{ u0: 0.6, u1: 3.4, v0: 0.9, v1: 2.2 }] : [];
+    b.wall(0, 7, 11, -7, y, h, 0.3, Mat.Brick, w, brick, -1); b.wall(0, 7, 11, -3, y, h, 0.3, Mat.Brick, w, brick, 1);
+    b.wall(1, -7, -3, 11, y, h, 0.3, Mat.Brick, w, brick, 1);
+  }
+  b.slab(7, -7, 11, -3, 3.25, 0.25, Mat.Concrete, []);
+  b.slab(7, -7, 11, -3, 11, 0.25, Mat.Concrete, [[10, -6.8, 10.85, -5.8]]);
+  b.ladder(10.85, -6.3, -1, 0, 3.25, 11, true);
+  b.box(6.6, 13.4, -7.4, 11.4, 15, -2.6, Mat.Roof, { shape: 'gable', noCollide: true, color: red });
+  b.slab(6.7, -7.3, 11.3, -2.7, 13.4, 0.2, Mat.Roof, []);
+  b.light(9, 13.2, -5); b.addLoot(8.5, 11, -4);
+  return b;
+}
+
+/** Gas station: store with glass front + ATM + office, fixed garage bay, rear door, roof ladder; pump canopy. */
+export function gasStation(): Builder {
+  const b = new Builder(), wall = 0xd8d4ca, brand = 0xc4201c;
+  b.box(-6, -1.2, -10, 6, 0.05, 7.2, Mat.Concrete, { color: 0x8e8c86 });
+  b.wall(0, -4.5, 4.5, 0, 0.05, 3.55, 0.25, Mat.Plaster, [{ u0: 0.5, u1: 3, v0: 0.4, v1: 2.6, glass: true }, { u0: 3.2, u1: 4.2, v0: 0, v1: 2.2 }, { u0: 4.4, u1: 5.8, v0: 0.4, v1: 2.6, glass: true }], wall, -1);
+  b.wall(0, -4.5, 4.5, 7, 0.05, 3.55, 0.25, Mat.Plaster, [{ u0: 1, u1: 2, v0: 0, v1: 2.2 }], wall, 1);
+  b.wall(1, 0, 7, -4.5, 0.05, 3.55, 0.25, Mat.Plaster, [{ u0: 2.5, u1: 3.5, v0: 0, v1: 2.2 }], wall, -1);
+  b.wall(1, 0, 7, 4.5, 0.05, 3.55, 0.25, Mat.Plaster, [], wall, 1);
+  b.box(4.63, 0.05, 1.5, 4.7, 3, 4.5, Mat.Metal, { color: 0x8a8f94, noCollide: true }); // roller door (fixed shut)
+  b.wall(1, 0.1, 6.9, 1.5, 0.05, 3.5, 0.12, Mat.Plaster, [{ u0: 4.5, u1: 5.5, v0: 0, v1: 2.2 }], 0xd8d0c0); // garage bay
+  b.wall(0, -4.4, -1.5, 4, 0.05, 3.5, 0.12, Mat.Plaster, [{ u0: 1, u1: 2, v0: 0, v1: 2.2 }], 0xd8d0c0); // office
+  b.box(-1.2, 0.05, 1, 0.5, 1.1, 2.2, Mat.Wood, { color: 0x6b4a2f }); // counter
+  b.box(-4.3, 0.05, 1.2, -3.8, 1.8, 2, Mat.Metal, { color: 0x3a4a5a }); // ATM
+  for (const x of [-3, 0]) b.box(x - 0.5, 0.05, 3, x + 0.5, 1.6, 3.4, Mat.Metal, { color: 0xc8c8c0 }); // shelves
+  b.slab(-4.7, -0.2, 4.7, 7.2, 3.6, 0.25, Mat.Roof, []);
+  b.box(-4.8, 3.6, -0.3, 4.8, 4.1, -0.2, Mat.Trim, { color: brand, noCollide: true });
+  b.ladder(3.5, 7.15, 0, 1, 0.05, 3.6);
+  // canopy: touches the store, walkable roof (step up from the store roof), two columns over the pumps
+  b.box(-5.2, 4.3, -9.2, 5.2, 4.6, -0.2, Mat.Metal, { color: 0xe6e6e0 });
+  b.box(-5.25, 4.1, -9.25, 5.25, 4.3, -0.15, Mat.Trim, { color: brand, noCollide: true });
+  for (const x of [-2.8, 2.8]) { b.box(x - 0.25, 0.05, -5.4, x + 0.25, 4.3, -4.9, Mat.Metal, { color: 0xd0d0c8 }); b.box(x - 0.5, 0.05, -6.8, x + 0.5, 1.6, -6.2, Mat.Metal, { color: brand }); }
+  b.light(0, 3.45, 2); b.light(-3, 3.45, 5.5); b.light(0, 4.25, -5); b.light(3, 3.45, 5.5);
+  b.addLoot(-2, 0.05, 2.5); b.addLoot(3, 0.05, 5); b.addLoot(-3, 0.05, 5.5); b.addLoot(0, 3.6, 4);
+  return b;
+}
+
+/** Place a prefab on free ground near (x, z), trying a spiral of spots and the four axis rotations. */
+export function placeNear(ctx: GenContext, b: () => Builder, kind: string, x: number, z: number, w: number, d: number, lod: number, maxR = 160): boolean {
+  for (let r = 0; r <= maxR; r += 8) for (let k = 0; k < Math.max(1, Math.floor(r / 4)); k++) {
+    const a = (k / Math.max(1, Math.floor(r / 4))) * Math.PI * 2 + r * 0.37, px = x + Math.cos(a) * r, pz = z + Math.sin(a) * r;
+    const ang = (Math.floor(ctx.rng.next() * 4) * Math.PI) / 2;
+    if (!ctx.occ.free(px, pz, ang, w, d, 2)) continue;
+    const fh = ctx.footprintHeights(px, pz, ang, w, d);
+    if (fh.max - fh.min > 3 || ctx.hf.at(px, pz) < 1) continue;
+    ctx.place(b(), kind, px, pz, ang, { lodColor: lod });
+    return true;
+  }
+  return false;
+}

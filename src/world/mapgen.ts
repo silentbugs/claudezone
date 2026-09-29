@@ -53,7 +53,7 @@ export interface Tree { x: number; y: number; z: number; s: number; kind: 0 | 1 
 /** A hinged door: its collision structure and closed angle. */
 export interface DoorRec { sid: number; base: number; w: number; h: number; locked?: boolean }
 /** An exterior ladder in world space: base on the wall face, outward normal, bottom and roof heights. */
-export interface LadderRec { x: number; z: number; nx: number; nz: number; y0: number; y1: number }
+export interface LadderRec { x: number; z: number; nx: number; nz: number; y0: number; y1: number; hatch?: boolean }
 export interface AscenderRec { x: number; z: number; nx: number; nz: number; y0: number; y1: number; stops: number[] }
 export interface WorldData {
   ascenders: AscenderRec[];
@@ -179,7 +179,7 @@ export function generateWorld(masks: MapMasks, seed = 1): WorldData {
       for (const [lx, ly, lz] of (b as any).lights ?? []) lights.push(x + lx * c + lz * s, y + ly, z - lx * s + lz * c);
       for (const l of (b as any).ladders ?? []) {
         const lx = x + l.x * c + l.z * s, lz = z - l.x * s + l.z * c, nx = l.nx * c + l.nz * s, nz = -l.nx * s + l.nz * c;
-        ladders.push({ x: lx, z: lz, nx, nz, y0: y + l.y0, y1: y + l.y1 });
+        ladders.push({ x: lx, z: lz, nx, nz, y0: y + l.y0, y1: y + l.y1, hatch: !!l.hatch });
       }
       // hinged door leaves: each its own small structure pivoting on its hinge
       for (const d of (b as any).doors ?? []) {

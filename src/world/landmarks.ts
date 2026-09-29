@@ -6,7 +6,7 @@
 import { Mat } from './collision';
 import { Builder, apartment, warehouse, garageRow, house, shop, FLOOR_H } from './builder';
 import { poi } from './mapdata';
-import { tvStation2020, trainStation2020, hospital2020, controlTower2020, superstore2020, sub } from './landmarks2020';
+import { tvStation2020, trainStation2020, hospital2020, controlTower2020, superstore2020, fireStation, gasStation, placeNear, sub } from './landmarks2020';
 import type { GenContext } from './mapgen';
 import { Rng } from '../core/rng';
 
@@ -19,6 +19,7 @@ export function buildLandmarks(ctx: GenContext) {
   tvStation2020(ctx);
   prison(ctx);
   superstore2020(ctx);
+  prefabs2020(ctx);
   hospital2020(ctx);
   trainStation(ctx);
   port(ctx);
@@ -551,4 +552,10 @@ export function buildGulag(ctx: GenContext) {
     b.block(s * 16, 7, 0.4, 3, 0.1, 2.2, Mat.Tile, { color: 0xd8d6cc });
   }
   for (let i = 0; i < GULAG_ARENAS; i++) { const a = gulagArena(i); const bb = new Builder(); bb.parts = b.parts.map((p) => ({ ...p })); ctx.place(bb, 'gulag', a.x, a.z, 0, { y: a.y, flatten: false, mark: false, lodColor: 0xc8c6bc }); }
+}
+
+/** Fire stations and gas stations where 2020 Verdansk had them (approximate, near the named places). */
+function prefabs2020(ctx: GenContext) {
+  for (const id of ['stadium', 'promenade_west', 'downtown', 'hills', 'lumber', 'military_base']) { const p = poi(id); placeNear(ctx, fireStation, 'firestation', p.x + p.r * 0.6, p.z + p.r * 0.4, 20, 19, 0x9a5a44); }
+  for (const id of ['bloc_18', 'lozoff_pass', 'farmland', 'riverside', 'junkyard', 'airport_maintenance', 'bloc_16', 'port']) { const p = poi(id); placeNear(ctx, gasStation, 'gasstation', p.x - p.r * 0.5, p.z + p.r * 0.5, 13, 18, 0xd8d4ca); }
 }
