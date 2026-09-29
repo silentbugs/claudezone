@@ -64,7 +64,12 @@ and the mountain rim are also there.
   - Hospital: atrium, cafeteria ward, tower with a skybridge and an ascender.
   - Superstore: 2F corner offices, with the roof reachable only from outside.
   - Airport control tower: ascender to the cab.
+  - Airport main terminal: check-in hall, double stairs to the Security Checkpoint, runway concourse, duty-free, crate stack to the 3F mezzanine, Departures door onto the elevated road, collapsed roof.
+  - Arklov Peak: walled bunk-tent compound, container barracks, grass-roofed hangars you can walk up.
+  - Warehouses: doors on all four sides, twin gantry stairs to a mezzanine office, exterior gantry to an upper door.
+  - Tenements (Torsk Bloc style): two stairwells linked by a zig-zag corridor, roof exits, end ladders.
   - Fire and gas stations.
+- Window glass breaks: shoot it, melee it or jump at it to smash the pane and go through.
 - Interiors are lit separately from the outdoors: rooms under a roof lose most of the sky light and get warm ceiling lights, while sunlight still comes in through windows and doors.
 
 **Vehicles.** ATV, Tactical Rover, SUV, Cargo Truck and a light helicopter.
@@ -99,9 +104,13 @@ Movement speeds, weapon swap times, sprint-to-fire, mantle timings and health re
 | G / Q | Lethal / tactical |
 | 5 / X | Killstreak / field upgrade |
 | Q (while parachuting) | Hold for third person |
+| B (aiming a scope) | Variable zoom: switch magnification |
+| Tab | Backpack: squad, weapons, ammo, equipment, plates and cash, with Drop actions |
 | MMB / Left Alt | Ping: on an enemy it marks them for your squad (red), otherwise a location your squad moves to |
 | M | Tac map |
 | Esc | Pause menu and settings |
+
+In a match the game captures browser shortcuts (Ctrl+F, Ctrl+Shift+C, zoom...). Ctrl+W / Ctrl+T / Ctrl+N only reach the game in fullscreen with keyboard lock (Chrome/Edge; setting on by default; hold Esc to leave fullscreen); otherwise closing or reloading the tab mid-match asks "Leave site?" first.
 
 ## Layout
 
