@@ -120,6 +120,7 @@ function melee(sim: Sim, p: Player, dmg: number) {
     best = q; bd = d;
   }
   if (best) sim.damage(best, dmg, p.id, 'melee', false, false, best.x, best.y + 1.1, best.z);
+  else { const g = sim.glassAhead(p.x, p.y + 1.3, p.z, fx, fz, 1.6); if (g) sim.breakGlass(g[0], g[1], p.x + fx * g[2], p.y + 1.3, p.z + fz * g[2], fx, fz); } // melee smashes a window
 }
 
 function startReload(sim: Sim, p: Player) {
@@ -270,6 +271,7 @@ export function updateBullets(sim: Sim, dt: number) {
       if (b.rocket) { sim.explode(hx, hy, hz, WEAPON[b.weapon].splash!.radius, WEAPON[b.weapon].splash!.damage, b.owner, 'rocket'); alive = false; }
       else {
         sim.emit({ t: 'impact', x: hx, y: hy, z: hz, nx: hit.nx, ny: hit.ny, nz: hit.nz, mat: hit.mat, water: hit.water });
+        if (hit.mat === Mat.Glass && hit.structure >= 0) sim.breakGlass(hit.structure, hit.part, hx, hy, hz, dx, dz);
         const pen = PENETRATION[hit.mat as Mat];
         if (pen !== undefined && b.dmgMul > 0.3) {
           // pass through thin cover and keep going

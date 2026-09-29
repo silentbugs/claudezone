@@ -48,15 +48,15 @@ export class TerrainMesh {
           float macro = fbm3(vWPos.xz / 90.0);
           float macro2 = fbm3(vWPos.xz / 23.0 + 7.0);
           float slope = 1.0 - clamp(vWNormal.y, 0.0, 1.0);
-          vec3 grass = texture(tLayers, vec3(uv, 0.0)).rgb * vec3(0.92, 1.06, 0.72);
-          vec3 dry = texture(tLayers, vec3(uv * 1.1, 1.0)).rgb;
+          vec3 grass = texture(tLayers, vec3(uv, 0.0)).rgb * vec3(0.96, 1.14, 0.64); // sunlit yellow-green meadow grass (2020)
+          vec3 dry = texture(tLayers, vec3(uv * 1.1, 1.0)).rgb * vec3(1.14, 1.06, 0.88); // dusty beige
           vec3 dirt = texture(tLayers, vec3(uv, 2.0)).rgb;
           vec3 bw = pow(abs(normalize(vWNormal)), vec3(4.0)); bw /= (bw.x + bw.y + bw.z);
           vec3 rock = texture(tLayers, vec3(vWPos.xz / 14.0, 3.0)).rgb * bw.y + texture(tLayers, vec3(vWPos.xy / 14.0, 3.0)).rgb * bw.z + texture(tLayers, vec3(vWPos.zy / 14.0, 3.0)).rgb * bw.x;
           vec3 snow = texture(tLayers, vec3(uv * 0.7, 4.0)).rgb;
           vec3 asph = texture(tLayers, vec3(uv * 0.8, 5.0)).rgb;
           vec3 sand = texture(tLayers, vec3(uv, 6.0)).rgb;
-          vec3 ice = texture(tLayers, vec3(uv * 0.3, 7.0)).rgb;
+          vec3 ice = texture(tLayers, vec3(uv * 0.3, 7.0)).rgb * vec3(0.6, 0.68, 0.76); // grey-blue river ice, not blown-out white
           vec3 pave = texture(tLayers, vec3(vWPos.xz / 6.0, 8.0)).rgb;
           float fDry = smoothstep(0.45, 0.8, macro) * 0.8, fDirt = smoothstep(0.62, 0.8, macro2) * 0.8;
           float fRock = smoothstep(0.28, 0.5, slope + (macro2 - 0.5) * 0.25), fSand = smoothstep(3.0, 0.8, vWPos.y) * (1.0 - vSplat.x);

@@ -68,7 +68,7 @@ export class Hud {
   setLowHealth(k: number) { this.lowPulse = Math.max(0, this.lowPulse - 0.03); const a = Math.min(1, k * (0.75 + 0.25 * this.lowPulse)); this.low.style.opacity = a < 0.01 ? '0' : a.toFixed(3); }
   beat(k: number) { this.lowPulse = 1; void k; }
   private vig = el('div', 'vig');
-  private scope = el('div', 'scope');
+  private scope = (() => { const d = el('div', 'scope'); d.innerHTML = '<i class="pv"></i><i class="ph"></i><b></b>'; return d; })();
   private flash = el('div', 'flash');
   private dot = el('div', 'reddot');
   private tags = el('div');
@@ -240,7 +240,8 @@ export class Hud {
     if (this.hmGlyphT > 0) { this.hm.classList.add('break'); this.hm.style.opacity = '1'; }
     // --- scope / red dot
     this.scope.style.display = opts.scope && opts.ads > 0.92 ? 'block' : 'none';
-    this.dot.style.display = (opts.optic || opts.scope) && opts.ads > 0.85 ? 'block' : 'none';
+    // the optic's own reticle (or the scope overlay) is the aim point; no second HUD dot on top of it
+    this.dot.style.display = 'none';
     // --- vignettes
     let vig = '';
     if (view.phase === Phase.Downed) vig = 'radial-gradient(circle, transparent 30%, rgba(120,0,0,0.6))';

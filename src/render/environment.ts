@@ -5,7 +5,7 @@ import { RIVER_DEPTH } from '../world/terrain';
 import { SHADER_NOISE } from './terrainMesh';
 
 export const SUN_DIR = new THREE.Vector3(-0.45, 0.62, -0.35).normalize();
-export const FOG_COLOR = new THREE.Color(0xbcc6cc);
+export const FOG_COLOR = new THREE.Color(0xd2c9b4);
 
 /**
  * Aerial perspective for every fogged material: exponential haze that thins with altitude (valleys and
@@ -58,7 +58,10 @@ INDOOR.map.minFilter = INDOOR.map.magFilter = THREE.NearestFilter; INDOOR.map.ne
   L.fragmentShader = '#define USE_INDOOR\nuniform sampler2D indoorMap; uniform vec4 indoorInfo; varying vec3 vIndoorW;\n' + L.fragmentShader.replace('#include <lights_fragment_end>', `#include <lights_fragment_end>
 	#ifndef NO_INDOOR
 	{
-		float roofY = texture2D(indoorMap, vIndoorW.xz / indoorInfo.x).r;
+		// look up the roof a little way out along the surface normal: an outside wall (even under the eaves)
+		// samples open ground and stays lit; an inside wall samples the room behind it
+		vec3 nIndW = normalize((vec4(normal, 0.0) * viewMatrix).xyz);
+		float roofY = texture2D(indoorMap, (vIndoorW.xz + nIndW.xz * 0.9) / indoorInfo.x).r;
 		float ind = smoothstep(roofY - 0.3, roofY - 1.0, vIndoorW.y) * indoorInfo.y;
 		reflectedLight.indirectDiffuse *= mix(1.0, 0.24, ind);
 		reflectedLight.indirectSpecular *= mix(1.0, 0.15, ind);
@@ -101,7 +104,7 @@ export function makeSky(): THREE.Mesh {
   const geo = new THREE.SphereGeometry(9000, 32, 16);
   const mat = new THREE.ShaderMaterial({
     side: THREE.BackSide, depthWrite: false, fog: false,
-    uniforms: { uSun: { value: SUN_DIR }, uHorizon: { value: new THREE.Color(0xc9d0d2) }, uZenith: { value: new THREE.Color(0x6f8fae) }, uGround: { value: new THREE.Color(0x9a9c96) } },
+    uniforms: { uSun: { value: SUN_DIR }, uHorizon: { value: new THREE.Color(0xdcd3bd) }, uZenith: { value: new THREE.Color(0x4a7fbf) }, uGround: { value: new THREE.Color(0xa89c84) } },
     vertexShader: `varying vec3 vDir; void main(){ vDir = normalize(position); vec4 p = projectionMatrix * modelViewMatrix * vec4(position,1.0); gl_Position = p.xyww; }`,
     fragmentShader: `uniform vec3 uSun, uHorizon, uZenith, uGround; varying vec3 vDir;
       ${SHADER_NOISE}
@@ -110,11 +113,11 @@ export function makeSky(): THREE.Mesh {
         vec3 c = mix(uHorizon, uZenith, pow(clamp(y,0.0,1.0), 0.55));
         c = mix(c, uGround, smoothstep(0.0, -0.08, y));
         float s = max(dot(vDir, uSun), 0.0);
-        c += vec3(1.0,0.93,0.8) * (pow(s, 900.0) * 6.0 + pow(s, 12.0) * 0.18);
+        c += vec3(1.0,0.93,0.8) * (pow(s, 900.0) * 9.0 + pow(s, 12.0) * 0.32 + pow(s, 3.0) * 0.08);
         // soft high cloud streaks
         vec2 cp = vDir.xz / max(y, 0.08) * 1.4;
         float cl = smoothstep(0.55, 0.85, fbm3(cp * 1.3 + vec2(3.0, 1.0))) * smoothstep(0.02, 0.25, y);
-        c = mix(c, vec3(0.93, 0.94, 0.95), cl * 0.5);
+        c = mix(c, vec3(0.97, 0.95, 0.9), cl * 0.28);
         gl_FragColor = vec4(c, 1.0);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
@@ -126,9 +129,9 @@ export function makeSky(): THREE.Mesh {
 }
 
 export function makeLights(scene: THREE.Scene) {
-  const hemi = new THREE.HemisphereLight(0xbdd0e6, 0x6b5f4c, 0.8);
+  const hemi = new THREE.HemisphereLight(0xc4d4e8, 0x86704f, 0.85);
   scene.add(hemi);
-  const sun = new THREE.DirectionalLight(0xffe2bf, 3.5);
+  const sun = new THREE.DirectionalLight(0xffe6c6, 3.6);
   sun.position.copy(SUN_DIR).multiplyScalar(200);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);

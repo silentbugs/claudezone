@@ -10,7 +10,7 @@ export const enum Mat { Concrete = 0, Brick = 1, Plaster = 2, Metal = 3, Wood = 
 export const PENETRATION: Partial<Record<Mat, number>> = { [Mat.Wood]: 0.65, [Mat.Glass]: 0.95, [Mat.Plaster]: 0.55, [Mat.Foliage]: 1.0 };
 
 /** Local-space part. y is relative to the structure base. */
-export interface Part { x0: number; y0: number; z0: number; x1: number; y1: number; z1: number; mat: Mat; color?: number; noCollide?: boolean; shape?: 'box' | 'cyl' | 'gable' | 'wedge'; }
+export interface Part { x0: number; y0: number; z0: number; x1: number; y1: number; z1: number; mat: Mat; color?: number; noCollide?: boolean; shape?: 'box' | 'cyl' | 'gable' | 'wedge'; /** smashed window pane: gone for collision, bullets and rendering */ broken?: boolean }
 /** Stair ramp in local space rising along axis (0 = x, 1 = z) in direction dir. */
 export interface RampPart { x0: number; y0: number; z0: number; x1: number; y1: number; z1: number; axis: 0 | 1; dir: 1 | -1; mat?: Mat }
 
@@ -269,7 +269,7 @@ export class CollisionWorld {
           if (!slab(lox, loy, loz, ldx, dy, ldz, s.bx0, -50, s.bz0, s.bx1, s.by1, s.bz1, best)) continue;
           for (let pi = 0; pi < s.parts.length; pi++) {
             const p = s.parts[pi];
-            if (skip && skip(p.mat)) continue;
+            if (p.broken || (skip && skip(p.mat))) continue;
             const t = slabT(lox, loy, loz, ldx, dy, ldz, p.x0, p.y0, p.z0, p.x1, p.y1, p.z1, best);
             if (t < best) {
               best = t; out.structure = id; out.part = pi; out.mat = p.mat;

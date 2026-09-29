@@ -44,6 +44,8 @@ export class Sim {
   chests: Chest[] = [];
   train: Train | null = null;
   doors: Doors | null = null;
+  /** smashed window panes as [structure, part], in order (for late joiners / replays) */
+  brokenGlass: [number, number][] = [];
   private ladderGrid = new Map<number, number[]>();
   private ladderOut: number[] = [];
   laddersNear(x: number, z: number): number[] {
@@ -223,6 +225,26 @@ export class Sim {
    * armor plate, cash ($100 / $1000 / all), lethal, tactical, killstreak, gas mask, self-revive kit.
    * Items land just in front of the player, where teammates can pick them up.
    */
+  /**
+   * Smash a window pane (2020: shooting, meleeing or jumping through glass breaks it). The part stops
+   * colliding and blocking bullets; the renderer drops it and throws shards. (nx, nz) is the travel direction.
+   */
+  breakGlass(sid: number, pi: number, x: number, y: number, z: number, nx = 0, nz = 0): boolean {
+    const st = this.world.col.structures[sid], part = st?.parts[pi];
+    if (!part || part.mat !== Mat.Glass || part.broken || this.world.col.dyn.includes(st)) return false;
+    part.broken = true; part.noCollide = true;
+    this.brokenGlass.push([sid, pi]);
+    this.emit({ t: 'glass', s: sid, i: pi, x, y, z, nx, nz });
+    return true;
+  }
+  /** First glass pane along a short ray (chest height forward), if any: [structure, part, t]. */
+  glassAhead(x: number, y: number, z: number, dx: number, dz: number, len: number): [number, number, number] | null {
+    const h = this.glassHit;
+    if (!this.world.col.raycast(x, y, z, dx, 0, dz, len, h, undefined, false) || h.mat !== Mat.Glass || h.structure < 0) return null;
+    return [h.structure, h.part, h.t];
+  }
+  private glassHit = { t: 0, nx: 0, ny: 0, nz: 0, structure: -1, part: -1, mat: 0, terrain: false, water: false } as RayHit;
+
   dropFromBackpack(p: Player, what: BackpackDrop, arg?: number | string): boolean {
     if (p.phase !== Phase.Alive) return false;
     const fx = -Math.sin(p.yaw), fz = -Math.cos(p.yaw), n = this.nextId;

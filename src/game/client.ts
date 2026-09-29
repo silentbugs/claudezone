@@ -106,7 +106,7 @@ export class Match {
     this.lastMouse = { dx, dy };
     if (this.hud.panel || this.menuOpen) return;
     const p = this.me, w = p.weapons[p.cur];
-    const zoom = w ? 1 + (WEAPON[w.id].zoom * (rarityMods(w.rarity).scope && !WEAPON[w.id].scope ? 1.3 : 1) - 1) * p.ads : 1;
+    const zoom = w ? 1 + (this.zoomNow - 1) * p.ads : 1;
     // ADS: sensitivity follows the zoom (MW "relative" behaviour) times the ADS multiplier
     const adsMul = 1 + (this.settings.adsSens / zoom - 1) * Math.min(1, p.ads * 1.2);
     const s = this.settings.sens * 0.0022 * adsMul * (p.stunT > 0 ? 0.35 : 1);
@@ -115,8 +115,25 @@ export class Match {
     this.camPitch = clamp(this.camPitch - dy * s * (this.settings.invertY ? -1 : 1), -1.45, 1.45);
   }
 
+  /** 2020 variable zoom: scoped weapons toggle between two magnifications while aiming */
+  scopeLevel = 0;
+  /** current ADS magnification, eased so a zoom toggle or optic swap doesn't snap */
+  zoomNow = 1;
+  private adsZoom() {
+    const w = this.me.weapons[this.me.cur]; if (!w) return 1;
+    const def = WEAPON[w.id]; let z = def.zoom;
+    if (rarityMods(w.rarity).scope && !def.scope) z *= 1.3; // red dot / holo magnify a little over irons
+    if (def.scope && this.scopeLevel) z *= 2;
+    return z;
+  }
+
   frame(dt: number, time: number) {
     const inp = this.input;
+    {
+      const w = this.me.weapons[this.me.cur], sc = !!(w && WEAPON[w.id].scope);
+      if (sc && this.me.ads > 0.5 && (this.settings.binds.scopeZoom ?? []).some((c) => c && inp.wasPressed(c))) { this.scopeLevel ^= 1; audio.play('uiBuy', { ui: true, vol: 0.18, rate: 2.2 }); }
+      this.zoomNow += (this.adsZoom() - this.zoomNow) * (1 - Math.exp(-dt * 14));
+    }
     // Tab: open / close the backpack
     {
       const codes = this.settings.binds.scoreboard ?? [];
@@ -234,6 +251,7 @@ export class Match {
       case 'uav': audio.say(e.squad === me.squad ? 'UAV online.' : 'Enemy UAV overhead.'); break;
       case 'eping': if (e.squad === me.squad) { audio.play('beep', { vol: 0.45, rate: 1.35 }); if (e.by === this.me.id) audio.say('Enemy spotted.'); } break;
       case 'door': if (d(e.x, e.y, e.z) < 40) audio.play(e.loud ? 'doorSlam' : e.open ? 'doorOpen' : 'doorClose', { x: e.x, y: e.y, z: e.z, range: e.loud ? 14 : 6, vol: e.loud ? 1 : 0.6 }); break;
+      case 'glass': this.sm.structures?.breakPane(e.s, e.i); if (d(e.x, e.y, e.z) < 60) { audio.play('impactGlass', { x: e.x, y: e.y, z: e.z, range: 22, vol: 1, rate: 0.7 }); audio.play('impactGlass', { x: e.x, y: e.y, z: e.z, range: 22, vol: 0.8, rate: 1.15 }); } break;
       case 'cuav': audio.say(e.squad === me.squad ? 'Counter UAV online.' : 'Enemy Counter UAV deployed.'); break;
       case 'gas': if (e.p === 0 && Math.random() < 0.35) audio.play('cough', { vol: 0.55, throttle: 1.2 }); break;
       case 'throw': if (e.p === 0) { audio.play('pin', { vol: 0.4 }); audio.play('throw', { vol: 0.5 }); } break;
@@ -329,7 +347,7 @@ export class Match {
       cam.position.set(x, y + this.eye - this.landDip * 0.4, z);
       cam.rotation.set(pitch, yaw, this.roll, 'YXZ');
       if (vp.slideT > 0) fov += 4;
-      if (def && me.ads > 0 && (this.settings.adsFovAffected || def.scope)) fov = fov / (1 + (def.zoom - 1) * me.ads);
+      if (def && me.ads > 0 && (this.settings.adsFovAffected || def.scope)) fov = fov / (1 + (this.zoomNow - 1) * me.ads);
       if (me.tacSprint > 0) fov += 6;
       const vv = vehicleOf(sim, vp);
       audio.loop('wind', 0); audio.loop('engine', 0); audio.loop('chute', 0);

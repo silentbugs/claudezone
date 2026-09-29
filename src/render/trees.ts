@@ -122,7 +122,7 @@ export class Trees {
     const leafDepth = new THREE.MeshDepthMaterial({ map: lt, alphaTest: 0.5, depthPacking: THREE.RGBADepthPacking });
     const pine = pineGeometry(), leafy = leafyGeometry(), bush = bushGeometry();
     const lodMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, flatShading: true });
-    const lodPine = mergeGeometries([vcolor(new THREE.CylinderGeometry(0.1, 0.3, 4, 5).translate(0, 2, 0), 0x4a3a2a, 0), vcolor(new THREE.ConeGeometry(2.9, 11, 7).translate(0, 8, 0), 0x2e4430, 0.1)])!;
+    const lodPine = mergeGeometries([vcolor(new THREE.CylinderGeometry(0.1, 0.3, 4, 5).translate(0, 2, 0), 0x4a3a2a, 0), vcolor(new THREE.ConeGeometry(2.9, 11, 7).translate(0, 8, 0), 0x46603f, 0.1)])!;
     const lodLeafy = mergeGeometries([vcolor(new THREE.CylinderGeometry(0.12, 0.2, 5, 5).translate(0, 2.5, 0), 0xb8b0a0, 0), vcolor(new THREE.IcosahedronGeometry(2.8, 0).translate(0, 6.6, 0), 0x5e6e38, 0.1)])!;
     const CH = 540, buckets = new Map<string, Tree[]>();
     for (const t of trees) { const key = `${Math.floor(t.x / CH)}:${Math.floor(t.z / CH)}`; let b = buckets.get(key); if (!b) buckets.set(key, (b = [])); b.push(t); }

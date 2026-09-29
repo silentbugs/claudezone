@@ -236,3 +236,34 @@ test('ride a tower ascender to the roof and step off', () => {
   assert.ok(Math.abs(p.y - a.y1) < 0.4 && p.onGround, 'standing at the top');
   assert.ok(p.health >= 100);
 });
+
+test('glass: jumping at a shop window smashes it and vaults out; a bullet smashes a pane', () => {
+  const sim = new Sim(world, 1, { humans: 1 });
+  sim.time = 200;
+  const shops = world.col.structures.filter((q) => q.kind === 'shop');
+  let done = false;
+  for (const s of shops.slice(0, 12)) {
+    const gi = s.parts.findIndex((q) => q.mat === 5 && q.z1 - q.z0 < 0.5 && q.x1 - q.x0 > 1 && q.z0 < s.bz0 + 0.8);
+    if (gi < 0) continue;
+    const g = s.parts[gi], p: any = freshPlayer(sim);
+    const [x, z] = toWorld(s, (g.x0 + g.x1) / 2, g.z1 + 0.5);
+    Object.assign(p, { x, z, y: world.col.groundAt(x, z, s.y + 1), yaw: s.angle, stance: 0, mantleT: 0 }); p.fallStartY = p.y; p.intent.yaw = s.angle;
+    if (!world.col.fits(p.x, p.y, p.z, 1.8, 0.3)) continue;
+    p.intent.jump = true; p.intent.mz = 1;
+    let broke = false;
+    for (let i = 0; i < 90; i++) { sim.tick(1 / 60); if (sim.events.some((e) => e.t === 'glass')) broke = true; sim.events.length = 0; p.intent.mz = 1; }
+    const [, lz] = toLocal(s, p.x, p.z);
+    console.log('shop', s.id, 'broke', broke, 'local z', lz.toFixed(2), 'glass z', g.z0.toFixed(2));
+    assert.ok(broke && g.broken, 'pane smashed');
+    assert.ok(lz < g.z0 - 0.2, 'went out through the window');
+    done = true; break;
+  }
+  assert.ok(done, 'found a shop window to test');
+  // a pane in a block can be smashed on its own (bullets and melee call this)
+  const b = world.col.structures.find((q) => q.kind === 'block' && q.parts.some((r) => r.mat === 5 && !r.broken))!;
+  const pi = b.parts.findIndex((r) => r.mat === 5 && !r.broken), g = b.parts[pi];
+  const [gx, gz] = toWorld(b, (g.x0 + g.x1) / 2, (g.z0 + g.z1) / 2);
+  const oy = b.y + (g.y0 + g.y1) / 2;
+  assert.ok(sim.breakGlass(b.id, pi, gx, oy, gz), 'breakGlass on a pane');
+  assert.ok(g.broken && g.noCollide, 'pane gone for collision');
+});

@@ -44,6 +44,8 @@ export class Input {
       if (this.capture) { const c = this.capture; this.capture = null; c(code); return; }
       if (this.locked) { this.pressed.add(code); }
     }, { passive: true });
+    // closing / reloading the tab mid-match asks first (the browser's own "Leave site?" dialog; needs a prior click, which starting a match is)
+    addEventListener('beforeunload', (e) => { if (this.inGame) { e.preventDefault(); e.returnValue = ''; } });
     addEventListener('contextmenu', (e) => e.preventDefault());
     addEventListener('wheel', (e) => { if (this.inGame && (e.ctrlKey || e.metaKey)) e.preventDefault(); }, { passive: false }); // no Ctrl+wheel page zoom
     addEventListener('keydown', (e) => { if (this.inGame && (e.ctrlKey || e.metaKey) && ['Equal', 'Minus', 'Digit0', 'NumpadAdd', 'NumpadSubtract'].includes(e.code)) e.preventDefault(); }, { capture: true });

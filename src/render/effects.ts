@@ -158,6 +158,12 @@ export class Effects {
         if (metal) for (let i = 0; i < 3; i++) this.add.spawn(e.x, e.y, e.z, e.nx * 4 + (R() - 0.5) * 5, e.ny * 4 + R() * 3, e.nz * 4 + (R() - 0.5) * 5, 0.15, 0.03, 0, 1, 0.8, 0.4, 0.7, 1, 9);
         break;
       }
+      case 'glass': {
+        // a burst of shards falling out along the direction of travel, and a little glitter dust
+        for (let i = 0; i < 26; i++) this.smoke.spawn(e.x + (R() - 0.5) * 0.9, e.y + (R() - 0.5) * 0.9, e.z + (R() - 0.5) * 0.9, e.nx * (1.5 + R() * 3) + (R() - 0.5) * 2, R() * 2, e.nz * (1.5 + R() * 3) + (R() - 0.5) * 2, 0.7 + R() * 0.5, 0.05, 0.04, 0.78, 0.88, 0.95, 0.9, 0.5, 9.8);
+        for (let i = 0; i < 6; i++) this.smoke.spawn(e.x, e.y, e.z, (R() - 0.5), R() * 0.5, (R() - 0.5), 0.6, 0.2, 0.6, 0.85, 0.9, 0.95, 0.3, 2, 0);
+        break;
+      }
       case 'hit': {
         if (e.victim === localId) break;
         const col = e.armorHit ? [0.7, 0.75, 0.8] : [0.5, 0.05, 0.03];

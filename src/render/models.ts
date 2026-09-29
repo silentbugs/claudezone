@@ -121,6 +121,14 @@ class Models {
         const r = new THREE.Mesh(new THREE.PlaneGeometry(holo ? 0.026 : 0.0065, holo ? 0.026 : 0.0065), new THREE.MeshBasicMaterial({ map: reticleTex(holo), transparent: true, depthTest: false, depthWrite: false, blending: THREE.AdditiveBlending }));
         r.position.set(0, sight, top.z - 0.01); r.renderOrder = 20; r.visible = false; r.userData.reticle = true; r.userData.noBake = true;
         root.add(r);
+        // lens mask: a depth-only window drawn before the gun, so nothing of the gun beyond the lens (front
+        // sight post, rail, barrel) shows through it; the sight picture is the reticle over the world only
+        const bb = new THREE.Box3().setFromObject(o), sz = bb.getSize(new THREE.Vector3());
+        const g = holo ? new THREE.PlaneGeometry(sz.x * 0.62, (bb.max.y - sight) * 1.5) : new THREE.CircleGeometry(Math.min(sz.x, bb.max.y - sight) * 0.54, 24);
+        const mask = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ colorWrite: false, side: THREE.DoubleSide }));
+        mask.position.set(0, sight + (holo ? (bb.max.y - sight) * 0.05 : 0), (bb.min.z + bb.max.z) / 2); mask.renderOrder = -10; mask.visible = false;
+        mask.userData.lensMask = true; mask.userData.noBake = true;
+        root.add(mask);
       }
     }
     const mz = sk('Attach_Muzzle');

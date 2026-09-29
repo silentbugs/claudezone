@@ -117,6 +117,7 @@ export type SimEvent =
   | { t: 'drop'; p: number; what: BackpackDrop }
   | { t: 'ascender'; p: number; on: boolean }
   | { t: 'door'; x: number; y: number; z: number; open: boolean; loud: boolean; p: number }
+  | { t: 'glass'; s: number; i: number; x: number; y: number; z: number; nx: number; nz: number }
   | { t: 'eping'; squad: number; by: number; target: number; x: number; y: number; z: number }
   | { t: 'contract'; p: number; kind: string; msg: 'start' | 'done' | 'fail' | 'progress' }
   | { t: 'announce'; text: string; squad?: number }

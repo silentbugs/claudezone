@@ -14,15 +14,16 @@ export type Quality = 'low' | 'medium' | 'high' | 'ultra';
 
 /** Warzone-ish grade in linear light: slight desaturation, warm highlights / cool shadows, vignette. */
 const GradeShader = {
-  uniforms: { tDiffuse: { value: null }, uSat: { value: 0.88 }, uVig: { value: 0.28 }, uGas: { value: 0 }, uLow: { value: 0 } },
+  uniforms: { tDiffuse: { value: null }, uSat: { value: 1.1 }, uVig: { value: 0.28 }, uGas: { value: 0 }, uLow: { value: 0 } },
   vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
   fragmentShader: `uniform sampler2D tDiffuse; uniform float uSat, uVig, uGas, uLow; varying vec2 vUv;
     void main(){ vec4 t = texture2D(tDiffuse, vUv); vec3 c = t.rgb;
       float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
       c = mix(vec3(l), c, uSat);
       // gentle filmic contrast around mid-grey
-      c = 0.18 * pow(max(c, vec3(0.0)) / 0.18, vec3(1.07));
-      c *= mix(vec3(0.96, 0.99, 1.05), vec3(1.04, 1.0, 0.95), smoothstep(0.05, 0.6, l));
+      c = 0.18 * pow(max(c, vec3(0.0)) / 0.18, vec3(1.14));
+      // warm sunlit highlights, neutral shadows: the bright dusty 2020 grade
+      c *= mix(vec3(0.97, 0.99, 1.03), vec3(1.05, 1.01, 0.93), smoothstep(0.05, 0.6, l));
       c = mix(c, c * vec3(1.25, 0.95, 0.55) + vec3(0.06, 0.04, 0.0), uGas * 0.6);
       c = mix(c, vec3(l) * vec3(0.96, 0.96, 0.98), uLow);
       vec2 d = vUv - 0.5; c *= 1.0 - uVig * dot(d, d) * 2.2;
@@ -71,10 +72,10 @@ export class SceneMgr {
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.0;
+    this.renderer.toneMappingExposure = 1.06;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.camera = new THREE.PerspectiveCamera(80, innerWidth / innerHeight, 0.1, 12000);
-    this.scene.fog = new THREE.FogExp2(FOG_COLOR.getHex(), 0.00062);
+    this.scene.fog = new THREE.FogExp2(FOG_COLOR.getHex(), 0.0005);
     this.scene.background = FOG_COLOR.clone();
     addEventListener('resize', () => this.resize());
   }
@@ -151,19 +152,19 @@ export class SceneMgr {
     if (this.structures) { this.structures.detailDist = (q === 'low' ? 260 : q === 'medium' ? 360 : 460) * dk; this.structures.farDist = this.drawDistance === 'max' ? 1e9 : 2600 * dk; this.structures.shadowDist = q === 'high' || q === 'ultra' ? shadowFar : 200; for (const c of this.structures.chunks) c.near = null; }
     if (this.trees) { this.trees.nearDist = 650 * dk; this.trees.shadowDist = q === 'ultra' ? 260 : 160; for (const c of (this.trees as any).chunks) c.state = -1; }
     if (this.terrain) this.terrain.lodScale = dk;
-    if (this.scene.fog) (this.scene.fog as THREE.FogExp2).density = 0.00062 / Math.pow(dk, 1.2);
+    if (this.scene.fog) (this.scene.fog as THREE.FogExp2).density = 0.0005 / Math.pow(dk, 1.2);
     // cascaded shadows on high/ultra: long-range shadows from buildings, trees and players
     if (this.csm) { this.csm.remove(); this.csm.dispose(); this.csm = null; }
     if (this.sun && (q === 'high' || q === 'ultra')) {
-      this.csm = new CSM({ maxFar: shadowFar, cascades: q === 'ultra' ? 4 : 3, mode: 'practical', parent: this.scene, shadowMapSize: 2048, lightDirection: SUN_DIR.clone().negate(), camera: this.camera, lightIntensity: 2.5, lightFar: 3000, lightMargin: 250 });
+      this.csm = new CSM({ maxFar: shadowFar, cascades: q === 'ultra' ? 4 : 3, mode: 'practical', parent: this.scene, shadowMapSize: 2048, lightDirection: SUN_DIR.clone().negate(), camera: this.camera, lightIntensity: 3.6, lightFar: 3000, lightMargin: 250 });
       this.csm.fade = true;
-      for (const l of this.csm.lights) { l.color.setHex(0xfff0dc); l.shadow.bias = -0.0003; l.shadow.normalBias = 0.5; l.shadow.camera.layers.enable(SHADOW_ONLY_LAYER); }
+      for (const l of this.csm.lights) { l.color.setHex(0xffe6c6); l.shadow.bias = -0.0003; l.shadow.normalBias = 0.5; l.shadow.camera.layers.enable(SHADOW_ONLY_LAYER); }
       this.sun.intensity = 0; this.sun.castShadow = false;
       this.csmMaterials = new WeakSet();
       this.scene.traverse((o) => { const m = (o as THREE.Mesh).material as THREE.Material; if (m) m.needsUpdate = true; });
       this.setupCsm();
     } else if (this.sun) {
-      this.sun.intensity = 2.5;
+      this.sun.intensity = 3.6;
       // undo CSM completely: original shader hook, default program cache key, no CSM defines
       this.scene.traverse((o) => {
         const mats = (o as THREE.Mesh).material; if (!mats) return;

@@ -141,10 +141,17 @@
 .hud .dmg i { position: absolute; left: calc(var(--u) * -4); top: calc(var(--u) * -9); width: calc(var(--u) * 8); height: calc(var(--u) * 2); border-top: 5px solid rgba(230,40,30,0.9); border-radius: 50%; transform-origin: calc(var(--u) * 4) calc(var(--u) * 9); }
 .hud .vig { position: absolute; inset: 0; }
 .hud .flash { position: absolute; inset: 0; background: #fff; opacity: 0; }
-.hud .scope { position: absolute; inset: 0; display: none; background: radial-gradient(circle at 50% 50%, transparent 0 33vh, #000 33.3vh); }
-.hud .scope:before, .hud .scope:after { content: ''; position: absolute; background: #000; }
-.hud .scope:before { left: 50%; top: 0; bottom: 0; width: 2px; transform: translateX(-1px); }
-.hud .scope:after { top: 50%; left: 0; right: 0; height: 2px; transform: translateY(-1px); }
+/* sniper scope (2020): a wide sight picture filling almost the full height, soft dark eyebox edge, thin
+   crosshair in the middle that thickens into posts toward the edge; nothing else in the way */
+.hud .scope { position: absolute; inset: 0; display: none; pointer-events: none;
+  background: radial-gradient(circle at 50% 50%, transparent 0 43vh, rgba(0,0,0,0.45) 45vh, rgba(0,0,0,0.92) 47.5vh, #000 49vh); }
+.hud .scope:before, .hud .scope:after { content: ''; position: absolute; background: rgba(0,0,0,0.85); }
+.hud .scope:before { left: 50%; top: 50%; height: 36vh; width: 1px; transform: translate(-0.5px, -50%); }
+.hud .scope:after { top: 50%; left: 50%; width: 36vh; height: 1px; transform: translate(-50%, -0.5px); }
+.hud .scope .pv, .hud .scope .ph { position: absolute; background: #000; }
+.hud .scope .pv { left: 50%; width: 5px; margin-left: -2.5px; top: 0; bottom: 0; -webkit-mask: linear-gradient(#000 0 calc(50% - 18vh), transparent 0 calc(50% + 18vh), #000 0); mask: linear-gradient(#000 0 calc(50% - 18vh), transparent 0 calc(50% + 18vh), #000 0); }
+.hud .scope .ph { top: 50%; height: 5px; margin-top: -2.5px; left: 0; right: 0; -webkit-mask: linear-gradient(90deg, #000 0 calc(50% - 18vh), transparent 0 calc(50% + 18vh), #000 0); mask: linear-gradient(90deg, #000 0 calc(50% - 18vh), transparent 0 calc(50% + 18vh), #000 0); }
+.hud .scope b { position: absolute; left: 50%; top: 50%; width: 3px; height: 3px; margin: -1.5px 0 0 -1.5px; border-radius: 50%; background: #e0301e; box-shadow: 0 0 3px #ff4a30; }
 .hud .reddot { position: absolute; left: 50%; top: 50%; width: 4px; height: 4px; margin: -2px 0 0 -2px; border-radius: 50%; background: #ff2a1a; box-shadow: 0 0 4px #ff2a1a; display: none; }
 /* altimeter */
 /* freefall altimeter (2020): tape at x 1350, y 298-810; SPEED tag top-left of it, GROUND tag bottom-right */

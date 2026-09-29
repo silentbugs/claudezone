@@ -17,6 +17,8 @@ const SCALE: Record<number, number> = { [Mat.Concrete]: 4, [Mat.Brick]: 2.4, [Ma
 const DEFAULT_TINT: Record<number, number> = { [Mat.Concrete]: 0xb4b0a8, [Mat.Brick]: 0xffffff, [Mat.Plaster]: 0xe0dccf, [Mat.Metal]: 0x9aa0a4, [Mat.Wood]: 0xc8b8a0, [Mat.Glass]: 0x2a3238, [Mat.Rock]: 0xa8a298, [Mat.Asphalt]: 0x8a8a8a, [Mat.Roof]: 0xa8a6a2, [Mat.Container]: 0x8a3a2a, [Mat.Trim]: 0xdddddd, [Mat.Dark]: 0x333333, [Mat.Foliage]: 0x6a8a4a, [Mat.Tile]: 0xdddddd, [Mat.Snow]: 0xffffff, [Mat.Water]: 0x335566 };
 
 class GeoBuf {
+  /** keep the CPU index copy (glass: panes are removed when smashed) */
+  keep = false;
   pos: number[] = []; nor: number[] = []; uv: number[] = []; col: number[] = []; lay: number[] = []; idx: number[] = [];
   get count() { return this.pos.length / 3; }
   build(): THREE.BufferGeometry | null {
@@ -30,7 +32,7 @@ class GeoBuf {
     g.setAttribute('aLayer', new THREE.BufferAttribute(Uint8Array.from(this.lay), 1, false));
     g.setIndex(this.count > 65535 ? new THREE.Uint32BufferAttribute(this.idx, 1) : new THREE.Uint16BufferAttribute(this.idx, 1));
     g.computeBoundingSphere(); g.computeBoundingBox();
-    releaseAfterUpload(g);
+    if (!this.keep) releaseAfterUpload(g);
     return g;
   }
 }
@@ -156,7 +158,8 @@ export function structureMaterial(tex: THREE.DataArrayTexture, transparent = fal
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', '#include <common>\nuniform highp sampler2DArray tLayers;\nuniform highp sampler2DArray tNormals;\nuniform float uAvg[16];\nuniform float uColored[16];\nvarying float vLayer;\nvarying vec2 vUv2;\n' + PERTURB_GLSL)
       .replace('#include <color_fragment>', '#include <color_fragment>\n  diffuseColor.rgb *= diffuseColor.rgb; // vertex colours are sqrt-encoded in uint8')
-      .replace('#include <map_fragment>', 'int li = int(floor(vLayer + 0.5));\nvec4 texel = texture(tLayers, vec3(vUv2, float(li)));\nif (li == 5) { diffuseColor.rgb = vec3(0.07, 0.085, 0.095) * (0.8 + texel.g * 0.5); } else if (uColored[li] > 0.5) { float tl = dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11)); diffuseColor.rgb = texel.rgb * clamp(tl / 0.3, 0.55, 1.5); } else diffuseColor.rgb *= clamp(mix(vec3(1.0), texel.rgb / max(uAvg[li], 0.02), 0.6), 0.0, 2.0);')
+      // coloured photos keep their hue but take the tint's brightness (the brick photo alone is near-black in shade)
+      .replace('#include <map_fragment>', 'int li = int(floor(vLayer + 0.5));\nvec4 texel = texture(tLayers, vec3(vUv2, float(li)));\nif (li == 5) { diffuseColor.rgb = vec3(0.07, 0.085, 0.095) * (0.8 + texel.g * 0.5); } else if (uColored[li] > 0.5) { float tl = dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11)); diffuseColor.rgb = mix(vec3(dot(texel.rgb, vec3(0.3, 0.59, 0.11))), texel.rgb, 0.75) * clamp(tl / max(uAvg[li], 0.02), 0.5, 5.0); } else diffuseColor.rgb *= clamp(mix(vec3(1.0), texel.rgb / max(uAvg[li], 0.02), 0.6), 0.0, 2.0);')
       .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n  { vec3 mn = texture(tNormals, vec3(vUv2, floor(vLayer + 0.5))).xyz * 2.0 - 1.0; mn.xy *= 1.0 - smoothstep(25.0, 90.0, length(vViewPosition)); normal = perturbN(normal, -vViewPosition, vUv2, normalize(mn)); }')
       .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
         roughnessFactor *= 0.85 + texel.g * 0.3;
@@ -185,23 +188,27 @@ export class StructureMesh {
   farDist = 1e9;
   /** shells cast shadows only within the shadow cascades' reach */
   shadowDist = 450;
+  /** glass pane -> its triangles in the chunk's glass index buffer */
+  private panes = new Map<number, { chunk: number; i0: number; n: number }>();
 
   constructor(structures: Structure[], tex: THREE.DataArrayTexture, worldSize: number, normals?: THREE.DataArrayTexture, colored?: number[]) {
     const opaque = structureMaterial(tex, false, normals, colored), glassM = structureMaterial(tex, true, normals, colored);
     const n = Math.ceil(worldSize / CHUNK);
-    const bufs: { d: GeoBuf; g: GeoBuf; l: GeoBuf }[] = Array.from({ length: n * n }, () => ({ d: new GeoBuf(), g: new GeoBuf(), l: new GeoBuf() }));
+    const bufs: { d: GeoBuf; g: GeoBuf; l: GeoBuf }[] = Array.from({ length: n * n }, () => { const g = new GeoBuf(); g.keep = true; return { d: new GeoBuf(), g, l: new GeoBuf() }; });
     const em = new Emitter();
     for (const s of structures) {
       if (s.kind === 'tree' || s.kind === 'door') continue; // doors are drawn (and swung) by DoorMeshes
       const ci = Math.min(n - 1, Math.max(0, Math.floor(s.z / CHUNK))) * n + Math.min(n - 1, Math.max(0, Math.floor(s.x / CHUNK)));
       const B = bufs[ci];
-      for (const p of s.parts) {
-        const target = p.mat === Mat.Glass ? B.g : B.d;
+      for (let pi = 0; pi < s.parts.length; pi++) {
+        const p = s.parts[pi];
+        const target = p.mat === Mat.Glass ? B.g : B.d, i0 = target.idx.length;
         em.setPart(s, target, p.mat, p.color);
         em.aoBase = p.y0 < 0.3 && p.y1 > 1 && p.mat !== Mat.Glass; em.aoY = Math.max(0, p.y0);
         if (p.shape === 'gable') em.gable(p);
         else if (p.shape === 'cyl') em.cyl(p);
         else em.box(p.x0, p.y0, p.z0, p.x1, p.y1, p.z1, p.y0 > 0.2);
+        if (p.mat === Mat.Glass) this.panes.set(s.id * 65536 + pi, { chunk: ci, i0, n: target.idx.length - i0 });
       }
       em.aoBase = false;
       for (const r of s.ramps) { em.setPart(s, B.d, r.mat ?? Mat.Concrete, r.mat === Mat.Roof ? undefined : 0x9a968e); if (r.mat === Mat.Roof) continue; em.ramp(r); }
@@ -229,6 +236,14 @@ export class StructureMesh {
       if (c.glass) c.glass.renderOrder = 2;
       this.chunks.push(c);
     }
+  }
+
+  /** A pane was smashed: collapse its triangles. */
+  breakPane(sid: number, pi: number) {
+    const r = this.panes.get(sid * 65536 + pi); if (!r) return;
+    const idx = this.chunks[r.chunk]?.glass?.geometry.index; if (!idx) return;
+    (idx.array as Uint16Array | Uint32Array).fill(0, r.i0, r.i0 + r.n);
+    idx.addUpdateRange(r.i0, r.n); idx.needsUpdate = true;
   }
 
   update(cam: THREE.Vector3) {

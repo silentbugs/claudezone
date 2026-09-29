@@ -103,7 +103,8 @@ export class Builder {
       let v = 0;
       for (const o of c.list.sort((p, q) => p.v0 - q.v0)) {
         seg(c.u0, c.u1, v, o.v0, mat);
-        if (o.glass) seg(c.u0, c.u1, o.v0, o.v1, Mat.Glass);
+        // glazing in panes of at most ~1.6 m, each of which can be smashed on its own
+        if (o.glass) { const n = Math.max(1, Math.ceil((c.u1 - c.u0) / 1.6)), pw = (c.u1 - c.u0) / n; for (let k = 0; k < n; k++) seg(c.u0 + k * pw, c.u0 + (k + 1) * pw, o.v0, o.v1, Mat.Glass); }
         v = Math.max(v, o.v1);
       }
       seg(c.u0, c.u1, v, h, mat);

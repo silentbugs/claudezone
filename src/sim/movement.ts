@@ -266,6 +266,11 @@ function tryMantle(sim: Sim, p: Player): boolean {
   const foot = col.groundAt(p.x, p.z, p.y + 0.1, 0.2);
   const base = p.y - foot < 1.6 ? foot : p.y;
   const reach = base + MOVE.mantleMax;
+  // jumping at a closed window smashes the pane and goes through it (2020)
+  for (const hy of [0.9, 1.4]) {
+    const g = sim.glassAhead(p.x, base + hy, p.z, fx, fz, 1.1);
+    if (g) sim.breakGlass(g[0], g[1], p.x + fx * g[2], base + hy, p.z + fz * g[2], fx, fz);
+  }
   for (const d of [0.45, 0.65, 0.85]) {
     const x = p.x + fx * d, z = p.z + fz * d;
     const top = col.groundAt(x, z, reach + 0.05, 0.12);

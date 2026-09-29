@@ -5,7 +5,7 @@
 export type Action =
   | 'forward' | 'back' | 'left' | 'right' | 'sprint' | 'jump' | 'crouch' | 'prone'
   | 'fire' | 'ads' | 'reload' | 'interact' | 'plate' | 'weapon1' | 'weapon2' | 'swap'
-  | 'lethal' | 'tactical' | 'fieldUpgrade' | 'killstreak' | 'ping' | 'map' | 'scoreboard' | 'thirdPerson' | 'melee';
+  | 'lethal' | 'tactical' | 'fieldUpgrade' | 'killstreak' | 'ping' | 'map' | 'scoreboard' | 'thirdPerson' | 'melee' | 'scopeZoom';
 
 export const ACTIONS: { id: Action; label: string; group: string }[] = [
   { id: 'forward', label: 'Move forward', group: 'Movement' },
@@ -23,6 +23,7 @@ export const ACTIONS: { id: Action; label: string; group: string }[] = [
   { id: 'weapon2', label: 'Secondary weapon', group: 'Combat' },
   { id: 'swap', label: 'Switch weapon', group: 'Combat' },
   { id: 'melee', label: 'Melee', group: 'Combat' },
+  { id: 'scopeZoom', label: 'Variable zoom (scopes, while aiming)', group: 'Combat' },
   { id: 'lethal', label: 'Lethal equipment', group: 'Combat' },
   { id: 'tactical', label: 'Tactical equipment', group: 'Combat' },
   { id: 'plate', label: 'Armor plate', group: 'Combat' },
@@ -69,7 +70,7 @@ export const DEFAULT_SETTINGS: Settings = {
     fire: ['Mouse0', ''], ads: ['Mouse2', ''], reload: ['KeyR', ''], interact: ['KeyF', ''], plate: ['Digit4', ''],
     weapon1: ['Digit1', ''], weapon2: ['Digit2', ''], swap: ['WheelDown', 'WheelUp'],
     lethal: ['KeyG', 'Mouse4'], tactical: ['KeyQ', 'Mouse3'], fieldUpgrade: ['KeyX', ''], killstreak: ['Digit5', ''],
-    ping: ['Mouse1', 'AltLeft'], melee: ['KeyV', 'KeyE'], map: ['KeyM', ''], scoreboard: ['Tab', ''], thirdPerson: ['KeyQ', ''],
+    ping: ['Mouse1', 'AltLeft'], melee: ['KeyV', 'KeyE'], map: ['KeyM', ''], scoreboard: ['Tab', ''], thirdPerson: ['KeyQ', ''], scopeZoom: ['KeyB', ''],
   },
   crouchMode: 'toggle', proneMode: 'toggle', adsMode: 'hold', sprintMode: 'hold', tacSprint: 'doubleTap', plateMode: 'hold', slideMode: 'tap',
   sens: 1, adsSens: 1, invertY: false,

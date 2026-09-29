@@ -79,6 +79,7 @@ export class ViewModel {
   private key = '';
   private glb: THREE.Object3D | null = null;
   private reticle: THREE.Object3D | null = null;
+  private lensMask: THREE.Object3D | null = null;
   private armsCache = new Map<string, THREE.BufferGeometry>();
   /** model guns: the left arm + a magazine it carries during reloads */
   private armL = new THREE.Mesh(leftArmGeometry(0x4d5140, false), new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.85 }));
@@ -194,7 +195,7 @@ export class ViewModel {
       const m = models.gun(w!.id, w!.rarity);
       if (m) {
         this.glb = m.obj; this.root.add(m.obj); this.gun.visible = false;
-        this.reticle = null; m.obj.traverse((o) => { if (o.userData.reticle) this.reticle = o; });
+        this.reticle = null; this.lensMask = null; m.obj.traverse((o) => { if (o.userData.reticle) this.reticle = o; if (o.userData.lensMask) this.lensMask = o; });
         this.muzzle = m.muzzle; this.sight = m.sight; this.scope = m.scope; this.optic = m.optic; this.opticZ = m.opticZ;
         const ak = `${pistolArms}:${m.gripZ.toFixed(3)}:${m.guardZ.toFixed(3)}`;
         let ag = this.armsCache.get(ak); if (!ag) { ag = armsGeometry(0x4d5140, pistolArms, true, m.gripZ, m.guardZ); this.armsCache.set(ak, ag); }
@@ -226,7 +227,7 @@ export class ViewModel {
     this.kick = Math.max(0, this.kick - dt * 14); this.kickRot = Math.max(0, this.kickRot - dt * 10);
     const S = 0.7, pistol = WEAPON[w!.id].cls === 'pistol';
     const g = !!this.glb;
-    const hip = pistol ? new THREE.Vector3(0.1, g ? -0.11 : -0.13, g ? -0.42 : -0.48) : new THREE.Vector3(g ? 0.13 : 0.12, g ? -0.15 : -0.14, g ? -0.4 : -0.36), aim = new THREE.Vector3(0, -this.sight * S, pistol ? (g ? -0.4 : -0.5) : g && this.optic ? -0.14 - this.opticZ * S : g ? -0.3 : -0.36);
+    const hip = pistol ? new THREE.Vector3(0.1, g ? -0.11 : -0.13, g ? -0.42 : -0.48) : new THREE.Vector3(g ? 0.13 : 0.12, g ? -0.15 : -0.14, g ? -0.4 : -0.36), aim = new THREE.Vector3(0, -this.sight * S, pistol ? (g ? -0.4 : -0.5) : g && this.optic ? -0.1 - this.opticZ * S : g ? -0.3 : -0.36);
     const pos = hip.clone().lerp(aim, ads);
     let rx = 0, ry = 0, rz = 0;
     if (sprinting) { const s = p.tacSprint > 0 ? 1 : 0.7; pos.x -= 0.05 * s; pos.y -= 0.06 * s; rx -= 0.35 * s; ry += 0.75 * s; rz += 0.25 * s; if (p.tacSprint > 0) { rx = 0.9; ry = 0.2; pos.y += 0.02; } }
@@ -288,6 +289,7 @@ export class ViewModel {
     this.gun.visible = this.arms.visible && !this.glb;
     if (this.glb) this.glb.visible = this.arms.visible;
     if (this.reticle) this.reticle.visible = p.ads > 0.6 && this.arms.visible;
+    if (this.lensMask) this.lensMask.visible = p.ads > 0.6 && this.arms.visible;
     // aiming through an optic: clip everything between the eye and the optic (receiver, rear iron sight)
     const near = this.glb && this.optic && !this.scope ? Math.max(0.01, (-this.root.position.z - this.opticZ * S) - 0.012) : 0.01;
     const nearNow = 0.01 + (near - 0.01) * Math.max(0, (p.ads - 0.7) / 0.3);
