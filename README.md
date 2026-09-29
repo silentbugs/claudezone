@@ -53,7 +53,19 @@ and the mountain rim are also there.
 - The freight train loops the south-west line at about 10 m/s (a lap takes ~6 minutes). You can parachute onto it, ride it, fight from it, and loot its caches.
 - About 14,000 hinged doors: walk into one to push it open, sprint to slam it, press Use to open or close it, and aim while pressing Use to crack it open.
 - Shops and warehouses have exterior roof ladders.
-- Village houses sit on raised plinths with steps, and many have a lean-to annex you can climb to reach the roof.
+- Village houses sit on raised plinths with steps. Many have a lean-to annex you can climb to reach the roof, and single-storey cottages have a loft.
+- Apartment buildings follow the 2020 layouts. Each stairwell has a dogleg stair and a window at the half landing.
+  - Walk-ups have about half their flats open.
+  - Long panel blocks have only one enterable stairwell, with the other flats boarded up.
+  - Tall blocks and downtown towers have lift shafts with ascenders; the towers' stairs stop at 3F.
+- Rebuilt to the 2020 Tac Map Atlas, interiors included:
+  - TV Station: glass drum foyer with a mezzanine.
+  - Train Station: domed ticket hall.
+  - Hospital: atrium, cafeteria ward, tower with a skybridge and an ascender.
+  - Superstore: 2F corner offices, with the roof reachable only from outside.
+  - Airport control tower: ascender to the cab.
+  - Fire and gas stations.
+- Interiors are lit separately from the outdoors: rooms under a roof lose most of the sky light and get warm ceiling lights, while sunlight still comes in through windows and doors.
 
 **Vehicles.** ATV, Tactical Rover, SUV, Cargo Truck and a light helicopter.
 - Seats: passengers can shoot, drivers can't.
