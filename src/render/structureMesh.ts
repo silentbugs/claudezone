@@ -211,7 +211,7 @@ export class StructureMesh {
         if (p.mat === Mat.Glass) this.panes.set(s.id * 65536 + pi, { chunk: ci, i0, n: target.idx.length - i0 });
       }
       em.aoBase = false;
-      for (const r of s.ramps) { em.setPart(s, B.d, r.mat ?? Mat.Concrete, r.mat === Mat.Roof ? undefined : 0x9a968e); if (r.mat === Mat.Roof) continue; em.ramp(r); }
+      for (const r of s.ramps) { em.setPart(s, B.d, r.mat ?? Mat.Concrete, r.mat === Mat.Roof ? undefined : r.color ?? 0x9a968e); if (r.mat === Mat.Roof) continue; em.ramp(r); }
       // LOD shell
       const big = s.by1 > 5 && (s.bx1 - s.bx0) * (s.bz1 - s.bz0) > 40;
       const lodMat = big && ['block', 'tower', 'hospital', 'terminal', 'tvstation', 'keep', 'cellblock', 'barracks', 'station', 'house', 'shop'].includes(s.kind) ? 15 : Mat.Concrete;

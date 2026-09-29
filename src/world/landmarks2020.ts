@@ -718,14 +718,14 @@ export function gasStation(): Builder {
 }
 
 /** Place a prefab on free ground near (x, z), trying a spiral of spots and the four axis rotations. */
-export function placeNear(ctx: GenContext, b: () => Builder, kind: string, x: number, z: number, w: number, d: number, lod: number, maxR = 160): boolean {
+export function placeNear(ctx: GenContext, b: () => Builder, kind: string, x: number, z: number, w: number, d: number, lod: number, maxR = 160, maxRise = 3, poiId?: string): boolean {
   for (let r = 0; r <= maxR; r += 8) for (let k = 0; k < Math.max(1, Math.floor(r / 4)); k++) {
     const a = (k / Math.max(1, Math.floor(r / 4))) * Math.PI * 2 + r * 0.37, px = x + Math.cos(a) * r, pz = z + Math.sin(a) * r;
     const ang = (Math.floor(ctx.rng.next() * 4) * Math.PI) / 2;
     if (!ctx.occ.free(px, pz, ang, w, d, 2)) continue;
     const fh = ctx.footprintHeights(px, pz, ang, w, d);
-    if (fh.max - fh.min > 3 || ctx.hf.at(px, pz) < 1) continue;
-    ctx.place(b(), kind, px, pz, ang, { lodColor: lod });
+    if (fh.max - fh.min > maxRise || ctx.hf.at(px, pz) < 1) continue;
+    ctx.place(b(), kind, px, pz, ang, { lodColor: lod, ...(poiId ? { poi: poiId } : {}) });
     return true;
   }
   return false;
@@ -912,4 +912,95 @@ export function terminal2020(ctx: GenContext, x: number, z: number) {
   for (const cx of [-20, 30]) B.box(cx - 6, F3, HD + 3, cx + 6, F3 + 3.2, HD + 5.6, Mat.Metal, { color: 0xd8d8d0 }); // coaches
   B.loot(0, F3, HD + 6);
   sub(ctx, f, 0, 0, 0, b);
+}
+
+// ---------------------------------------------------------------------------------------------
+/** Olive canvas bunk tent (Arklov barracks / airport camp): ~10 × 7 m, 4 m ridge along x, door flaps at both gable ends. */
+function tent(b: Builder, cx: number, cz: number, rot: boolean) {
+  const olive = 0x5a6238, L = 5, Wd = 3.5;
+  const X = (x: number, z: number): [number, number] => (rot ? [cx + z, cz + x] : [cx + x, cz + z]);
+  const box = (x0: number, y0: number, z0: number, x1: number, y1: number, z1: number, m: Mat, e?: any) => { const [a, c] = X(x0, z0), [d, g] = X(x1, z1); b.box(Math.min(a, d), y0, Math.min(c, g), Math.max(a, d), y1, Math.max(c, g), m, e); };
+  box(-L, 0.05, -Wd, L, 0.2, Wd, Mat.Wood, { color: 0x6a5a40 }); // pallet floor
+  // side walls (canvas) and end walls with door flaps
+  if (!rot) {
+    b.wall(0, cx - L, cx + L, cz - Wd, 0.2, 1.8, 0.08, Mat.Plaster, [], olive); b.wall(0, cx - L, cx + L, cz + Wd, 0.2, 1.8, 0.08, Mat.Plaster, [], olive);
+    for (const ex of [cx - L, cx + L]) b.wall(1, cz - Wd, cz + Wd, ex, 0.2, 1.8, 0.08, Mat.Plaster, [{ u0: Wd - 0.7, u1: Wd + 0.7, v0: 0, v1: 1.79, open: true }], olive);
+    b.box(cx - L - 0.1, 1.8, cz - Wd - 0.15, cx + L + 0.1, 4.1, cz + Wd + 0.15, Mat.Plaster, { color: olive, shape: 'gable', noCollide: true });
+  } else {
+    b.wall(1, cz - L, cz + L, cx - Wd, 0.2, 1.8, 0.08, Mat.Plaster, [], olive); b.wall(1, cz - L, cz + L, cx + Wd, 0.2, 1.8, 0.08, Mat.Plaster, [], olive);
+    for (const ez of [cz - L, cz + L]) b.wall(0, cx - Wd, cx + Wd, ez, 0.2, 1.8, 0.08, Mat.Plaster, [{ u0: Wd - 0.7, u1: Wd + 0.7, v0: 0, v1: 1.79, open: true }], olive);
+    // gable ridge runs along local x in the renderer: for rotated tents use a lower flat canvas roof pair
+    b.box(cx - Wd - 0.15, 1.8, cz - L - 0.1, cx + Wd + 0.15, 2.2, cz + L + 0.1, Mat.Plaster, { color: olive, noCollide: true });
+    b.box(cx - Wd * 0.55, 2.2, cz - L - 0.1, cx + Wd * 0.55, 3.2, cz + L + 0.1, Mat.Plaster, { color: olive, noCollide: true });
+  }
+  // double bunks along both long sides
+  for (let i = 0; i < 4; i++) for (const sd of [-1, 1]) {
+    const x0 = -L + 0.6 + i * 2.35, z0 = sd * (Wd - 1.05);
+    box(x0, 0.2, z0 - 0.45, x0 + 2, 0.65, z0 + 0.45, Mat.Metal, { color: 0x4a5040 });
+    box(x0, 1.35, z0 - 0.45, x0 + 2, 1.45, z0 + 0.45, Mat.Metal, { color: 0x4a5040, noCollide: true });
+  }
+  const [lx, lz] = X(0, 0); b.addLoot(lx, 0.2, lz); b.light(lx, 3.2, lz);
+}
+
+/**
+ * Arklov Peak barracks compound (2020): 10 bunk tents in two rows inside a 3 m concrete panel wall with
+ * gaps and an entrance, crates between the tents, and a two-level container barracks with an exterior
+ * steel stair to the upper container doors.
+ */
+export function barracksCompound(): Builder {
+  const b = new Builder(), HW = 44, HD = 30, wallC = 0xa8a49a;
+  // no base slab: the flattened ground is the compound floor (a slab edge would be a step at the wall gaps)
+  const gap = (u: number, w = 5) => ({ u0: u, u1: u + w, v0: 0, v1: 3.2, open: true });
+  b.wall(0, -HW, HW, -HD, 0.05, 3, 0.35, Mat.Concrete, [gap(HW - 3, 6), gap(12)], wallC);
+  b.wall(0, -HW, HW, HD, 0.05, 3, 0.35, Mat.Concrete, [gap(2 * HW - 18)], wallC);
+  b.wall(1, -HD, HD, -HW, 0.05, 3, 0.35, Mat.Concrete, [gap(HD - 2.5)], wallC);
+  b.wall(1, -HD, HD, HW, 0.05, 3, 0.35, Mat.Concrete, [gap(10)], wallC);
+  for (let i = 0; i < 5; i++) { tent(b, -34 + i * 13, -17, false); tent(b, -34 + i * 13, 4, false); }
+  for (const [x, z] of [[-27.5, -6], [-14.5, -7], [11.5, -6], [24.5, -7], [-1, 14], [30, 16]]) b.block(x, z, 1.2, 1.2, 0.05, 1.25, Mat.Wood, { color: 0x7a5a38 });
+  // container barracks: two stacked rows along the east side, exterior stair to the upper doors
+  const cont = (x0: number, z0: number, y: number, col: number) => {
+    b.wall(0, x0, x0 + 12, z0, y, 2.55, 0.08, Mat.Container, [{ u0: 5.4, u1: 6.4, v0: 0, v1: 2.1 }], col, -1);
+    b.wall(0, x0, x0 + 12, z0 + 2.45, y, 2.55, 0.08, Mat.Container, [{ u0: 2, u1: 4, v0: 0.9, v1: 1.8, open: true }], col, 1);
+    b.wall(1, z0, z0 + 2.45, x0, y, 2.55, 0.08, Mat.Container, [], col); b.wall(1, z0, z0 + 2.45, x0 + 12, y, 2.55, 0.08, Mat.Container, [], col);
+    b.box(x0, y + 2.55, z0 - 0.04, x0 + 12, y + 2.65, z0 + 2.49, Mat.Container, { color: col });
+    b.light(x0 + 6, y + 2.4, z0 + 1.2); b.addLoot(x0 + 3, y, z0 + 1.2);
+  };
+  cont(26, 22, 0.05, 0xb8b4a8); cont(26, 22, 2.65, 0xb0aca0);
+  b.ramp(22, 0.05, 20.6, 25.9, 2.65, 21.9, 0, 1, Mat.Metal); // exterior stair up to the upper container
+  b.box(25.9, 2.45, 20.3, 38, 2.65, 21.95, Mat.Metal, { color: 0x6d7378 }); // walkway along the doors
+  b.box(25.9, 2.65, 20.3, 38, 3.65, 20.4, Mat.Metal, { color: 0x6d7378 });
+  b.addLoot(0, 0.05, -6); b.addLoot(-20, 0.05, 14);
+  return b;
+}
+
+/**
+ * Arklov hangar (2020 "Hangars 11-13, 21-22"): an earth-covered arched hangar ~40 × 30 × 12 m. Open front
+ * with a camouflage panel over it, grass slopes you can walk up from outside onto the roof, sparse inside,
+ * a short rear corridor through the mound to a metal door. Front at local -z.
+ */
+export function grassHangar(): Builder {
+  // arched profile: two grass slopes from the ground 6 m outside the side walls meet at a 14 m ridge;
+  // their undersides are the arched ceiling inside. Low side walls, back wall and camo front follow the arch
+  const b = new Builder(), HW = 20, HD = 15, R = 14, E = HW + 6, grass = 0x5e6e3c, wall = 0x7c7f74;
+  const arch = (x: number) => 0.05 + (E - Math.abs(x)) * (R - 0.05) / E;
+  b.box(-E, -1.2, -HD - 0.2, E, 0.05, HD + 0.2, Mat.Concrete, { color: 0x8e8c86 });
+  b.ramp(-E, 0.05, -HD - 0.2, 0, R, HD + 0.2, 0, 1, Mat.Concrete, grass); b.ramp(0, 0.05, -HD - 0.2, E, R, HD + 0.2, 0, -1, Mat.Concrete, grass);
+  const side = arch(HW) - 0.3;
+  b.wall(1, -HD, HD, -HW, 0.05, side, 0.4, Mat.Concrete, [], wall); b.wall(1, -HD, HD, HW, 0.05, side, 0.4, Mat.Concrete, [], wall);
+  // back wall in 2 m strips up to the arch, a door in the middle strip; camo panels over the front
+  for (let x = -HW; x < HW; x += 2) {
+    const top = Math.min(arch(x), arch(x + 2)) - 0.3;
+    if (x === 0) { /* door strip */ b.box(x, 2.3, HD - 0.2, x + 2, top, HD + 0.2, Mat.Concrete, { color: wall }); b.box(x, 0.05, HD - 0.2, x + 0.45, 2.3, HD + 0.2, Mat.Concrete, { color: wall }); b.box(x + 1.55, 0.05, HD - 0.2, x + 2, 2.3, HD + 0.2, Mat.Concrete, { color: wall }); }
+    else b.box(x, 0.05, HD - 0.2, x + 2, top, HD + 0.2, Mat.Concrete, { color: wall });
+    if (top > 8.6) b.box(x, 8.2, -HD - 0.25, x + 2, top, -HD + 0.05, Mat.Plaster, { color: 0x6a6a48, noCollide: true });
+  }
+  // short rear corridor to a metal door
+  b.wall(1, HD, HD + 4, 0, 0.05, 2.6, 0.2, Mat.Concrete, [], wall); b.wall(1, HD, HD + 4, 2, 0.05, 2.6, 0.2, Mat.Concrete, [], wall);
+  b.box(-0.1, 2.6, HD, 2.1, 2.8, HD + 4, Mat.Concrete, { color: wall });
+  b.wall(0, 0, 2, HD + 4, 0.05, 2.8, 0.2, Mat.Metal, [{ u0: 0.45, u1: 1.55, v0: 0, v1: 2.2 }], 0x5a6066);
+  b.light(1, 2.5, HD + 2);
+  for (let x = -10; x <= 10; x += 10) b.light(x, arch(x) - 1.2, 0);
+  for (const [x, z] of [[-14, -6], [12, 8], [7, 11]]) { b.block(x, z, 2.4, 1.2, 0.05, 1.3, Mat.Wood, { color: 0x6a5a40 }); b.addLoot(x + 2, 0.05, z); }
+  b.addLoot(-3, R - 1.6, 0);
+  return b;
 }

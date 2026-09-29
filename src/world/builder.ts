@@ -125,8 +125,8 @@ export class Builder {
       if (z < z1) this.box(sx0, y - t, z, sx1, y, z1, mat);
     }
   }
-  ramp(x0: number, y0: number, z0: number, x1: number, y1: number, z1: number, axis: 0 | 1, dir: 1 | -1, mat = Mat.Concrete) {
-    this.ramps.push({ x0, y0, z0, x1, y1, z1, axis, dir, mat });
+  ramp(x0: number, y0: number, z0: number, x1: number, y1: number, z1: number, axis: 0 | 1, dir: 1 | -1, mat = Mat.Concrete, color?: number) {
+    this.ramps.push({ x0, y0, z0, x1, y1, z1, axis, dir, mat, color });
   }
   addLoot(x: number, y: number, z: number) { this.loot.push([x, y + 0.05, z]); }
 }

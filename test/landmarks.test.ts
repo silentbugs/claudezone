@@ -171,3 +171,25 @@ test('Airport terminal: Departures -> check-in -> double stairs -> checkpoint ->
     assert.ok(typeof r === 'number' && Math.abs(r - want) < 0.5, name);
   }
 });
+
+test('Military base: tent compound (through a wall gap into a tent, up to the upper container); hangar grass slope to the roof, rear corridor', () => {
+  const sim = newSim();
+  const bs = world.col.structures.find((q) => q.kind === 'barracks' && q.radius > 40)!;
+  assert.ok(bs, 'barracks compound placed');
+  const f = { x: bs.x, z: bs.z, y: bs.y, a: bs.angle };
+  const r1 = walkRoute(sim, f, [-47, 0], [[-45, 0.2], [-41.5, 0.2], [-41.5, 4], [-38, 4], [-34, 4]]);
+  console.log('wall gap -> tent', r1);
+  assert.ok(typeof r1 === 'number' && Math.abs(r1 - 0.2) < 0.4, 'inside a tent');
+  const r2 = walkRoute(sim, f, [18, 18], [[20, 21.2], [23, 21.2], [26.5, 21.1], [32, 21.1]]);
+  console.log('stair -> container walkway', r2);
+  assert.ok(typeof r2 === 'number' && Math.abs(r2 - 2.65) < 0.4, 'on the container walkway');
+  const hs = world.col.structures.filter((q) => q.kind === 'hangar' && q.ramps.length === 2);
+  assert.ok(hs.length >= 2, 'grass hangars placed');
+  const h = { x: hs[0].x, z: hs[0].z, y: hs[0].y, a: hs[0].angle };
+  const r3 = walkRoute(sim, h, [-29, 0], [[-26.3, 0], [-22, 0], [-2, 0]]);
+  console.log('grass slope -> hangar roof', r3);
+  assert.ok(typeof r3 === 'number' && Math.abs(r3 - 12.93) < 0.4, 'up the arched grass roof');
+  const r4 = walkRoute(sim, h, [1, -20], [[1, -12], [1, 12], [1, 14.4], [1, 16], [1, 19.5], [1, 22]]);
+  console.log('front -> rear corridor -> out', r4);
+  assert.ok(typeof r4 === 'number', 'out through the rear door (the ground behind may be lower)');
+});

@@ -12,7 +12,7 @@ export const PENETRATION: Partial<Record<Mat, number>> = { [Mat.Wood]: 0.65, [Ma
 /** Local-space part. y is relative to the structure base. */
 export interface Part { x0: number; y0: number; z0: number; x1: number; y1: number; z1: number; mat: Mat; color?: number; noCollide?: boolean; shape?: 'box' | 'cyl' | 'gable' | 'wedge'; /** smashed window pane: gone for collision, bullets and rendering */ broken?: boolean }
 /** Stair ramp in local space rising along axis (0 = x, 1 = z) in direction dir. */
-export interface RampPart { x0: number; y0: number; z0: number; x1: number; y1: number; z1: number; axis: 0 | 1; dir: 1 | -1; mat?: Mat }
+export interface RampPart { x0: number; y0: number; z0: number; x1: number; y1: number; z1: number; axis: 0 | 1; dir: 1 | -1; mat?: Mat; color?: number }
 
 export interface Structure {
   id: number;
