@@ -6,7 +6,7 @@
 import { Mat } from './collision';
 import { Builder, apartment, warehouse, garageRow, house, shop, FLOOR_H } from './builder';
 import { poi } from './mapdata';
-import { tvStation2020, trainStation2020, hospital2020, controlTower2020, superstore2020, fireStation, gasStation, placeNear, sub } from './landmarks2020';
+import { tvStation2020, trainStation2020, hospital2020, controlTower2020, superstore2020, terminal2020, fireStation, gasStation, placeNear, sub } from './landmarks2020';
 import type { GenContext } from './mapgen';
 import { Rng } from '../core/rng';
 
@@ -134,10 +134,9 @@ function airport(ctx: GenContext) {
   ctx.place(r, 'runway', rx, rz, 0, { y: ry, flatten: false, pad: 4, lodColor: 0x3a3b3d });
   // crashed plane on the runway edge
   plane(ctx, rx + 150, rz - 10, 0.35, 1.0);
-  // terminal: long 2-storey hall with glass front facing the runway (north)
+  // main terminal (2020 atlas layout), runway side north
   const tx = 800, tz = 1440;
-  const term = apartment(rng, 150, 34, 2, { wall: Mat.Concrete, wallColor: 0xc9c5bb, trim: 0, roof: Mat.Roof, roofColor: 0x5a5d62 }, { glassBands: true });
-  ctx.place(term, 'terminal', tx, tz, Math.PI, { poi: 'airport', lodColor: 0xc9c5bb });
+  terminal2020(ctx, tx, tz + 6);
   // control tower: horseshoe admin building round the base, ascender up the shaft, open-air cab
   controlTower2020(ctx, 880, 1395);
   // hangars east of the terminal along the apron

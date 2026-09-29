@@ -14,9 +14,10 @@ export function walkRoute(sim: Sim, f: { x: number; z: number; y: number; a: num
   const p: any = sim.players[0];
   const [sx, sz] = W(start[0], start[1]);
   Object.assign(p, { phase: 4, alive: true, x: sx, z: sz, y: world.col.groundAt(sx, sz, f.y + (start[2] ?? 0) + 1), vx: 0, vy: 0, vz: 0, onGround: true, mantleT: 0, stance: 0, health: 100 }); p.fallStartY = p.y;
-  for (const [lx, lz] of pts) {
+  for (const [lx, lz, jump] of pts) {
     const [tx, tz] = W(lx, lz);
-    for (let t = 0; t < 600; t++) { const dx = tx - p.x, dz = tz - p.z; if (Math.hypot(dx, dz) < 0.35) break; p.intent.yaw = Math.atan2(-dx, -dz); p.intent.mz = 1; p.intent.mx = 0; sim.tick(1 / 60); sim.events.length = 0; }
+    // a third value on a waypoint = keep jumping on the way (mantle up crates / ledges)
+    for (let t = 0; t < 600; t++) { const dx = tx - p.x, dz = tz - p.z; if (Math.hypot(dx, dz) < 0.35) break; p.intent.yaw = Math.atan2(-dx, -dz); p.intent.mz = 1; p.intent.mx = 0; if (jump && t % 15 === 0) p.intent.jump = true; sim.tick(1 / 60); sim.events.length = 0; }
     const [lx2, lz2] = L(p.x, p.z);
     if (Math.hypot(lx2 - lx, lz2 - lz) > 0.6) return `stuck before ${lx},${lz} at ${lx2.toFixed(1)},${lz2.toFixed(1)} y ${(p.y - f.y).toFixed(2)}`;
   }
@@ -151,4 +152,20 @@ test('Warehouse (2020 K): side door -> west gantry stair -> mezzanine office; ex
   const r2 = walkRoute(sim, f, [hw + 3, mz - run - 3], [[hw + 0.85, mz - run - 1], [hw + 0.85, dz], [hw - 1, dz], [hw - 3, dz]]);
   console.log('exterior gantry -> upper door', r2);
   assert.ok(typeof r2 === 'number' && Math.abs(r2 - my) < 0.4, 'through the upper door onto the mezzanine');
+});
+
+test('Airport terminal: Departures -> check-in -> double stairs -> checkpoint -> crate stack -> mezzanine -> 3F road; east stairs to the café; maintenance stairs', () => {
+  const sim = newSim(), f = frameOf('terminal', 60);
+  const T = (pts: number[][]) => pts.map(([x, z, j]) => (j ? [x - 20, z - 4, j] : [x - 20, z - 4]));
+  const S = (x: number, z: number, y = 0) => [x - 20, z - 4, y];
+  const routes: [string, number[], number[][], number][] = [
+    ['departures -> stairs -> crates -> mezzanine -> 3F road', S(-26, 31), T([[-26, 27], [-26, 22], [1, 20], [1, 19], [1, 5], [1, 3], [5, 3], [5, -16], [0.3, -16.5], [0.3, -14.2, 1], [0.3, -12.7, 1], [0.3, -11.2, 1], [0.3, -9.2, 1], [0.3, -7], [4, -6], [4, 4], [12, 4], [12, 8], [12, 24], [12, 26], [12, 28]]), 10.5],
+    ['2F concourse -> east double stairs -> café', S(45, -20, 5.5), T([[50, -20], [50, -16], [50, -2], [50, 4], [48.5, 4], [44, 4]]), 0.05],
+    ['maintenance stairs -> 2F', S(-56.5, -28), T([[-56.5, -26], [-56.5, -24], [-56.5, -23], [-56.5, -14.8], [-56.5, -13.7], [-53.6, -13.7], [-53.6, -23.6], [-53.6, -24.3], [-50, -24.3]]), 5.5],
+  ];
+  for (const [name, st, pts, want] of routes) {
+    const r = walkRoute(sim, f, st, pts);
+    console.log(name, r);
+    assert.ok(typeof r === 'number' && Math.abs(r - want) < 0.5, name);
+  }
 });

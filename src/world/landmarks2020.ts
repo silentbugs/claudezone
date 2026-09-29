@@ -730,3 +730,185 @@ export function placeNear(ctx: GenContext, b: () => Builder, kind: string, x: nu
   }
   return false;
 }
+
+// ---------------------------------------------------------------------------------------------
+/**
+ * Verdansk International Airport main terminal (Zone 2A, atlas 010A-010ZF). Local frame: x west→east,
+ * -z faces the runway (north), +z the landside roads (south). 1F: west coffee shop / lounge and the
+ * maintenance stairs; the check-in hall (three counter islands, crashed SUV + APC) under a triple-height
+ * volume; wide double stairs up to the 2F Security Checkpoint concourse; garage bays 01-07 and a hole in
+ * the wall on the runway side; east café / tourist concourse, customs and baggage claim reached by the
+ * east double stairs. 2F: the east-west concourse along the runway glass, the checkpoint concourse, the
+ * duty-free store with its blown-out wall, Economy / Business doors onto the baggage-loading roof, the
+ * gate window. 3F: the central mezzanine (seat rows, a hole into duty-free) reached by the crate stack or
+ * the Departures door from the elevated road; the west Burger Town mezzanine only from above. Roof partly
+ * collapsed.
+ */
+export function terminal2020(ctx: GenContext, x: number, z: number) {
+  const f = frame(ctx, 'airport', x + 20, z + 4, 0, 260, 80, 'terminal', 0xc9c5bb);
+  const b = new Builder();
+  const HW = 85, HD = 25, F2 = 5.5, F3 = 10.5, H = 16;
+  const conc = 0xc9c5bb, panel = 0xb8682c, pillar = 0x8e8f8c, tile = 0xd8d4cc, glassBand = 0x9ab0b8;
+  // Builder.box expects world-ish local coords; the frame sits at (x + 20, z + 4): shift everything so the
+  // hall is centred on (x, z) and the east ramp has room
+  const ox = -20, oz = -4;
+  const B = {
+    box: (x0: number, y0: number, z0: number, x1: number, y1: number, z1: number, m: Mat, e?: any) => b.box(x0 + ox, y0, z0 + oz, x1 + ox, y1, z1 + oz, m, e),
+    slab: (x0: number, z0: number, x1: number, z1: number, y: number, t: number, m: Mat, holes: [number, number, number, number][] = []) => b.slab(x0 + ox, z0 + oz, x1 + ox, z1 + oz, y, t, m, holes.map(([a, c, d, e]) => [a + ox, c + oz, d + ox, e + oz] as [number, number, number, number])),
+    wall: (axis: 0 | 1, a: number, c: number, at: number, y0: number, h: number, t: number, m: Mat, ops: any[] = [], col?: number, out: 0 | 1 | -1 = 0) => b.wall(axis, a + (axis === 0 ? ox : oz), c + (axis === 0 ? ox : oz), at + (axis === 0 ? oz : ox), y0, h, t, m, ops, col, out),
+    ramp: (x0: number, y0: number, z0: number, x1: number, y1: number, z1: number, axis: 0 | 1, dir: 1 | -1, m = Mat.Concrete) => b.ramp(x0 + ox, y0, z0 + oz, x1 + ox, y1, z1 + oz, axis, dir, m),
+    light: (lx: number, ly: number, lz: number) => b.light(lx + ox, ly, lz + oz),
+    loot: (lx: number, ly: number, lz: number) => b.addLoot(lx + ox, ly, lz + oz),
+    ladder: (lx: number, lz: number, nx: number, nz: number, y0: number, y1: number) => b.ladder(lx + ox, lz + oz, nx, nz, y0, y1),
+  };
+  const door = (u: number, w = 1.8, v0 = 0) => ({ u0: u, u1: u + w, v0, v1: v0 + 2.3 });
+  const open = (u: number, w: number, v0: number, v1: number) => ({ u0: u, u1: u + w, v0, v1, open: true });
+  B.box(-HW - 0.2, -1.5, -HD - 0.2, HW + 0.2, 0.05, HD + 0.2, Mat.Tile, { color: tile });
+
+  // ---------------- exterior walls
+  // north (runway): 1F maintenance door, garage bays 01-07 (3 open), hole in the wall, blown-out tourist
+  // concourse windows, baggage claim door; 2F runway glass (broken up by the Economy / Business doors and
+  // the open gate window)
+  const nOps: any[] = [door(HW - 57, 1), door(HW + 72, 1.8)];
+  for (let i = 0; i < 7; i++) { const u = HW - 2 + i * 4.6; if (i % 2 === 1) nOps.push(open(u, 3.6, 0, 3.6)); }
+  nOps.push(open(HW + 58, 4.5, 0, 4.2), open(HW + 49, 8, 0, 4.2));
+  const ecoDoors = [HW + 43, HW + 49.5];
+  const gateWin = [HW + 64, HW + 70];
+  let u = 1;
+  const cuts = [...ecoDoors.map((d) => [d - 0.4, d + 1.5]), gateWin].sort((p, q) => p[0] - q[0]);
+  for (const [c0, c1] of cuts) { if (c0 - u > 1) nOps.push({ u0: u, u1: c0, v0: F2 + 0.9, v1: F3 - 0.3, glass: true }); u = c1 + 0.4; }
+  if (2 * HW - 1 - u > 1) nOps.push({ u0: u, u1: 2 * HW - 1, v0: F2 + 0.9, v1: F3 - 0.3, glass: true });
+  for (const d of ecoDoors) nOps.push({ ...door(d, 1.1, F2 - 0.05), door: true });
+  nOps.push(open(gateWin[0], gateWin[1] - gateWin[0], F2 + 0.2, F3 - 0.3));
+  B.wall(0, -HW, HW, -HD, 0.05, H, 0.35, Mat.Concrete, nOps, conc, -1);
+  // south (landside): lounge doors, 3 Departures and 2 Arrivals openings between pillars, "BMA" window
+  // band, the 3F Departures entrance and two smashed coach windows onto the elevated road
+  const sOps: any[] = [door(5, 1.8), open(HW - 40, 4, 0, 4), open(HW - 28, 4, 0, 4), open(HW - 16, 4, 0, 4), open(HW + 62, 4, 0, 4), open(HW + 72, 4, 0, 4)];
+  sOps.push(open(HW + 10, 4, F3 - 0.05, F3 + 2.8), open(HW - 8, 3, F3 + 0.4, F3 + 2.4), open(HW - 3, 3, F3 + 0.4, F3 + 2.4));
+  for (let x0 = 18; x0 < 2 * HW - 6; x0 += 9) if (!(x0 > HW - 10 && x0 < HW + 16)) sOps.push({ u0: x0, u1: x0 + 6, v0: F2 + 1.4, v1: F2 + 4, glass: true });
+  B.wall(0, -HW, HW, HD, 0.05, H, 0.35, Mat.Concrete, sOps, conc, 1);
+  B.wall(1, -HD + 0.17, HD - 0.17, -HW, 0.05, H, 0.35, Mat.Concrete, [door(HD + 5, 1.8), { u0: 6, u1: 2 * HD - 6, v0: F3 + 1, v1: H - 1.5, glass: true }], conc, -1);
+  B.wall(1, -HD + 0.17, HD - 0.17, HW, 0.05, H, 0.35, Mat.Concrete, [{ u0: 6, u1: 2 * HD - 6, v0: F3 + 1, v1: H - 1.5, glass: true }], conc, 1);
+  // sandbagged pillars at the entrances
+  for (const px of [-44, -32, -20, 58, 68, 78]) { B.box(px - 0.6, 0.05, HD + 0.4, px + 0.6, 4.5, HD + 1.6, Mat.Concrete, { color: pillar }); B.box(px - 1.3, 0.05, HD + 1.6, px + 1.3, 1.1, HD + 2.4, Mat.Wood, { color: 0x8a7a58 }); }
+
+  // ---------------- 1F west: coffee shop, lounge, restrooms, maintenance stairs
+  B.wall(1, -HD + 0.2, HD - 0.2, -52, 0.05, F2 - 0.05, 0.25, Mat.Plaster, [open(HD + 6, 3.5, 0, 3), door(HD - 20 + 5, 1.1)], 0xd8d0c0);
+  B.box(-80, 0.05, 6, -70, 1.1, 7.2, Mat.Wood, { color: 0x6a4a30 }); // coffee counter
+  for (let i = 0; i < 5; i++) B.box(-78 + i * 4.5, 0.05, 14, -76 + i * 4.5, 0.5, 20, Mat.Wood, { color: 0x3a3d44 }); // lounge seats
+  B.wall(0, -85, -64, -5, 0.05, F2 - 0.05, 0.2, Mat.Plaster, [door(12, 1)], 0xd8d0c0); // restrooms / junction
+  B.wall(1, -25, -5, -64, 0.05, F2 - 0.05, 0.2, Mat.Plaster, [door(10, 1)], 0xd8d0c0);
+  dogleg(b, -58 + ox, -52.2 + ox, -24.9 + oz, -13 + oz, 0.05, 1, F2 - 0.05);
+  B.wall(1, -24.9, -13, -58.1, 0.05, F2 - 0.05, 0.2, Mat.Plaster, [door(0.2, 1.1)], 0xcfc8bb);
+  B.slab(-HW, -HD, -52, -5, F2, 0.3, Mat.Concrete, [[-58, -23.5, -52.2, -13]]);
+  B.wall(0, -HW, -52, -5, F2, F3 - F2, 0.2, Mat.Plaster, [door(20, 1)], 0xd8d0c0); // 2F junction room
+  for (const [lx, lz] of [[-75, 0], [-75, 15], [-60, 10], [-70, -15], [-60, -20]]) B.light(lx, F2 - 0.15, lz);
+  B.loot(-75, 0.05, 10); B.loot(-60, 0.05, -18); B.loot(-70, F2, -15);
+
+  // ---------------- 1F check-in hall (x -52..-2), triple height
+  for (const cx of [-44, -32, -20]) {
+    B.box(cx - 1.1, 0.05, 0, cx + 1.1, 1.1, 12, Mat.Wood, { color: panel });
+    B.box(cx - 0.3, 0.05, 0, cx + 0.3, 0.6, 12, Mat.Metal, { color: 0x3a3c40 }); // belt
+    B.box(cx - 2.5, 2.2, 5.5, cx + 2.5, 3.8, 5.7, Mat.Metal, { color: 0x2a3a4a, noCollide: true }); // airline board
+  }
+  B.box(-31, 0.05, 16, -26, 2.1, 18.4, Mat.Metal, { color: 0x2a2d28 }); // crashed SUV
+  B.box(-23, 0.05, 11, -16.5, 2.6, 14, Mat.Metal, { color: 0x4a5040 }); // APC
+  for (const [lx, lz] of [[-44, 8], [-32, 8], [-20, 8]]) B.loot(lx + 2, 0.05, lz);
+  for (let lx = -48; lx <= -6; lx += 10) for (const lz of [2, 16]) B.light(lx, H - 0.6, lz);
+
+  // ---------------- double stairs up to the Security Checkpoint (x 0..8, rising north z 18 -> 6)
+  B.ramp(-1, 0.05, 6, 3, F2, 18, 1, -1, Mat.Tile); B.ramp(4, 0.05, 6, 8, F2, 18, 1, -1, Mat.Tile);
+  B.box(3.05, 0.05, 6, 3.95, 1.0, 18, Mat.Metal, { color: 0x9aa0a4, noCollide: true });
+  B.box(-1.1, 0.05, 6, -1, F2 + 1, 18, Mat.Metal, { color: 0x9aa0a4, noCollide: true }); B.box(8, 0.05, 6, 8.1, F2 + 1, 18, Mat.Metal, { color: 0x9aa0a4, noCollide: true });
+  B.box(-1, F2 + 3.2, 5.6, 9, F2 + 4.4, 5.9, Mat.Metal, { color: 0x24384c, noCollide: true }); // SECURITY CHECKPOINT sign
+
+  // ---------------- 2F: east-west concourse (runway side) + checkpoint concourse + east part
+  B.slab(-52, -HD, 70, -15, F2, 0.35, Mat.Tile);
+  B.slab(-2, -15, 40, 6, F2, 0.35, Mat.Tile);
+  // balcony fronts: orange panelling with a rail; gaps at the stair heads
+  const rail = (x0: number, z0: number, x1: number, z1: number) => { B.box(x0, F2, z0, x1, F2 + 1.05, z1, Mat.Glass, {}); B.box(x0, F2 - 1.2, z0, x1, F2 - 0.3, z1, Mat.Wood, { color: panel, noCollide: true }); };
+  rail(-52, -15.1, -2, -14.9); rail(-2.1, -15, -1.9, 6); rail(8.2, 5.9, 40, 6.1); rail(40, -15.1, 48, -14.9); rail(57, -15.1, 70, -14.9);
+  B.box(-1, F2 - 1.2, 5.9, 8.2, F2 - 0.3, 6.1, Mat.Wood, { color: panel, noCollide: true });
+  // columns
+  for (let cx = -48; cx <= 80; cx += 16) for (const cz of [-15, 6]) if (!(cx > 40 && cz === 6)) B.box(cx - 0.55, 0.05, cz - 0.55, cx + 0.55, H, cz + 0.55, Mat.Concrete, { color: pillar });
+  // duty-free store (x 24..40, z -12..6) with a big hole in its west wall
+  B.wall(1, -12, 6, 24, F2, F3 - F2 - 0.1, 0.2, Mat.Plaster, [open(4, 6, 0, 3.4)], 0xe0dad0);
+  B.wall(0, 24, 40, -12, F2, F3 - F2 - 0.1, 0.2, Mat.Plaster, [door(3, 1.8)], 0xe0dad0);
+  for (let i = 0; i < 4; i++) B.box(27 + i * 3.2, F2, -8, 28 + i * 3.2, F2 + 1.6, 3, Mat.Metal, { color: 0x8a8f94 });
+  B.loot(32, F2, -3); B.loot(10, F2, -5); B.loot(-30, F2, -20); B.loot(60, F2, -20);
+  // Economy / Business check-in counter between the two doors
+  B.box(44.6, F2, -24.6, 49.3, F2 + 1.1, -23.4, Mat.Wood, { color: panel });
+  for (let lx = -46; lx <= 66; lx += 10) B.light(lx, F3 - 0.15, -20);
+  for (let lx = 2; lx <= 38; lx += 9) B.light(lx, F3 - 0.15, -5);
+  // crate stack in the corner up to the mezzanine (steps of ~1.3 m you can mantle)
+  const cr = [[-15, -13.5, 1.3], [-13.5, -12, 2.6], [-12, -10.5, 3.9], [-10.5, -8.05, 4.9]];
+  for (const [z0, z1, hh] of cr) B.box(-1.6, F2, z0, 2.2, F2 + hh, z1, Mat.Wood, { color: 0x7a5a38 });
+
+  // ---------------- 3F mezzanine (x -2..40, z -8..6) + bridge to the Departures door
+  B.slab(-2, -8, 40, 6, F3, 0.35, Mat.Tile, [[30, -6, 36, -2]]);
+  B.slab(8, 6, 16, HD - 0.2, F3, 0.35, Mat.Tile);
+  for (let i = 0; i < 4; i++) for (let j = 0; j < 3; j++) B.box(6 + i * 7, F3, -5 + j * 3.5, 11 + i * 7, F3 + 0.45, -4.3 + j * 3.5, Mat.Metal, { color: 0x3a4250 });
+  const mrail = (x0: number, z0: number, x1: number, z1: number) => B.box(x0, F3, z0, x1, F3 + 1.05, z1, Mat.Metal, { color: 0x9aa0a4 });
+  mrail(2.3, -8.1, 40, -7.95); mrail(-2.1, -8, -1.95, 6); mrail(-2, 5.95, 8, 6.1); mrail(16, 5.95, 40, 6.1); mrail(39.9, -8, 40.05, 6); mrail(7.9, 6, 8.05, HD - 0.2); mrail(15.95, 6, 16.1, HD - 0.2);
+  B.light(10, H - 0.6, 0); B.light(28, H - 0.6, 0); B.loot(20, F3, 2); B.loot(12, F3, 18);
+
+  // ---------------- west Burger Town mezzanine (only from above)
+  B.slab(-HW, -HD, -55, 5, F3, 0.35, Mat.Tile);
+  B.box(-80, F3, -22, -70, F3 + 1.1, -20.8, Mat.Metal, { color: 0xc8302a }); // Burger Town counter
+  for (let i = 0; i < 6; i++) B.box(-78 + (i % 3) * 7, F3, -12 + Math.floor(i / 3) * 8, -76.8 + (i % 3) * 7, F3 + 0.75, -10.8 + Math.floor(i / 3) * 8, Mat.Wood, { color: 0x8a6a48 });
+  B.box(-55.1, F3, -HD, -54.95, F3 + 1.05, 5, Mat.Metal, { color: 0x9aa0a4 }); B.box(-HW, F3, 4.95, -55, F3 + 1.05, 5.1, Mat.Metal, { color: 0x9aa0a4 });
+  B.loot(-75, F3, -15); B.light(-70, H - 0.6, -10);
+
+  // ---------------- 1F under the checkpoint: garage bay room + storage, 1F east
+  B.wall(0, -2, 40, -14, 0.05, F2 - 0.05, 0.25, Mat.Concrete, [open(10, 3, 0, 2.6), open(30, 2.5, 0, 2.6)], 0xb0aca4);
+  B.wall(1, -14, 6, -2, 0.05, F2 - 0.05, 0.25, Mat.Concrete, [door(8, 1.8)], 0xb0aca4);
+  B.wall(1, -25, -14, -2, 0.05, F2 - 0.05, 0.25, Mat.Concrete, [], 0xb0aca4);
+  for (const [lx, lz] of [[6, -20], [18, -19], [30, -21], [12, -4], [30, -2]]) { B.box(lx - 1, 0.05, lz - 1, lx + 1, 1.3, lz + 1, Mat.Wood, { color: 0x7a5a38 }); B.loot(lx + 2, 0.05, lz); }
+  for (let lx = 4; lx <= 36; lx += 10) { B.light(lx, F2 - 0.15, -19); B.light(lx, F2 - 0.15, -4); }
+  // east double stairs (x 48..57) from the 2F concourse down to the 1F east concourse (z -15 -> -3)
+  B.ramp(48, 0.05, -15, 52.3, F2, -3, 1, -1, Mat.Tile); B.ramp(52.7, 0.05, -15, 57, F2, -3, 1, -1, Mat.Tile);
+  B.box(52.3, 0.05, -15, 52.7, 1, -3, Mat.Metal, { color: 0x9aa0a4, noCollide: true });
+  // café express and tourist information (low rooms, roofs = low mezzanines)
+  for (const [x0, x1, name] of [[40, 47, 'cafe'], [58, 66, 'tourist']] as [number, number, string][]) {
+    B.wall(0, x0, x1, -2, 0.05, 3.8, 0.2, Mat.Plaster, [], 0xe0dad0);
+    B.wall(0, x0, x1, 12, 0.05, 3.8, 0.2, Mat.Plaster, [door(2, 1.8)], 0xe0dad0);
+    B.wall(1, -2, 12, name === 'cafe' ? x1 : x0, 0.05, 3.8, 0.2, Mat.Glass, [door(5, 1.8)], 0xe0dad0);
+    B.wall(1, -2, 12, name === 'cafe' ? x0 : x1, 0.05, 3.8, 0.2, Mat.Plaster, [], 0xe0dad0);
+    B.slab(x0, -2, x1, 12, 3.95, 0.15, Mat.Concrete);
+    B.light((x0 + x1) / 2, 3.7, 5); B.loot((x0 + x1) / 2, 0.05, 5);
+  }
+  B.box(41, 0.05, 1, 46, 1.1, 2, Mat.Wood, { color: panel }); // café counter
+  // customs / bureau de change / baggage claim
+  B.wall(1, -15, HD - 0.2, 66, 0.05, F2 - 0.05, 0.25, Mat.Plaster, [open(4, 3, 0, 2.6), door(22, 1.8), open(30, 4, 0, 2.6)], 0xd8d0c0);
+  B.slab(66, -15, HW, HD, F2, 0.35, Mat.Concrete);
+  for (const cz of [-8, 6]) { B.box(70, 0.05, cz - 1.5, 81, 0.7, cz + 1.5, Mat.Metal, { color: 0x5a6066 }); B.box(71, 0.7, cz - 0.6, 80, 0.75, cz + 0.6, Mat.Metal, { color: 0x2a2d30 }); }
+  B.wall(0, 66, HW, 15, 0.05, F2 - 0.05, 0.2, Mat.Plaster, [door(6, 1.8), { u0: 10, u1: 16, v0: 1, v1: 2.3, glass: true }], 0xd8d0c0); // bureau de change
+  for (const [lx, lz] of [[75, -10], [75, 8], [75, 20], [52, 10], [62, 18]]) { B.light(lx, F2 - 0.15, lz); B.loot(lx, 0.05, lz); }
+  for (let lx = 44; lx <= 64; lx += 10) B.light(lx, H - 0.6, 18);
+
+  // ---------------- roof, partly collapsed (helicopter-sized holes), parapet
+  B.slab(-HW - 0.2, -HD - 0.2, HW + 0.2, HD + 0.2, H, 0.45, Mat.Roof, [[-40, -10, -20, 12], [-78, -18, -62, -2], [44, -14, 58, 2]]);
+  for (const [x0, z0, x1, z1] of [[-HW, HD - 0.3, HW, HD], [-HW, -HD, HW, -HD + 0.3], [-HW, -HD, -HW + 0.3, HD], [HW - 0.3, -HD, HW, HD]]) B.box(x0, H, z0, x1, H + 1, z1, Mat.Concrete, { color: conc });
+  B.box(-40, H - 3, -10, -34, H - 2.6, 12, Mat.Concrete, { color: pillar }); // sagging roof beam
+  B.loot(0, H, 0); B.loot(60, H, 15);
+
+  // ---------------- runway side: baggage loading annex (x 36..56), its roof deck + exterior gantry
+  B.box(35.8, -1.2, -37.2, 56.2, 0.05, -HD, Mat.Concrete, { color: 0x9a968f });
+  B.wall(0, 36, 56, -37, 0.05, F2 - 0.1, 0.3, Mat.Metal, [open(6, 4, 0, 3.6), door(14, 1)], 0x8a8f94, -1);
+  B.wall(1, -37, -HD - 0.17, 36, 0.05, F2 - 0.1, 0.3, Mat.Metal, [], 0x8a8f94, -1);
+  B.wall(1, -37, -HD - 0.17, 56, 0.05, F2 - 0.1, 0.3, Mat.Metal, [door(4, 1)], 0x8a8f94, 1);
+  B.slab(35.8, -37.2, 56.2, -HD - 0.17, F2, 0.3, Mat.Concrete);
+  B.box(35.8, F2, -37.2, 56.2, F2 + 1, -37.05, Mat.Metal, { color: 0x6d7378 }); B.box(56.05, F2, -37.2, 56.2, F2 + 1, -HD, Mat.Metal, { color: 0x6d7378 });
+  B.ramp(33.8, 0.05, -40, 35.7, F2, -28.5, 1, 1, Mat.Metal); // gantry up the west side of the annex
+  B.box(33.8, F2 - 0.2, -28.5, 35.8, F2, -26, Mat.Metal, { color: 0x6d7378 });
+  B.light(46, F2 - 0.3, -31); B.loot(46, 0.05, -31); B.loot(46, F2, -31);
+
+  // ---------------- landside: elevated road at 3F with a ramp down to the east, coaches
+  B.box(-60, F3 - 0.6, HD + 0.2, 60, F3, HD + 12, Mat.Asphalt, { color: 0x6e6f72 });
+  B.ramp(60, 0.05, HD + 0.2, 125, F3, HD + 12, 0, -1, Mat.Asphalt);
+  for (let px = -54; px <= 110; px += 14) { const top = px <= 60 ? F3 - 0.6 : F3 * (125 - px) / 65 - 0.4; if (top > 1) B.box(px - 0.6, 0.05, HD + 5.4, px + 0.6, top, HD + 6.8, Mat.Concrete, { color: pillar }); }
+  B.box(-60, F3, HD + 11.8, 60, F3 + 1, HD + 12, Mat.Concrete, { color: conc });
+  for (const cx of [-20, 30]) B.box(cx - 6, F3, HD + 3, cx + 6, F3 + 3.2, HD + 5.6, Mat.Metal, { color: 0xd8d8d0 }); // coaches
+  B.loot(0, F3, HD + 6);
+  sub(ctx, f, 0, 0, 0, b);
+}
