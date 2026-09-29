@@ -39,6 +39,64 @@ THREE.ShaderChunk.fog_fragment = `#ifdef USE_FOG
   gl_FragColor.rgb = mix(gl_FragColor.rgb, vdFog_fcol, clamp(fogFactor, 0.0, 1.0));
 #endif`;
 
+/**
+ * Interior lighting for every MeshStandardMaterial: a top-down map of roof heights (built from the
+ * buildings when the world loads) tells the shader whether a surface is under a roof. Under a roof the
+ * sky/ambient light mostly can't reach, so it's cut down and replaced by a dim warm fill (lamps);
+ * sunlight still comes in through windows and doors via the shadow maps.
+ */
+export const INDOOR = {
+  map: new THREE.DataTexture(new Uint16Array([THREE.DataUtils.toHalfFloat(-1000)]), 1, 1, THREE.RedFormat, THREE.HalfFloatType),
+  info: new THREE.Vector4(3240, 1, 0, 0), // x: world size, y: strength
+};
+INDOOR.map.minFilter = INDOOR.map.magFilter = THREE.NearestFilter; INDOOR.map.needsUpdate = true;
+{
+  const L = THREE.ShaderLib.physical;
+  L.uniforms.indoorMap = { value: INDOOR.map };
+  L.uniforms.indoorInfo = { value: INDOOR.info };
+  L.vertexShader = '#define USE_INDOOR\nvarying vec3 vIndoorW;\n' + L.vertexShader.replace('#include <fog_vertex>', '#include <fog_vertex>\n\tvIndoorW = cameraPosition + transpose(mat3(viewMatrix)) * mvPosition.xyz;');
+  L.fragmentShader = '#define USE_INDOOR\nuniform sampler2D indoorMap; uniform vec4 indoorInfo; varying vec3 vIndoorW;\n' + L.fragmentShader.replace('#include <lights_fragment_end>', `#include <lights_fragment_end>
+	#ifndef NO_INDOOR
+	{
+		float roofY = texture2D(indoorMap, vIndoorW.xz / indoorInfo.x).r;
+		float ind = smoothstep(roofY - 0.3, roofY - 1.0, vIndoorW.y) * indoorInfo.y;
+		reflectedLight.indirectDiffuse *= mix(1.0, 0.3, ind);
+		reflectedLight.indirectSpecular *= mix(1.0, 0.15, ind);
+		reflectedLight.indirectDiffuse += diffuseColor.rgb * vec3(1.0, 0.85, 0.66) * 0.16 * ind;
+		#ifndef USE_SHADOWMAP
+		reflectedLight.directDiffuse *= mix(1.0, 0.12, ind); reflectedLight.directSpecular *= mix(1.0, 0.12, ind);
+		#endif
+	}
+	#endif`);
+}
+
+/** Rasterise roof heights (half-float, 1.5 m cells) from building parts: wide parts only, inset from their edges. */
+export function buildIndoorMap(structs: { kind: string; x: number; y: number; z: number; cos: number; sin: number; parts: { x0: number; y0: number; z0: number; x1: number; y1: number; z1: number; noCollide?: boolean; shape?: string }[] }[], size: number) {
+  const CELL = 1.5, n = Math.ceil(size / CELL), roof = new Float32Array(n * n).fill(-1000);
+  const skip = new Set(['door', 'tree', 'lamp', 'pole', 'prop', 'train', 'lattice', 'crane', 'ferris', 'comms']);
+  for (const s of structs) {
+    if (skip.has(s.kind)) continue;
+    for (const p of s.parts) {
+      const w = p.x1 - p.x0, d = p.z1 - p.z0;
+      if (w < 2.2 || d < 2.2) continue; // walls, columns, posts
+      if (p.noCollide && p.shape !== 'gable') continue;
+      if (p.y1 < 1.8 && p.shape !== 'gable') continue; // floors / plinths are not roofs
+      const top = s.y + (p.shape === 'gable' ? p.y0 : p.y1);
+      const ins = 0.6, x0 = p.x0 + ins, x1 = p.x1 - ins, z0 = p.z0 + ins, z1 = p.z1 - ins;
+      // walk the part in local space, stamp world cells
+      for (let lz = z0; lz <= z1; lz += CELL * 0.7) for (let lx = x0; lx <= x1; lx += CELL * 0.7) {
+        const wx = s.x + lx * s.cos + lz * s.sin, wz = s.z - lx * s.sin + lz * s.cos;
+        const i = Math.floor(wx / CELL), j = Math.floor(wz / CELL); if (i < 0 || j < 0 || i >= n || j >= n) continue;
+        const k = j * n + i; if (top > roof[k]) roof[k] = top;
+      }
+    }
+  }
+  const half = new Uint16Array(n * n); for (let k = 0; k < n * n; k++) half[k] = THREE.DataUtils.toHalfFloat(roof[k]);
+  INDOOR.map.image = { data: half, width: n, height: n } as any; INDOOR.map.needsUpdate = true;
+  INDOOR.info.x = n * CELL;
+  return { roof, n, CELL };
+}
+
 export function makeSky(): THREE.Mesh {
   const geo = new THREE.SphereGeometry(9000, 32, 16);
   const mat = new THREE.ShaderMaterial({

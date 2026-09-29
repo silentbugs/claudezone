@@ -353,7 +353,8 @@ export class Sim {
   }
 
   /** What the player is looking at to interact with (for prompts and for the action). */
-  interactTarget(p: Player): { kind: 'door' | 'revive' | 'chest' | 'item' | 'buy' | 'contract' | 'crate' | 'vehicle' | 'exit' | 'balloon' | 'box' | 'turret' | 'unman'; id: number; label: string } | null {
+  interactTarget(p: Player): { kind: 'ascender' | 'door' | 'revive' | 'chest' | 'item' | 'buy' | 'contract' | 'crate' | 'vehicle' | 'exit' | 'balloon' | 'box' | 'turret' | 'unman'; id: number; label: string } | null {
+    if (((p as any).asc ?? -1) >= 0) return null; // riding an ascender: Use lets go (handled by movement)
     if (p.turret >= 0) return { kind: 'unman', id: p.turret, label: 'Leave Shield Turret' };
     if ((p as any).vehicle !== undefined) return { kind: 'exit', id: (p as any).vehicle, label: 'Exit vehicle' };
     for (const q of this.playersNear(p.x, p.z, 2.5)) if (q.squad === p.squad && q.id !== p.id && q.phase === Phase.Downed) return { kind: 'revive', id: q.id, label: `Revive ${q.name}` };
@@ -376,6 +377,8 @@ export class Sim {
     for (const t of this.turrets) if (t.user < 0 && Math.abs(t.x - p.x) < 3 && Math.abs(t.z - p.z) < 3) consider('turret', t.id, 'Use Shield Turret', t.x, t.y + 1, t.z, 2.8, -0.3);
     this.world.balloons.forEach((b, i) => { if (Math.abs(b.x - p.x) < 4 && Math.abs(b.z - p.z) < 4) consider('balloon', i, 'Use Redeploy Balloon', b.x, b.y + 1.2, b.z, 3.5, -0.5); });
     for (const cr of this.crates) if (cr.squad === p.squad && this.time >= cr.land && !cr.taken.has(p.id) && Math.abs(cr.x - p.x) < 3 && Math.abs(cr.z - p.z) < 3) consider('crate', cr.id, 'Open Loadout Drop', cr.x, cr.y + 0.6, cr.z, 3);
+    // ascenders: grab the cable
+    (this.world.ascenders ?? []).forEach((a, i) => { if (Math.abs(a.x - p.x) < 2 && Math.abs(a.z - p.z) < 2 && p.y > a.y0 - 0.6 && p.y < a.y1 - 1) consider('ascender', i, 'Use Ascender', a.x, p.y + 1.2, a.z, 1.8, 0.2); });
     // doors (lowest priority: only when nothing else is in reach)
     if (!best && this.doors) for (const st of this.world.col.near(p.x, p.z, 2.4, this.doorTmp)) {
       if (st.kind !== 'door') continue; const i = this.doors.byStructure.get(st.id); if (i === undefined) continue;
@@ -393,6 +396,7 @@ export class Sim {
     if (t.kind === 'chest') { const c = this.chests.find((c2) => c2.id === t.id)!; c.opened = true; for (const itm of chestContents(this, c.x, c.y, c.z, c.legendary)) this.addItem(itm); this.emit({ t: 'chest', p: p.id, x: c.x, y: c.y, z: c.z }); }
     else if (t.kind === 'item') { const itm = this.itemById.get(t.id); if (itm) tryPickup(this, p, itm, true); }
     else if (t.kind === 'door') this.doors?.interact(t.id, p);
+    else if (t.kind === 'ascender') { (p as any).asc = t.id; (p as any).ascHeld = true; (p as any).ladder = -1; p.sprinting = false; p.ads = 0; this.emit({ t: 'ascender', p: p.id, on: true }); }
     else if (t.kind === 'buy') { if (!p.bot) this.emit({ t: 'announce', text: '__buy__', squad: p.squad }); else (p as any).atBuy = t.id; }
     else if (t.kind === 'contract') this.acceptContract(p, t.id);
     else if (t.kind === 'vehicle') { const v = this.vehicles.find((q) => q.id === t.id); if (v) enterVehicle(this, p, v); }

@@ -108,6 +108,14 @@ export class ViewModel {
    * The viewmodel keeps its own framing whatever the world FOV. Vertical 58° is tuned for 16:9; on
    * narrower windows widen it so the horizontal view never crops the hands, gun or parachute toggles.
    */
+  /** 0..1 how far indoors the player is: dims the viewmodel's own lights like the world around it */
+  setIndoor(k: number) {
+    this.indoorK += (k - this.indoorK) * 0.1;
+    const f = 1 - 0.62 * this.indoorK;
+    this.scene.traverse((o) => { const l = o as THREE.Light; if ((l as any).isHemisphereLight || (l as any).isDirectionalLight) { l.userData.base ??= l.intensity; l.intensity = l.userData.base * f; } });
+    this.scene.traverse((o) => { const m = (o as THREE.Mesh).material as any; for (const mm of Array.isArray(m) ? m : m ? [m] : []) if (!mm.defines || mm.defines.NO_INDOOR === undefined) { mm.defines = { ...(mm.defines ?? {}), NO_INDOOR: '' }; mm.needsUpdate = true; } });
+  }
+  private indoorK = 0;
   setAspect(a: number) {
     const base = 58, ref = 16 / 9;
     const vfov = a >= ref ? base : (2 * Math.atan(Math.tan((base * Math.PI) / 360) * ref / a) * 180) / Math.PI;
@@ -248,7 +256,7 @@ export class ViewModel {
     this.plate.visible = p.plateT > 0;
     if (p.plateT > 0) { pos.y -= 0.18; rx -= 0.4; const t = 1 - p.plateT / 1.25; this.plate.position.set(-0.08, 0.06 - t * 0.08, -0.1 + t * 0.12); this.plate.rotation.set(0.6, 0.3, 0); }
     // climbing a ladder: weapon lowered out of view
-    this.climbK += ((((p as any).ladder ?? -1) >= 0 ? 1 : 0) - this.climbK) * Math.min(1, dt * 8);
+    this.climbK += ((((p as any).ladder ?? -1) >= 0 || ((p as any).asc ?? -1) >= 0 ? 1 : 0) - this.climbK) * Math.min(1, dt * 8);
     if (this.climbK > 0.01) { pos.y -= 0.45 * this.climbK; rx -= 0.9 * this.climbK; }
     if (this.swap > 0) { const e = this.swap * this.swap * (3 - 2 * this.swap); pos.y -= e * 0.3; rx -= e * 0.7; rz += e * 0.25; }
     // mantle: weapon tucked down and away, left hand reaches out and plants on the ledge

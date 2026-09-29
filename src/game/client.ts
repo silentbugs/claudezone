@@ -356,6 +356,7 @@ export class Match {
     this.chars.update(sim.players, a, cam.position, dt, me.squad);
     this.ambient.update(dt, cam.position);
     this.trainMesh?.update(a);
+    this.vm.setIndoor(this.sm.indoorAt(cam.position.x, cam.position.y, cam.position.z));
     this.doorMesh?.update(cam.position);
     this.fx.viewId = this.viewId();
     this.fx.update(dt, a, cam.position, time, cam.fov);

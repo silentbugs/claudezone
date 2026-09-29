@@ -53,7 +53,11 @@ export interface Tree { x: number; y: number; z: number; s: number; kind: 0 | 1 
 export interface DoorRec { sid: number; base: number; w: number; h: number }
 /** An exterior ladder in world space: base on the wall face, outward normal, bottom and roof heights. */
 export interface LadderRec { x: number; z: number; nx: number; nz: number; y0: number; y1: number }
+export interface AscenderRec { x: number; z: number; nx: number; nz: number; y0: number; y1: number; stops: number[] }
 export interface WorldData {
+  ascenders: AscenderRec[];
+  /** interior light fixtures, xyz triples */
+  lights: Float32Array;
   doors: DoorRec[];
   ladders: LadderRec[];
   hf: Heightfield;
@@ -129,6 +133,8 @@ export function generateWorld(masks: MapMasks, seed = 1): WorldData {
   { const rp = extra.railPath; for (let i = 0; i < rp.length; i += 3) { const x = rp[i], z = rp[i + 2]; for (let dz = -8; dz <= 8; dz += occ.cell) for (let dx = -8; dx <= 8; dx += occ.cell) { const oi = Math.floor((x + dx) / occ.cell), oj = Math.floor((z + dz) / occ.cell); if (oi >= 0 && oj >= 0 && oi < occ.res && oj < occ.res) occ.g[oj * occ.res + oi] = 3; } } }
   const doors: DoorRec[] = [];
   const ladders: LadderRec[] = [];
+  const ascenders: AscenderRec[] = [];
+  const lights: number[] = [];
   const ctx: GenContext = {
     rng, hf, extra, masks, col, occ,
     buyStations: [], chests: [], contracts: [], vehicleSpawns: [], wires: [], balloons: [],
@@ -166,6 +172,10 @@ export function generateWorld(masks: MapMasks, seed = 1): WorldData {
       const st = makeStructure(0, kind, x, y, z, angle, b.parts, b.ramps, b.loot);
       st.poi = opts.poi; st.style = opts.style; st.lodColor = opts.lodColor;
       const added = col.add(st);
+      for (const a of (b as any).ascenders ?? []) {
+        ascenders.push({ x: x + a.x * c + a.z * s, z: z - a.x * s + a.z * c, nx: a.nx * c + a.nz * s, nz: -a.nx * s + a.nz * c, y0: y + a.y0, y1: y + a.y1, stops: a.stops.map((v: number) => y + v) });
+      }
+      for (const [lx, ly, lz] of (b as any).lights ?? []) lights.push(x + lx * c + lz * s, y + ly, z - lx * s + lz * c);
       for (const l of (b as any).ladders ?? []) {
         const lx = x + l.x * c + l.z * s, lz = z - l.x * s + l.z * c, nx = l.nx * c + l.nz * s, nz = -l.nx * s + l.nz * c;
         ladders.push({ x: lx, z: lz, nx, nz, y0: y + l.y0, y1: y + l.y1 });
@@ -281,7 +291,7 @@ export function generateWorld(masks: MapMasks, seed = 1): WorldData {
       }
     }
   }
-  return { doors, ladders, hf, extra, col, trees, masks, buyStations: ctx.buyStations, chests: ctx.chests, contracts: ctx.contracts, groundLoot: groundLoot.filter((g) => !ctx.chests.includes(g as any)), vehicleSpawns: ctx.vehicleSpawns, wires: Float32Array.from(ctx.wires), balloons: ctx.balloons };
+  return { doors, ladders, ascenders, lights: Float32Array.from(lights), hf, extra, col, trees, masks, buyStations: ctx.buyStations, chests: ctx.chests, contracts: ctx.contracts, groundLoot: groundLoot.filter((g) => !ctx.chests.includes(g as any)), vehicleSpawns: ctx.vehicleSpawns, wires: Float32Array.from(ctx.wires), balloons: ctx.balloons };
 }
 
 import { VERDANSK } from '../data/verdansk';

@@ -11,6 +11,7 @@ export const WALL_T = 0.25;
 
 export interface Opening { u0: number; u1: number; v0: number; v1: number; glass?: boolean; /** no door leaf (arches, garages, shop fronts) */ open?: boolean }
 /** A hinged door leaf in builder-local space: hinge at (x, z), closed leaf runs along +angle direction. */
+export interface AscenderDef { x: number; z: number; nx: number; nz: number; y0: number; y1: number; stops: number[] }
 export interface LadderDef { x: number; z: number; nx: number; nz: number; y0: number; y1: number }
 export interface DoorDef { x: number; z: number; y: number; angle: number; w: number; h: number }
 
@@ -20,6 +21,20 @@ export class Builder {
   loot: [number, number, number][] = [];
   doors: DoorDef[] = [];
   ladders: LadderDef[] = [];
+  ascenders: AscenderDef[] = [];
+  lights: [number, number, number][] = [];
+  /**
+   * Ascender (2020 vertical zip cable, in lift shafts): hold on with Use and ride up. (x, z) is the cable,
+   * (nx, nz) the way out of the shaft, stops the floor levels you can step off at (the top is always one).
+   */
+  ascender(x: number, z: number, nx: number, nz: number, y0: number, y1: number, stops: number[] = []) {
+    this.ascenders.push({ x, z, nx, nz, y0, y1, stops: [...stops, y1].sort((a, b) => a - b) });
+    this.box(x - 0.02, y0, z - 0.02, x + 0.02, y1 + 2.2, z + 0.02, Mat.Metal, { color: 0x1d1f21, noCollide: true }); // cable
+    this.box(x - 0.18, y0 + 0.9, z - 0.12, x + 0.18, y0 + 1.25, z + 0.12, Mat.Metal, { color: 0xc9a227, noCollide: true }); // yellow grab unit
+    this.box(x - 0.3, y1 + 2.2, z - 0.3, x + 0.3, y1 + 2.5, z + 0.3, Mat.Metal, { color: 0x3a3d40, noCollide: true }); // top pulley
+  }
+  /** Ceiling light fixture (drawn as a lit panel; also a hint for interior lighting). */
+  light(x: number, y: number, z: number) { this.lights.push([x, y, z]); }
   /**
    * Exterior ladder against a wall face. (x, z) is on the wall face, (nx, nz) the outward normal (axis-aligned).
    * Rails and rungs are visual only; climbing is handled by movement.
@@ -143,6 +158,7 @@ export function house(rng: Rng, w: number, d: number, floors: number, st: Style)
     // interior partition across the depth with a doorway
     const px = rng.range(-hw * 0.3, hw * 0.3);
     if (w > 7) b.wall(1, -hd + WALL_T, hd - WALL_T, px, y, wh, 0.14, Mat.Plaster, [{ u0: d * 0.5 - 0.5, u1: d * 0.5 + 0.5, v0: 0, v1: 2.2 }], 0xd8d0c0);
+    b.light((-hw + px) / 2, y + wh - 0.02, 0); b.light((hw + px) / 2, y + wh - 0.02, 0);
     b.addLoot(-hw + 1.2, y, -hd + 1.2); b.addLoot(hw - 1.2, y, hd - 1.2);
     if (rng.chance(0.5)) b.addLoot(px + 1, y, 0);
   }
@@ -302,6 +318,7 @@ export function warehouse(rng: Rng, w: number, d: number, h: number, st: Style, 
     b.block(cx, cz, rng.range(1.2, 2.4), rng.range(1.2, 2.4), 0.1, 0.1 + rng.pick([1.2, 1.2, 2.4]), rng.chance(0.5) ? Mat.Wood : Mat.Container, { color: rng.pick([0x7a5a38, 0x5e6e44, 0x6a4a30]) });
   }
   b.slab(-hw - 0.2, -hd - 0.2, hw + 0.2, hd + 0.2, h + 0.1, 0.3, st.roof);
+  for (let lx = -hw + 5; lx <= hw - 5; lx += 8) for (let lz = -hd + 5; lz <= hd - 5; lz += 8) b.light(lx, h - 0.25, lz);
   b.ladder(hw + 0.15, -hd + 2.2, 1, 0, 0.1, h + 0.1); // roof ladder on the side (2020: warehouses reach the roof by exterior ladder)
   b.addLoot(-hw + 2, 0.1, -hd + 2); b.addLoot(hw - 2, 0.1, -hd + 2); b.addLoot(0, 0.1, 0);
   return b;
@@ -317,6 +334,7 @@ export function shop(rng: Rng, w: number, d: number, st: Style): Builder {
   b.wall(1, -hd + 0.12, hd - 0.12, hw, 0.1, h, 0.25, st.wall, [], st.wallColor);
   // counter/shelves
   b.block(0, hd * 0.3, w * 0.5, 0.8, 0.1, 1.1, Mat.Wood, { color: 0x6b4a2f });
+  for (let lx = -hw + 2.5; lx <= hw - 2.5; lx += 4) b.light(lx, h + 0.08 - 0.02 - 0.3, 0);
   b.slab(-hw - 0.3, -hd - 0.3, hw + 0.3, hd + 0.3, h + 0.1, 0.3, st.roof);
   b.ladder(hw - 1.2, hd + 0.125, 0, 1, 0.1, h + 0.1); // roof ladder at the back
   // signage band

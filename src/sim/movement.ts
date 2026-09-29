@@ -88,7 +88,8 @@ function ground(sim: Sim, p: Player, dt: number) {
   const downed = p.phase === Phase.Downed;
   const def = p.weapons[p.cur] ? WEAPON[p.weapons[p.cur]!.id] : null;
   // --- ladders
-  if (downed) (p as any).ladder = -1;
+  if (downed) { (p as any).ladder = -1; (p as any).asc = -1; }
+  else if (ascend(sim, p, dt)) return;
   else if (ladder(sim, p, dt)) return;
   // --- mantle in progress
   if (p.mantleT > 0) {
@@ -343,5 +344,31 @@ function ladder(sim: Sim, p: Player, dt: number): boolean {
   }
   if (p.y <= l.y0 && climb < 0) { p.y = sim.world.col.groundAt(p.x, p.z, p.y + 0.5); P.ladder = -1; p.onGround = true; }
   if (p.y < l.y0) p.y = l.y0;
+  return true;
+}
+
+const ASCEND = 7.0; // m/s
+/** Riding an ascender: pulled up the cable; at the top (or on Jump / Use at a floor) you step out of the shaft. */
+function ascend(sim: Sim, p: Player, dt: number): boolean {
+  const P = p as any; if (P.asc === undefined || P.asc < 0) return false;
+  const a = sim.world.ascenders[P.asc]; if (!a) { P.asc = -1; return false; }
+  const it = p.intent;
+  p.x += (a.x - p.x) * Math.min(1, dt * 14); p.z += (a.z - p.z) * Math.min(1, dt * 14);
+  p.vx = p.vz = 0; p.vy = 0; p.onGround = false; p.fallStartY = p.y; p.stance = Stance.Stand;
+  p.y = Math.min(a.y1, p.y + ASCEND * dt);
+  const stepOut = (floorY: number) => {
+    P.asc = -1; sim.emit({ t: 'ascender', p: p.id, on: false });
+    const tx = a.x + a.nx * 1.3, tz = a.z + a.nz * 1.3, t = 0.4;
+    p.mantleT = t; p.mantleY = floorY + 0.02; P.mantleDur = t; P.mantleY0 = p.y; P.mantleX0 = p.x; P.mantleZ0 = p.z; P.mantleX1 = tx; P.mantleZ1 = tz;
+  };
+  if (p.y >= a.y1 - 1e-3) { stepOut(a.y1); return true; }
+  if (!it.interact) P.ascHeld = false;
+  if (it.jump || (it.interact && !P.ascHeld)) {
+    it.jump = false; P.ascHeld = true;
+    // step off at the floor we're passing (within 1.6 m below the feet), otherwise just let go
+    const below = a.stops.filter((y) => y <= p.y + 0.3 && y >= p.y - 1.6);
+    if (below.length) stepOut(below[below.length - 1]);
+    else { P.asc = -1; sim.emit({ t: 'ascender', p: p.id, on: false }); }
+  }
   return true;
 }

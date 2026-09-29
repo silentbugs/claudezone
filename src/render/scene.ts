@@ -35,7 +35,7 @@ import { TerrainMesh } from './terrainMesh';
 import { StructureMesh, SHADOW_ONLY_LAYER } from './structureMesh';
 import { Trees } from './trees';
 import { Foliage } from './foliage';
-import { makeSky, makeLights, followSun, makeWater, waterMaterial, FOG_COLOR } from './environment';
+import { makeSky, makeLights, followSun, makeWater, waterMaterial, FOG_COLOR, buildIndoorMap } from './environment';
 
 export class SceneMgr {
   renderer: THREE.WebGLRenderer;
@@ -50,6 +50,14 @@ export class SceneMgr {
   grade: ShaderPass | null = null;
   private gtao: GTAOPass | null = null;
   quality: Quality = 'high';
+  indoor: { roof: Float32Array; n: number; CELL: number } | null = null;
+  fixtures: THREE.InstancedMesh | null = null;
+  /** 0..1: is this point under a roof (same rule as the shader) */
+  indoorAt(x: number, y: number, z: number): number {
+    const I = this.indoor; if (!I) return 0;
+    const i = Math.floor(x / I.CELL), j = Math.floor(z / I.CELL); if (i < 0 || j < 0 || i >= I.n || j >= I.n) return 0;
+    const r = I.roof[j * I.n + i], t = (r - 0.3 - y) / 0.7; return Math.max(0, Math.min(1, t));
+  }
   ao = false;
   drawDistance: 'near' | 'medium' | 'far' | 'max' = 'far';
   csm: CSM | null = null;
@@ -100,6 +108,15 @@ export class SceneMgr {
     this.terrain = new TerrainMesh(w.hf, w.extra, terr, this.photos.t?.normal);
     this.scene.add(this.terrain.group);
     this.structures = new StructureMesh(w.col.structures, mats, w.hf.size, this.photos.b?.normal, this.photos.b?.colored);
+    this.indoor = buildIndoorMap(w.col.structures as any, w.hf.size);
+    // ceiling light fixtures: small warm lit panels
+    const L = w.lights ?? new Float32Array(0), nL = L.length / 3;
+    if (nL) {
+      const fx = new THREE.InstancedMesh(new THREE.BoxGeometry(0.9, 0.05, 0.3), new THREE.MeshBasicMaterial({ color: new THREE.Color(1.0, 0.93, 0.78).multiplyScalar(2.2) }), nL);
+      const m4 = new THREE.Matrix4();
+      for (let i = 0; i < nL; i++) fx.setMatrixAt(i, m4.makeTranslation(L[i * 3], L[i * 3 + 1] - 0.03, L[i * 3 + 2]));
+      fx.computeBoundingSphere(); this.scene.add(fx); this.fixtures = fx;
+    }
     this.scene.add(this.structures.group);
     this.trees = new Trees(w.trees); this.scene.add(this.trees.group);
     this.grass = new Foliage(w); this.grass.density = this.foliage; this.scene.add(this.grass.mesh);

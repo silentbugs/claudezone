@@ -111,6 +111,7 @@ export type SimEvent =
   | { t: 'uav'; squad: number }
   | { t: 'cuav'; squad: number }
   | { t: 'stim'; p: number }
+  | { t: 'ascender'; p: number; on: boolean }
   | { t: 'door'; x: number; y: number; z: number; open: boolean; loud: boolean; p: number }
   | { t: 'eping'; squad: number; by: number; target: number; x: number; y: number; z: number }
   | { t: 'contract'; p: number; kind: string; msg: 'start' | 'done' | 'fail' | 'progress' }
