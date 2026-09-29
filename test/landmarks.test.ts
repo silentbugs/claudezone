@@ -60,3 +60,26 @@ test('Train Station: hall stairwell to the dome roof, pavilion stairs, back door
     assert.ok(typeof r === 'number' && Math.abs(r - want) < 0.6, name);
   }
 });
+
+test('Hospital: foyer -> west stair -> 3F -> skybridge -> tower ascender to the roof; cafeteria -> east stair -> roof', () => {
+  const sim = newSim(), f = frameOf('hospital', 60);
+  const up = (xL: number, xR: number, zF: number, zB: number, n: number) => { const r: number[][] = []; for (let k = 0; k < n; k++) r.push([xL, zF + 0.1], [xL, zB - 0.4], [xR, zB - 0.4], [xR, zF + 0.1]); return r; };
+  const r1 = walkRoute(sim, f, [-4, 28], [[-4, 25], [-4, 22], [-8, 2.7], [-11, 2.7], [-14.5, 2.7], ...up(-14.5, -11.5, 2.6, 13.6, 1), [-11.4, 2.7], [-9, 2.7], [-9, 15], [-17, 15], [-20, 12], [-33, 12], [-33, 9], [-33, 4], [-32.5, 1], [-32.5, -1], [-32.5, -7], [-32.5, -13], [-32.8, -15.5], [-33.5, -19], [-33.5, -22.5], [-31.6, -24], [-31.6, -28.2], [-32.3, -28.2]]);
+  console.log('foyer -> tower 3F lift door', r1);
+  assert.ok(typeof r1 === 'number' && Math.abs(r1 - 7) < 0.5, 'reached the tower 3F');
+  // ride the tower ascender
+  const p: any = sim.players[0];
+  const c = Math.cos(f.a), s = Math.sin(f.a);
+  const a = sim.world.ascenders.reduce((m, q) => (Math.hypot(q.x - (f.x + -33.8 * c + -28.2 * s), q.z - (f.z - -33.8 * s + -28.2 * c)) < Math.hypot(m.x - (f.x + -33.8 * c + -28.2 * s), m.z - (f.z - -33.8 * s + -28.2 * c)) ? q : m));
+  p.yaw = p.intent.yaw = Math.atan2(a.nx, a.nz);
+  const t = sim.interactTarget(p);
+  assert.equal(t?.kind, 'ascender', 'ascender in reach');
+  p.intent.mz = 0; p.intent.mx = 0;
+  p.intent.interact = true; sim.tick(1 / 60); p.intent.interact = false; sim.events.length = 0;
+  for (let i = 0; i < 12 * 60; i++) { sim.tick(1 / 60); sim.events.length = 0; }
+  console.log('tower roof', (p.y - f.y).toFixed(2));
+  assert.ok(Math.abs(p.y - f.y - 35) < 0.5 && p.onGround, 'on the tower roof');
+  const r2 = walkRoute(sim, f, [17, -28], [[20, -28], [23, -28], [30, -27], [33.9, -17], [33.9, -13], [36, -14.1], [39.5, -14.1], ...up(40.3, 43.3, -14.8, -2.6, 2), [39.3, -14.1], [37, -14.1]]);
+  console.log('cafeteria -> east stair -> roof', r2);
+  assert.ok(typeof r2 === 'number' && Math.abs(r2 - 12) < 0.5, 'reached the roof');
+});

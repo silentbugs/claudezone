@@ -302,3 +302,161 @@ export function trainStation2020(ctx: GenContext, x: number, z: number, a: numbe
   sub(ctx, f, 0, 0, 0, b);
   return f;
 }
+
+/**
+ * Verdansk Hospital (Zone 3A). L-shaped main building: south wing A (x -45..45, z 0..24) with a
+ * full-height foyer atrium and a 3F balcony ring around it; east wing B (x 21..45, z -40..0) with the
+ * double-height cafeteria turned triage ward (skylight) and kitchens under a 3F cubicle office. Levels
+ * are "1F" (ground) and "3F" (7 m); roof at 12 m with a raised helipad on the west. West stairwell by
+ * the foyer (1F-3F), east stairwell by the cafeteria (1F-3F-roof), a lift bank with an ascender. The
+ * 10-storey NW tower joins at 3F by a glazed skybridge; its stairs stop at 3F and an ascender runs to
+ * the roof (2F and 4F+ are sealed).
+ */
+export function hospital2020(ctx: GenContext) {
+  const p = poi('hospital');
+  const f = frame(ctx, 'hospital', p.x, p.z - 6, 0, 100, 76, 'hospital', 0xe3d3ac);
+  const cream = 0xe3d3ac, green = 0x3f4f46, wm = Mat.Concrete;
+  const F3 = 7, RF = 12;
+  const b = new Builder();
+  b.box(-45.2, -1.5, -40.2, 45.2, 0.05, 24.2, Mat.Concrete, { color: 0xb0aca2 });
+  b.box(-45.2, -1.5, -40.2, 20.8, 0.05, -0.2, Mat.Concrete, { color: 0xb0aca2, noCollide: true });
+  const win = (u: number, lvl: number) => ({ u0: u, u1: u + 1.8, v0: lvl ? 1.0 : 1.3, v1: lvl ? 3.2 : 3.8, glass: false });
+  const wins = (len: number, lvl: number, skip: [number, number][] = []) => { const o = []; for (let u = 2.5; u < len - 2.5; u += 4.5) if (!skip.some(([a, c]) => u + 1.8 > a - 0.4 && u < c + 0.4)) o.push(win(u, lvl)); return o; };
+  // ---- wing A exterior (two levels: 0..7 and 7..12)
+  for (const [y, h, lvl] of [[0.05, F3 - 0.05, 0], [F3, RF - F3, 1]] as [number, number, number][]) {
+    const sDoors: [number, number][] = lvl ? [] : [[40.1, 41.9], [48.1, 49.9], [73, 74.8], [77, 78.8]];
+    b.wall(0, -45, 45, 24, y, h, 0.4, wm, [...wins(90, lvl, sDoors), ...sDoors.map(([a, c]) => ({ u0: a, u1: c, v0: 0, v1: 2.5 }))], cream, 1, 0xf0e6cc);
+    const nDoors: [number, number][] = lvl ? [[11.5, 13.5]] : [];
+    b.wall(0, -45, 21, 0, y, h, 0.4, wm, [...wins(66, lvl, [[11, 14], [58, 62]]), ...nDoors.map(([a, c]) => ({ u0: a, u1: c, v0: 0, v1: 2.3 }))], cream, -1, 0xf0e6cc); // N (skybridge door at 3F)
+    b.wall(1, 0, 24, -45, y, h, 0.4, wm, lvl ? wins(24, 1) : [{ u0: 11.5, u1: 12.5, v0: 0, v1: 2.2 }, ...wins(24, 0, [[11, 13]])], cream, -1, 0xf0e6cc); // W, pantry door
+    b.wall(1, 0, 24, 45, y, h, 0.4, wm, lvl ? wins(24, 1) : [{ u0: 11.1, u1: 12.9, v0: 0, v1: 2.4 }, ...wins(24, 0, [[10.5, 13.5]])], cream, 1, 0xf0e6cc); // E, double doors under the sign
+  }
+  // green pilasters on the facades
+  for (let x = -44; x <= 44; x += 9) { b.box(x - 0.4, 0.05, 24.2, x + 0.4, RF, 24.55, wm, { color: green, noCollide: true }); }
+  // canopies over the S entrances
+  b.box(-8, 3.2, 24.2, 8, 3.5, 28, Mat.Concrete, { color: 0xd8d0bc }); b.box(26, 3.2, 24.2, 36, 3.5, 28, Mat.Concrete, { color: 0xd8d0bc });
+  // ---- wing B exterior
+  for (const [y, h, lvl] of [[0.05, F3 - 0.05, 0], [F3, RF - F3, 1]] as [number, number, number][]) {
+    b.wall(1, -40, 0, 21, y, h, 0.4, wm, lvl ? wins(40, 1) : [{ u0: 11.1, u1: 12.9, v0: 0, v1: 2.4 }, ...wins(40, 0, [[10.5, 13.5]])], cream, -1, 0xf0e6cc); // W cafeteria double doors
+    b.wall(1, -40, 0, 45, y, h, 0.4, wm, lvl ? wins(40, 1) : [{ u0: 11.1, u1: 12.9, v0: 0, v1: 2.4 }, ...wins(40, 0, [[10.5, 13.5]])], cream, 1, 0xf0e6cc); // E
+    b.wall(0, 21, 45, -40, y, h, 0.4, wm, lvl ? wins(24, 1) : [{ u0: 5, u1: 6.8, v0: 0, v1: 2.4 }, { u0: 16, u1: 17.8, v0: 0, v1: 2.4 }], cream, -1, 0xf0e6cc); // N, 2 double doors
+  }
+  // ---- interior, wing A
+  // west part: two corridors E-W with rooms (surgery, reception...) either side, both levels
+  for (const [y, h] of [[0.05, F3 - 0.05], [F3, RF - F3]]) {
+    const doorsAt = (xs: number[]) => xs.map((x) => ({ u0: x + 45 - 0.5, u1: x + 45 + 0.5, v0: 0, v1: 2.2 }));
+    b.wall(0, -45, -16, 8, y, h, 0.15, Mat.Plaster, doorsAt([-40, -33, -26, -20]), 0xe8e2d2);
+    b.wall(0, -45, -16, 16, y, h, 0.15, Mat.Plaster, doorsAt([-40, -33, -26, -20]), 0xe8e2d2);
+    for (const x of [-37, -30, -23]) { b.wall(1, 0.2, 8, x, y, h, 0.15, Mat.Plaster, [], 0xe8e2d2); b.wall(1, 16, 23.8, x, y, h, 0.15, Mat.Plaster, [], 0xe8e2d2); }
+    // east part: reception / ER bays
+    b.wall(1, 0.2, 23.8, 21, y, h, 0.2, Mat.Plaster, [{ u0: 5, u1: 6.8, v0: 0, v1: 2.3 }, { u0: 17, u1: 18.8, v0: 0, v1: 2.3 }], 0xe8e2d2);
+    for (const x of [28, 35]) b.wall(1, 12, 23.8, x, y, h, 0.15, Mat.Plaster, [{ u0: 1, u1: 2, v0: 0, v1: 2.2 }], 0xe8e2d2);
+    for (let x = -40; x <= 40; x += 8) { b.light(x, y + h - 0.1, 12); b.light(x, y + h - 0.1, 4); }
+  }
+  // foyer atrium x -10..10, z 2..22: check-in booth, benches; 3F balcony ring (slab hole + rails)
+  b.box(-3, 0.05, 11, 3, 1.1, 13, Mat.Wood, { color: 0x6b4a2f });
+  for (const [x0, z0, x1, z1] of [[-7, 5, 7, 5.1], [-7, 18.9, 7, 19], [-7, 5, -6.9, 19], [6.9, 5, 7, 19]]) b.box(x0, F3, z0, x1, F3 + 1.05, z1, Mat.Metal, { color: 0x9aa0a4 });
+  for (const [lx, lz] of [[0, 8], [0, 16], [-4, 12], [4, 12]]) b.light(lx, RF - 0.2, lz);
+  // lift bank east of the foyer with an ascender (1F, 3F, roof)
+  const lx0 = 11, lx1 = 13.4, lz0 = 1.2, lz1 = 4;
+  b.wall(0, lx0, lx1, lz1, 0.05, RF + 3, 0.2, Mat.Concrete, [], 0x8a8680);
+  b.wall(1, lz0 - 0.9, lz1, lx1, 0.05, RF + 3, 0.2, Mat.Concrete, [], 0x8a8680);
+  b.wall(1, lz0 - 0.9, lz1, lx0, 0.05, RF + 3, 0.2, Mat.Concrete, [{ u0: 1.2, u1: 2.4, v0: 0, v1: 2.2, open: true }, { u0: 1.2, u1: 2.4, v0: F3, v1: F3 + 2.2, open: true }, { u0: 1.2, u1: 2.4, v0: RF, v1: RF + 2.2, open: true }], 0x8a8680);
+  b.ascender((lx0 + lx1) / 2, (lz0 + lz1) / 2, -1, 0, 0.05, RF, [0.05, F3]);
+  b.box(lx0 - 0.2, RF + 3, lz0 - 1, lx1 + 0.2, RF + 3.2, lz1 + 0.2, Mat.Roof);
+  // west stairwell by the foyer (1F -> 3F), door on its east side at each level
+  const wHole = dogleg(b, -16, -10, 2, 14, 0.05, 1, F3 - 0.05);
+  b.wall(1, 2, 14, -10, 0.05, RF - 0.05, 0.2, Mat.Plaster, [{ u0: 0.15, u1: 1.3, v0: 0, v1: 2.2 }, { u0: 0.15, u1: 1.3, v0: F3, v1: F3 + 2.2 }], 0xcfc8bb);
+  b.wall(1, 2, 14, -16, 0.05, RF - 0.05, 0.2, Mat.Plaster, [], 0xcfc8bb);
+  b.wall(0, -16, -10, 14, 0.05, RF - 0.05, 0.2, Mat.Plaster, [], 0xcfc8bb);
+  // 3F slab over wing A: holes for the atrium, the west stair and the lift
+  b.slab(-45, 0, 45, 24, F3, 0.3, Mat.Concrete, [[-7, 5, 7, 19], wHole, [lx0, lz0 - 0.9, lx1, lz1]]);
+  // ---- interior, wing B: cafeteria (double height) and kitchens under the 3F office
+  b.wall(0, 21, 45, -15, 0.05, RF - 0.05, 0.25, Mat.Plaster, [{ u0: 4, u1: 5.8, v0: 0, v1: 2.4 }, { u0: 12, u1: 13.8, v0: 0, v1: 2.4 }, { u0: 3, u1: 9, v0: F3 + 1, v1: F3 + 2.4, glass: true }], 0xe8e2d2);
+  b.wall(0, 21, 45, 0, 0.05, RF - 0.05, 0.25, Mat.Plaster, [{ u0: 3, u1: 4.8, v0: 0, v1: 2.4 }, { u0: 12, u1: 13.8, v0: 0, v1: 2.4 }, { u0: 3, u1: 4.8, v0: F3, v1: F3 + 2.4 }, { u0: 12, u1: 13.8, v0: F3, v1: F3 + 2.4 }], 0xe8e2d2);
+  for (let x = 24; x < 44; x += 5) for (const z of [-35, -30, -24, -19]) {
+    b.block(x, z, 1.0, 2.1, 0.05, 0.7, Mat.Plaster, { color: 0xe6eaec }); // triage beds
+    b.block(x + 1.2, z, 0.05, 2.4, 0.05, 1.7, Mat.Plaster, { color: 0xc8c0a8 }); // privacy screens
+  }
+  for (let x = 25; x < 44; x += 6) for (const z of [-34, -27, -20]) b.light(x, RF - 0.3, z);
+  b.block(43.5, -18, 0.8, 1.6, 0.05, 1.9, Mat.Metal, { color: 0xa33a2a });
+  b.wall(1, -15, -0.2, 32, 0.05, F3 - 0.05, 0.15, Mat.Plaster, [{ u0: 6, u1: 7, v0: 0, v1: 2.2 }], 0xe8e2d2); // kitchens
+  // east stairwell by the cafeteria (1F -> 3F -> roof)
+  const eHole = dogleg(b, 38.8, 44.8, -14.8, -2.6, 0.05, 1, F3 - 0.05);
+  dogleg(b, 38.8, 44.8, -14.8, -2.6, F3, 1, RF - F3);
+  b.wall(1, -14.8, -2.6, 38.7, 0.05, RF + 2.6, 0.2, Mat.Plaster, [{ u0: 0.15, u1: 1.3, v0: 0, v1: 2.2 }, { u0: 0.15, u1: 1.3, v0: F3, v1: F3 + 2.2 }, { u0: 0.15, u1: 1.3, v0: RF, v1: RF + 2.2 }], 0xcfc8bb);
+  b.wall(0, 38.7, 45, -2.5, 0.05, RF + 2.6, 0.2, Mat.Plaster, [], 0xcfc8bb);
+  b.wall(0, 38.7, 45, -14.9, RF, 2.6, 0.2, wm, [], cream); b.box(38.5, RF + 2.6, -15.1, 45.2, RF + 2.8, -2.3, Mat.Roof);
+  b.slab(21, -15, 45, 0, F3, 0.3, Mat.Concrete, [eHole]);
+  for (let x = 23; x < 38; x += 4) for (const z of [-11, -6]) b.block(x, z, 1.6, 0.8, F3, F3 + 0.75, Mat.Wood, { color: 0x6b5a48 }); // cubicle desks
+  for (let x = 24; x < 38; x += 6) b.light(x, RF - 0.1, -8);
+  // ---- roof: skylights over the atrium and the cafeteria, helipad on a raised deck (west)
+  b.slab(-45.3, -0.3, 45.3, 24.3, RF, 0.35, Mat.Roof, [[-6, 6, 6, 18], [lx0, lz0 - 0.9, lx1, lz1]]);
+  b.slab(20.7, -40.3, 45.3, -0.3, RF, 0.35, Mat.Roof, [[26, -35, 40, -20], eHole]);
+  for (const [x0, z0, x1, z1] of [[-45, 23.8, 45, 24.2], [-45, -0.2, 21, 0.2], [-45.2, 0, -44.8, 24], [44.8, -40, 45.2, 24], [20.8, -40, 21.2, 0], [21, -40.2, 45, -39.8]]) b.box(x0, RF, z0, x1, RF + 0.9, z1, wm, { color: cream });
+  b.box(-43, RF, 4, -27, RF + 1.3, 20, Mat.Metal, { color: 0x5d6166 }); // helipad deck
+  b.box(-38, RF + 1.3, 9, -32, RF + 1.32, 15, Mat.Trim, { color: 0xe8e8e0, noCollide: true });
+  b.ramp(-27, RF, 10, -23, RF + 1.3, 12, 0, -1, Mat.Metal); b.ramp(-36, RF, 20, -34, RF + 1.3, 23, 1, -1, Mat.Metal);
+  // the red cross on the east roof, the VERDANSK HOSPITAL letters
+  b.box(30, RF + 0.36, -28, 36, RF + 0.38, -27, Mat.Trim, { color: 0xeeeeee, noCollide: true }); b.box(32.5, RF + 0.36, -30.5, 33.5, RF + 0.38, -24.5, Mat.Trim, { color: 0xeeeeee, noCollide: true });
+  for (let i = 0; i < 9; i++) b.box(-20 + i * 2.2, RF + 1, 23.4, -18.6 + i * 2.2, RF + 3, 23.6, Mat.Metal, { color: 0x9a2a22 });
+  b.ladder(15, 0.2, 0, -1, 0.05, RF); // NE inner-corner ladder to the roof
+  b.addLoot(0, 0.05, 8); b.addLoot(-30, 0.05, 4); b.addLoot(-30, F3, 20); b.addLoot(30, 0.05, -30); b.addLoot(28, F3, -8); b.addLoot(0, F3, 3); b.addLoot(-35, RF + 1.3, 12); b.addLoot(38, 0.05, 20);
+  sub(ctx, f, 0, 0, 0, b);
+  // ---- NW tower (x -40..-24, z -30..-14), 10 storeys of 3.5 m; stairs 1F -> 3F only, ascender to the roof
+  const t = new Builder(), TH = 3.5, TF = 10, TR = TF * TH;
+  const TX0 = -40, TX1 = -24, TZ0 = -30, TZ1 = -14;
+  t.box(TX0 - 0.2, -1.5, TZ0 - 0.2, TX1 + 0.2, 0.05, TZ1 + 0.2, Mat.Concrete, { color: 0xb0aca2 });
+  for (let k = 0; k < TF; k++) {
+    const y = k * TH + (k === 0 ? 0.05 : 0), h = TH - (k === 0 ? 0.05 : 0), sealed = k === 1 || k > 2;
+    const tw = [2.5, 6.5, 10.5].map((u) => ({ u0: u, u1: u + 2.2, v0: 0.9, v1: 2.8, glass: sealed }));
+    t.wall(0, TX0, TX1, TZ1, y, h, 0.4, wm, k === 0 ? [{ u0: 3, u1: 4.8, v0: 0, v1: 2.4 }, ...tw.slice(1)] : k === 2 ? [{ u0: 6.2, u1: 8.2, v0: 0, v1: 2.3 }, tw[0], tw[2]] : tw, cream, 1, 0xf0e6cc);
+    t.wall(0, TX0, TX1, TZ0, y, h, 0.4, wm, tw, cream, -1, 0xf0e6cc);
+    t.wall(1, TZ0, TZ1, TX0, y, h, 0.4, wm, tw, cream, -1, 0xf0e6cc);
+    t.wall(1, TZ0, TZ1, TX1, y, h, 0.4, wm, tw, cream, 1, 0xf0e6cc);
+  }
+  for (const x of [-37, -32, -27]) t.box(x - 0.4, 0.05, TZ1 + 0.2, x + 0.4, TR, TZ1 + 0.55, wm, { color: green, noCollide: true });
+  // stair shaft (NE of the tower), 2 levels to 3F; 2F door locked
+  const tHole = dogleg(t, -30.2, -24.4, -29.6, -18.6, 0.05, 2, TH - 0.025);
+  t.wall(1, -29.6, -18.6, -30.3, 0.05, TR, 0.2, Mat.Plaster, [{ u0: 0.15, u1: 1.3, v0: 0, v1: 2.2 }, { u0: 0.15, u1: 1.3, v0: TH, v1: TH + 2.2, locked: true }, { u0: 0.15, u1: 1.3, v0: 2 * TH, v1: 2 * TH + 2.2 }], 0xcfc8bb);
+  t.wall(0, -30.3, -24.2, -18.5, 0.05, TR, 0.2, Mat.Plaster, [], 0xcfc8bb);
+  // lift shaft with the ascender (stops 1F, 3F, roof)
+  const ex0 = -35, ex1 = -32.6, ez0 = -29.6, ez1 = -26.8;
+  t.wall(0, ex0, ex1, ez1, 0.05, TR + 3, 0.2, Mat.Concrete, [], 0x8a8680); t.wall(1, ez0, ez1, ex0, 0.05, TR + 3, 0.2, Mat.Concrete, [], 0x8a8680);
+  t.wall(1, ez0, ez1, ex1, 0.05, TR + 3, 0.2, Mat.Concrete, [0, 2 * TH, TR].map((v) => ({ u0: 0.8, u1: 2.0, v0: v, v1: v + 2.2, open: true })), 0x8a8680);
+  t.ascender((ex0 + ex1) / 2, (ez0 + ez1) / 2, 1, 0, 0.05, TR, [0.05, 2 * TH]);
+  t.box(ex0 - 0.2, TR + 3, ez0 - 0.3, ex1 + 1.6, TR + 3.2, ez1 + 0.2, Mat.Roof);
+  t.wall(0, ex1, ex1 + 1.6, ez1, TR, 3, 0.2, wm, [], cream);
+  // slabs: 2F, 3F, 3F ceiling, roof (4F+ are sealed and empty)
+  t.slab(TX0, TZ0, TX1, TZ1, TH, 0.25, Mat.Concrete, [tHole, [ex0, ez0, ex1, ez1]]);
+  t.slab(TX0, TZ0, TX1, TZ1, 2 * TH, 0.25, Mat.Concrete, [tHole, [ex0, ez0, ex1, ez1]]);
+  t.slab(TX0, TZ0, TX1, TZ1, 3 * TH, 0.25, Mat.Concrete, [[ex0, ez0, ex1, ez1]]);
+  t.slab(TX0 - 0.3, TZ0 - 0.3, TX1 + 0.3, TZ1 + 0.3, TR, 0.4, Mat.Roof, [[ex0, ez0, ex1, ez1]]);
+  for (const [x0, z0, x1, z1] of [[TX0, TZ0, TX1, TZ0 + 0.3], [TX0, TZ1 - 0.3, TX1, TZ1], [TX0, TZ0, TX0 + 0.3, TZ1], [TX1 - 0.3, TZ0, TX1, TZ1]]) t.box(x0, TR, z0, x1, TR + 1.0, z1, wm, { color: cream });
+  t.box(-37, TR, -24, -29, TR + 3, -16, wm, { color: cream }); // upper tier
+  t.ladder(-33, -15.85, 0, 1, TR, TR + 3);
+  for (let i = 0; i < 8; i++) t.box(-38 + i * 1.8, TR + 3, -16.3, -36.8 + i * 1.8, TR + 5, -16.1, Mat.Metal, { color: 0xb3261e }); // HOSPITAL letters
+  // 3F: hallway along the south, 3 two-bed rooms to the north
+  t.wall(0, TX0 + 0.2, -30.4, -21, 2 * TH, TH, 0.15, Mat.Plaster, [-37, -33.5].map((x) => ({ u0: x - TX0 - 0.5, u1: x - TX0 + 0.5, v0: 0, v1: 2.2 })), 0xe8e2d2);
+  t.wall(1, TZ0 + 0.2, -21, -35.2, 2 * TH, TH, 0.15, Mat.Plaster, [], 0xe8e2d2);
+  for (const [lx, lz] of [[-36, -17.5], [-28, -17], [-37.5, -26], [-32, -16]]) { t.light(lx, 2 * TH + TH - 0.1, lz); t.light(lx, TH - 0.1, lz); }
+  t.block(-36, -17, 3, 1, 0.05, 1.1, Mat.Wood, { color: 0x6b4a2f }); // 1F reception
+  t.addLoot(-36, 2 * TH, -26); t.addLoot(-37, 0.05, -20); t.addLoot(-32, TR, -20);
+  sub(ctx, f, 0, 0, 0, t, 'hospital');
+  // glazed skybridge at 3F: tower south wall (z -14) -> wing A north wall (z 0), x -34..-30
+  const sk = new Builder();
+  sk.box(-34, F3 - 0.3, -14, -30, F3, 0, Mat.Concrete, { color: 0xb0aca2 });
+  sk.wall(1, -14, 0, -34, F3, 3, 0.15, Mat.Metal, [{ u0: 0.5, u1: 13.5, v0: 0.9, v1: 2.7, glass: true }], 0x6a6e72);
+  sk.wall(1, -14, 0, -30, F3, 3, 0.15, Mat.Metal, [{ u0: 0.5, u1: 13.5, v0: 0.9, v1: 2.7, glass: true }], 0x6a6e72);
+  sk.box(-34.1, F3 + 3, -14, -29.9, F3 + 3.2, 0, Mat.Roof);
+  sk.light(-32, F3 + 2.9, -7);
+  sub(ctx, f, 0, 0, 0, sk, 'hospital');
+  // aid tents and the buy station
+  for (let i = 0; i < 5; i++) {
+    const tb = new Builder();
+    tb.box(-3, 0, -2.5, 3, 2.6, 2.5, Mat.Plaster, { color: 0xe8e4d8, shape: 'gable', noCollide: false });
+    tb.addLoot(0, 0.05, 0);
+    ctx.place(tb, 'tent', p.x - 40 + i * 8, p.z + 34, 0, { poi: 'hospital', lodColor: 0xe8e4d8 });
+  }
+  ctx.buyStations.push({ x: p.x - 55, y: 0, z: p.z + 10, a: 0 });
+}

@@ -166,7 +166,12 @@ export function house(rng: Rng, w: number, d: number, floors: number, st: Style)
     b.wall(1, -hd + WALL_T / 2, hd - WALL_T / 2, -hw, y, wh, WALL_T, st.wall, windows(d, 3.4, 1.2, 0.95, 2.25), st.wallColor, -1, st.trim);
     b.wall(1, -hd + WALL_T / 2, hd - WALL_T / 2, hw, y, wh, WALL_T, st.wall, windows(d, 3.4, 1.2, 0.95, 2.25), st.wallColor, 1, st.trim);
     // interior partition across the depth with a doorway
-    const px = f === 0 ? (lastPx = rng.range(-hw * 0.3, hw * 0.3)) : rng.range(-hw * 0.3, hw * 0.3);
+    // interior partition: never right behind the front door (x = 0) or the back door (x = -hw + 0.3w)
+    let px = rng.range(-hw * 0.3, hw * 0.3);
+    const bdx = -hw + w * 0.3;
+    for (let k = 0; k < 6 && (Math.abs(px) < 1.3 || Math.abs(px - bdx) < 1.3); k++) px = rng.range(-hw * 0.45, hw * 0.45);
+    if (Math.abs(px) < 1.3 || Math.abs(px - bdx) < 1.3) px = hw * 0.4;
+    if (f === 0) lastPx = px;
     if (w > 7) b.wall(1, -hd + WALL_T, hd - WALL_T, px, y, wh, 0.14, Mat.Plaster, [{ u0: d * 0.5 - 0.5, u1: d * 0.5 + 0.5, v0: 0, v1: 2.2 }], 0xd8d0c0);
     b.light((-hw + px) / 2, y + wh - 0.02, 0); b.light((hw + px) / 2, y + wh - 0.02, 0);
     b.addLoot(-hw + 1.2, y, -hd + 1.2); b.addLoot(hw - 1.2, y, hd - 1.2);

@@ -378,7 +378,7 @@ export class Sim {
     this.world.balloons.forEach((b, i) => { if (Math.abs(b.x - p.x) < 4 && Math.abs(b.z - p.z) < 4) consider('balloon', i, 'Use Redeploy Balloon', b.x, b.y + 1.2, b.z, 3.5, -0.5); });
     for (const cr of this.crates) if (cr.squad === p.squad && this.time >= cr.land && !cr.taken.has(p.id) && Math.abs(cr.x - p.x) < 3 && Math.abs(cr.z - p.z) < 3) consider('crate', cr.id, 'Open Loadout Drop', cr.x, cr.y + 0.6, cr.z, 3);
     // ascenders: grab the cable
-    (this.world.ascenders ?? []).forEach((a, i) => { if (Math.abs(a.x - p.x) < 2 && Math.abs(a.z - p.z) < 2 && p.y > a.y0 - 0.6 && p.y < a.y1 - 1) consider('ascender', i, 'Use Ascender', a.x, p.y + 1.2, a.z, 1.8, 0.2); });
+    (this.world.ascenders ?? []).forEach((a, i) => { if (Math.abs(a.x - p.x) < 2.5 && Math.abs(a.z - p.z) < 2.5 && p.y > a.y0 - 0.6 && p.y < a.y1 - 1) consider('ascender', i, 'Use Ascender', a.x, p.y + 1.2, a.z, 2.4, 0.2); });
     // doors (lowest priority: only when nothing else is in reach)
     if (!best && this.doors) for (const st of this.world.col.near(p.x, p.z, 2.4, this.doorTmp)) {
       if (st.kind !== 'door') continue; const i = this.doors.byStructure.get(st.id); if (i === undefined || this.world.doors[i].locked) continue;

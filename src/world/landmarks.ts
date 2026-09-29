@@ -6,7 +6,7 @@
 import { Mat } from './collision';
 import { Builder, apartment, warehouse, garageRow, house, shop, FLOOR_H } from './builder';
 import { poi } from './mapdata';
-import { tvStation2020, trainStation2020, sub } from './landmarks2020';
+import { tvStation2020, trainStation2020, hospital2020, sub } from './landmarks2020';
 import type { GenContext } from './mapgen';
 import { Rng } from '../core/rng';
 
@@ -19,7 +19,7 @@ export function buildLandmarks(ctx: GenContext) {
   tvStation2020(ctx);
   prison(ctx);
   superstore(ctx);
-  hospital(ctx);
+  hospital2020(ctx);
   trainStation(ctx);
   port(ctx);
   boneyard(ctx);
