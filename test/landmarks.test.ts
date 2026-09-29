@@ -135,3 +135,20 @@ test('Fire station: garage, stair to the crew quarters, hose tower ladder to the
   console.log('gas station roof', (q.y - g.y).toFixed(2));
   assert.ok(q.y - g.y > 3.5, 'up the rear ladder');
 });
+
+test('Warehouse (2020 K): side door -> west gantry stair -> mezzanine office; exterior gantry -> upper door', () => {
+  const sim = newSim();
+  const ws = world.col.structures.filter((q) => q.kind === 'warehouse' && q.ramps.length >= 3);
+  assert.ok(ws.length > 0, 'warehouses with gantries exist');
+  const s = ws[0], f = { x: s.x, z: s.z, y: s.y, a: s.angle };
+  const ext = s.ramps.reduce((m, r) => (r.x0 > m.x0 ? r : m));
+  const hw = ext.x0 - 0.2, hd = ext.z1 + 4.4, mz = hd - 5, run = 5.2, my = 3.6;
+  const ow = Math.min(10, hw * 2 - 8) / 2, oz = mz + 0.6;
+  const r1 = walkRoute(sim, f, [-hw - 2.5, -hd + 2.25], [[-hw - 0.8, -hd + 2.25], [-hw + 1, -hd + 2.25], [-hw + 1.05, -hd + 4], [-hw + 1.05, mz - run - 0.8], [-hw + 1.05, mz + 0.6], [-ow - 0.8, mz + 0.6], [-ow - 0.8, oz + 1.1], [-ow + 1, oz + 1.1]]);
+  console.log('side door -> gantry -> office', r1);
+  assert.ok(typeof r1 === 'number' && Math.abs(r1 - my) < 0.4, 'reached the mezzanine office');
+  const dz = hd - 3.7;
+  const r2 = walkRoute(sim, f, [hw + 3, mz - run - 3], [[hw + 0.85, mz - run - 1], [hw + 0.85, dz], [hw - 1, dz], [hw - 3, dz]]);
+  console.log('exterior gantry -> upper door', r2);
+  assert.ok(typeof r2 === 'number' && Math.abs(r2 - my) < 0.4, 'through the upper door onto the mezzanine');
+});

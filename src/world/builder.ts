@@ -9,7 +9,7 @@ import { Rng } from '../core/rng';
 export const FLOOR_H = 3.2;
 export const WALL_T = 0.25;
 
-export interface Opening { u0: number; u1: number; v0: number; v1: number; glass?: boolean; /** no door leaf (arches, garages, shop fronts) */ open?: boolean; /** door leaf that never opens (boarded flats, sealed stairwells) */ locked?: boolean }
+export interface Opening { u0: number; u1: number; v0: number; v1: number; glass?: boolean; /** no door leaf (arches, garages, shop fronts) */ open?: boolean; /** door leaf that never opens (boarded flats, sealed stairwells) */ locked?: boolean; /** raised doorway (gantry landing) that still gets a leaf */ door?: boolean }
 /** A hinged door leaf in builder-local space: hinge at (x, z), closed leaf runs along +angle direction. */
 export interface AscenderDef { x: number; z: number; nx: number; nz: number; y0: number; y1: number; stops: number[] }
 export interface LadderDef { x: number; z: number; nx: number; nz: number; y0: number; y1: number; /** interior ladder through a floor hatch: step off on the ladder's side */ hatch?: boolean }
@@ -76,7 +76,7 @@ export class Builder {
     // hinged doors in door-sized, floor-level openings (single ~1 m, double ~1.8 m as two leaves)
     for (const o of ops) {
       const ow = o.u1 - o.u0, oh = o.v1 - o.v0;
-      if (o.open || o.glass || o.v0 > 0.05 || oh < 1.9 || oh > 2.8 || ow < 0.7 || ow > 2.3) continue;
+      if (o.open || o.glass || (o.v0 > 0.05 && !o.door) || oh < 1.9 || oh > 2.8 || ow < 0.7 || ow > 2.3) continue;
       const leaves = ow > 1.45 ? 2 : 1, lw = ow / leaves - 0.02;
       for (let k = 0; k < leaves; k++) {
         // hinge at the jamb; leaf direction along the wall toward the other jamb (or the centre for doubles)
@@ -318,33 +318,72 @@ export function tower(rng: Rng, w: number, d: number, floors: number, st: Style)
 
 /** Warehouse / hangar: big open hall with roller doors, a mezzanine with stairs, clerestory windows. */
 export function warehouse(rng: Rng, w: number, d: number, h: number, st: Style, opts: { hangar?: boolean } = {}): Builder {
+  // 2020 warehouse (archetype K): doors on all four sides, two steel gantry stairs inside (one per end) up to a
+  // mezzanine over a lower-ceilinged back bay with a glazed cubicle office, and an exterior gantry stair up the
+  // east wall to an upper door onto the mezzanine. Roof by exterior ladder only.
   const b = new Builder(), hw = w / 2, hd = d / 2;
+  const steel = { color: 0x6d7378 };
   b.box(-hw - 0.1, -1.5, -hd - 0.1, hw + 0.1, 0.1, hd + 0.1, Mat.Concrete, { color: 0x8a8884 });
-  const bigDoor = opts.hangar ? { u0: w * 0.1, u1: w * 0.9, v0: 0, v1: h * 0.8 } : { u0: w / 2 - 2.5, u1: w / 2 + 2.5, v0: 0, v1: 4.2 };
+  const mezz = !opts.hangar && d > 12 && h > 6 && w >= 14, my = 3.6, run = 5.2;
+  const bigDoor = opts.hangar ? { u0: w * 0.1, u1: w * 0.9, v0: 0, v1: h * 0.8, open: true } : { u0: w / 2 - 2.5, u1: w / 2 + 2.5, v0: 0, v1: 4.2, open: true };
   const hi = windows(w, 4, 2.5, h - 2, h - 0.8);
   b.wall(0, -hw, hw, -hd, 0.1, h, 0.3, st.wall, [bigDoor, ...hi.filter((o) => o.u1 < bigDoor.u0 || o.u0 > bigDoor.u1 || o.v0 > bigDoor.v1)], st.wallColor);
-  b.wall(0, -hw, hw, hd, 0.1, h, 0.3, st.wall, [{ u0: w * 0.25 - 0.6, u1: w * 0.25 + 0.6, v0: 0, v1: 2.4 }, ...(opts.hangar ? [] : [{ u0: w * 0.7 - 2, u1: w * 0.7 + 2, v0: 0, v1: 4 }]), ...windows(w, 4, 2.5, h - 2, h - 0.8)], st.wallColor);
-  b.wall(1, -hd + 0.15, hd - 0.15, -hw, 0.1, h, 0.3, st.wall, [{ u0: d / 2 - 0.6, u1: d / 2 + 0.6, v0: 0, v1: 2.4 }, ...windows(d, 5, 2, 1.2, 2.4, [[d / 2 - 0.6, d / 2 + 0.6]])], st.wallColor);
-  b.wall(1, -hd + 0.15, hd - 0.15, hw, 0.1, h, 0.3, st.wall, windows(d, 5, 2, 1.2, 2.4), st.wallColor);
-  // mezzanine along the back with stairs
-  if (!opts.hangar && d > 12 && h > 6) {
-    const my = 3.6;
-    b.box(-hw + 0.2, my - 0.25, hd - 5, hw - 0.2, my, hd - 0.2, Mat.Metal, { color: 0x6d7378 });
-    b.box(-hw + 0.2, my, hd - 5.05, hw - 0.2, my + 1.0, hd - 4.95, Mat.Metal, { color: 0x6d7378, noCollide: false });
-    b.ramp(-hw + 0.4, 0.1, hd - 6.3 - 0.1, -hw + 5.4, my, hd - 5.1, 0, 1, Mat.Metal);
-    b.box(-hw + 0.4, 0.1, hd - 6.3 - 0.1, -hw + 5.4, 0.2, hd - 5.1, Mat.Metal, { noCollide: true });
-    b.addLoot(hw - 2, my, hd - 2); b.addLoot(0, my, hd - 2.5);
+  // back: personnel door + loading/unloading double doors (roller opening on the bigger sheds)
+  const load = w * 0.7;
+  b.wall(0, -hw, hw, hd, 0.1, h, 0.3, st.wall, [{ u0: w * 0.25 - 0.55, u1: w * 0.25 + 0.55, v0: 0, v1: 2.3 }, ...(opts.hangar ? [] : w > 20 ? [{ u0: load - 2, u1: load + 2, v0: 0, v1: 4, open: true }] : [{ u0: load - 0.9, u1: load + 0.9, v0: 0, v1: 2.3 }]), ...hi.filter((o) => o.v0 > 4.2 || o.u1 < load - 2 || o.u0 > load + 2)], st.wallColor);
+  // sides: a metal door near the front on each end; the east end also gets the upper gantry door
+  const sd = { u0: 1.6, u1: 2.6, v0: 0, v1: 2.3 };
+  const up = mezz ? { u0: d - 0.3 - 4.1, u1: d - 0.3 - 3.0, v0: my - 0.1, v1: my + 2.1, door: true } : null;
+  const sideWin = (avoid: [number, number][]) => windows(d, 5, 2, 1.2, 2.4, avoid);
+  b.wall(1, -hd + 0.15, hd - 0.15, -hw, 0.1, h, 0.3, st.wall, [sd, ...sideWin([[1.2, 3]])], st.wallColor);
+  b.wall(1, -hd + 0.15, hd - 0.15, hw, 0.1, h, 0.3, st.wall, [sd, ...(up ? [up] : []), ...sideWin([[1.2, 3], ...(up ? [[up.u0 - 0.5, up.u1 + 0.5] as [number, number]] : [])]).filter((o) => !up || o.u1 < up.u0 || o.u0 > up.u1)], st.wallColor);
+  if (mezz) {
+    const mz = hd - 5;
+    b.box(-hw + 0.2, my - 0.25, mz, hw - 0.2, my, hd - 0.2, Mat.Metal, steel);
+    // edge rail, open at both stair heads
+    b.box(-hw + 1.9, my, mz - 0.05, hw - 1.9, my + 1.0, mz + 0.05, Mat.Metal, steel);
+    // two gantry staircases along the end walls, rising toward the back
+    for (const s of [-1, 1] as const) {
+      const xa = s < 0 ? -hw + 0.4 : hw - 1.7, xb = xa + 1.3;
+      b.ramp(xa, 0.1, mz - run, xb, my, mz, 1, 1, Mat.Metal);
+      const xi = s < 0 ? xb : xa; // stringer/handrail on the open side
+      b.box(xi - 0.04, 0.1, mz - run, xi + 0.04, my + 0.9, mz, Mat.Metal, { ...steel, noCollide: true });
+    }
+    // cubicle office on 2F, glazed toward the warehouse floor
+    const ow = Math.min(10, w - 8) / 2;
+    if (ow > 2.5) {
+      const oz = mz + 0.6, oh = 2.6;
+      b.wall(0, -ow, ow, oz, my, oh, 0.12, Mat.Plaster, [{ u0: 0.5, u1: ow * 2 - 0.5, v0: 1.0, v1: 2.3, glass: true }], 0xc9c5bb);
+      b.wall(1, oz, hd - 0.3, -ow, my, oh, 0.12, Mat.Plaster, [{ u0: 0.6, u1: 1.6, v0: 0, v1: 2.2 }], 0xc9c5bb);
+      b.wall(1, oz, hd - 0.3, ow, my, oh, 0.12, Mat.Plaster, [{ u0: 0.6, u1: 1.6, v0: 0, v1: 2.2 }], 0xc9c5bb);
+      b.box(-ow, my + oh, oz, ow, my + oh + 0.1, hd - 0.3, Mat.Plaster, { color: 0xd8d4ca });
+      for (let x = -ow + 1.6; x < ow - 1; x += 2.4) {
+        b.box(x - 0.7, my, hd - 1.6, x + 0.7, my + 0.75, hd - 0.9, Mat.Wood, { color: 0x8a7258 });
+        b.box(x + 0.72, my, hd - 1.9, x + 0.78, my + 1.3, hd - 0.4, Mat.Plaster, { color: 0x7a7e84 });
+      }
+      b.light(0, my + oh - 0.05, (oz + hd) / 2);
+      b.addLoot(0, my, oz + 1.2);
+    }
+    // exterior gantry: steel stair up the east wall to a landing at the upper door
+    const lz0 = hd - 4.4, lz1 = hd - 1.4;
+    b.ramp(hw + 0.2, 0.1, lz0 - run, hw + 1.5, my, lz0, 1, 1, Mat.Metal);
+    b.box(hw + 0.2, my - 0.2, lz0, hw + 1.6, my, lz1, Mat.Metal, steel);
+    b.box(hw + 1.55, my, lz0 - run, hw + 1.62, my + 1.0, lz1, Mat.Metal, { ...steel, noCollide: true });
+    b.box(hw + 0.2, my, lz1 - 0.06, hw + 1.62, my + 1.0, lz1, Mat.Metal, steel);
+    for (const z of [lz0 - run * 0.5, lz0 + 0.1, lz1 - 0.1]) b.box(hw + 1.45, 0.1, z - 0.06, hw + 1.57, my - 0.2, z + 0.06, Mat.Metal, steel);
+    b.addLoot(hw - 2, my, hd - 2); b.addLoot(-hw + 2, my, hd - 2);
   }
-  // crates inside for cover
-  const n = Math.floor((w * d) / 140);
-  for (let i = 0; i < n; i++) {
-    const cx = rng.range(-hw + 3, hw - 3), cz = rng.range(-hd + 3, hd - 7);
+  // crates inside for cover, clear of the doors, stairs and the space under the mezzanine
+  const n = Math.floor((w * d) / 140), zMax = mezz ? hd - 11 : hd - 3;
+  for (let i = 0; i < n && zMax > -hd + 4.5; i++) {
+    const cx = rng.range(-hw + 3.4, hw - 3.4), cz = rng.range(-hd + 4.5, zMax);
     b.block(cx, cz, rng.range(1.2, 2.4), rng.range(1.2, 2.4), 0.1, 0.1 + rng.pick([1.2, 1.2, 2.4]), rng.chance(0.5) ? Mat.Wood : Mat.Container, { color: rng.pick([0x7a5a38, 0x5e6e44, 0x6a4a30]) });
   }
+  if (mezz) for (let x = -hw + 5; x <= hw - 5; x += 8) b.light(x, my - 0.3, hd - 2.5); // low bay under the mezzanine
   b.slab(-hw - 0.2, -hd - 0.2, hw + 0.2, hd + 0.2, h + 0.1, 0.3, st.roof);
-  for (let lx = -hw + 5; lx <= hw - 5; lx += 8) for (let lz = -hd + 5; lz <= hd - 5; lz += 8) b.light(lx, h - 0.25, lz);
-  b.ladder(hw + 0.15, -hd + 2.2, 1, 0, 0.1, h + 0.1); // roof ladder on the side (2020: warehouses reach the roof by exterior ladder)
-  b.addLoot(-hw + 2, 0.1, -hd + 2); b.addLoot(hw - 2, 0.1, -hd + 2); b.addLoot(0, 0.1, 0);
+  for (let lx = -hw + 5; lx <= hw - 5; lx += 8) for (let lz = -hd + 5; lz <= (mezz ? hd - 6 : hd - 5); lz += 8) b.light(lx, h - 0.25, lz);
+  b.ladder(-hw + 1.2, -hd - 0.15, 0, -1, 0.1, h + 0.1); // roof by the exterior ladder only (front corner)
+  b.addLoot(-hw + 2, 0.1, -hd + 3.5); b.addLoot(hw - 2, 0.1, -hd + 3.5); b.addLoot(0, 0.1, 0);
   return b;
 }
 
