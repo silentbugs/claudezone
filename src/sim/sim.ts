@@ -9,11 +9,11 @@ import type { WorldData } from '../world/mapgen';
 import { inPlayable } from '../world/mapgen';
 import { MAP_SIZE, POIS } from '../world/mapdata';
 import { GULAG_POS, GULAG_SPAWNS, GULAG_BALCONY_Z, GULAG_ARENAS, gulagArena } from '../world/landmarks';
-import { WEAPON, AMMO_MAX, AmmoType } from '../data/weapons';
+import { WEAPON, AMMO_MAX, AMMO_PICKUP, AmmoType } from '../data/weapons';
 import { Train } from './train';
 import { Doors } from './doors';
 import { PLAYERS, SQUAD_SIZE, HEALTH, DEPLOY, DOWNED, GAS, CIRCLES, INITIAL_RADIUS, GULAG, PRICES, CONTRACT } from './config';
-import { Bullet, Chest, emptyIntent, Explosion, Item, ItemKind, Phase, Player, SimEvent, Stance, Throwable } from './types';
+import { Bullet, Chest, emptyIntent, Explosion, Item, ItemKind, BackpackDrop, Phase, Player, SimEvent, Stance, Throwable } from './types';
 import { movePlayer, eyeHeight } from './movement';
 import { weaponTick, updateBullets, updateThrowables, throwItem, aimDir } from './combat';
 import { randomItem, chestContents, tryPickup, dropBag, magSize } from './loot';
@@ -218,6 +218,44 @@ export class Sim {
     }
     return out;
   }
+  /**
+   * Backpack drops (Tab menu), like Warzone 2020: a weapon from a slot, a stack of one ammo type, one
+   * armor plate, cash ($100 / $1000 / all), lethal, tactical, killstreak, gas mask, self-revive kit.
+   * Items land just in front of the player, where teammates can pick them up.
+   */
+  dropFromBackpack(p: Player, what: BackpackDrop, arg?: number | string): boolean {
+    if (p.phase !== Phase.Alive) return false;
+    const fx = -Math.sin(p.yaw), fz = -Math.cos(p.yaw), n = this.nextId;
+    const spot = () => { const a = (n * 1.7 + this.rng.next()) * 2.4; return [p.x + fx * 1.1 + Math.cos(a) * 0.35, p.y + 0.3, p.z + fz * 1.1 + Math.sin(a) * 0.35] as const; };
+    // what you drop isn't auto-collected by you again for a few seconds (so it can be left for a teammate)
+    const drop = (it: Partial<Item>) => { const [x, y, z] = spot(); const d: any = this.dropItem(it, x, y, z); if (d) { d.droppedBy = p.id; d.dropUntil = this.time + 4; } };
+    switch (what) {
+      case 'weapon': {
+        const i = typeof arg === 'number' ? arg : p.cur, w = p.weapons[i]; if (!w) return false;
+        drop({ kind: ItemKind.Weapon, weapon: w.id, rarity: w.rarity, mag: w.mag });
+        p.weapons[i] = null; p.reloadT = 0;
+        if (i === p.cur) { const o = p.weapons[i === 0 ? 1 : 0]; if (o) { p.cur = i === 0 ? 1 : 0; p.swapT = WEAPON[o.id].raise; } }
+        break;
+      }
+      case 'ammo': {
+        const t = arg as AmmoType; const have = p.ammo[t] ?? 0; if (have <= 0) return false;
+        const k = Math.min(have, AMMO_PICKUP[t]); p.ammo[t] -= k; drop({ kind: ItemKind.Ammo, ammo: t, n: k }); break;
+      }
+      case 'plate': if (p.plates <= 0) return false; p.plates--; drop({ kind: ItemKind.Plate, n: 1 }); break;
+      case 'cash': {
+        const k = arg === 'all' ? p.cash : Math.min(p.cash, Number(arg) || 100); if (k <= 0) return false;
+        p.cash -= k; drop({ kind: ItemKind.Cash, n: k }); break;
+      }
+      case 'lethal': if (!p.lethal) return false; for (let k = 0; k < p.lethal.n; k++) drop({ kind: ItemKind.Lethal, lethal: p.lethal.type }); p.lethal = null; break;
+      case 'tactical': if (!p.tactical) return false; for (let k = 0; k < p.tactical.n; k++) drop({ kind: ItemKind.Tactical, tactical: p.tactical.type }); p.tactical = null; break;
+      case 'killstreak': if (!p.killstreak) return false; drop({ kind: ItemKind.Killstreak, killstreak: p.killstreak }); p.killstreak = null; break;
+      case 'gasMask': if (!p.hasMask) return false; drop({ kind: ItemKind.GasMask }); p.hasMask = false; p.gasMask = 0; break;
+      case 'selfRevive': if (!p.selfRevive) return false; drop({ kind: ItemKind.SelfRevive }); p.selfRevive = false; break;
+    }
+    this.emit({ t: 'drop', p: p.id, what });
+    return true;
+  }
+
   dropItem(it: Partial<Item>, x: number, y: number, z: number) {
     const g = this.world.col.groundAt(x, z, y + 1.5);
     return this.addItem({ id: this.nextId++, alive: true, x, y: g + 0.05, z, ...it } as Item);
@@ -345,7 +383,7 @@ export class Sim {
     if (p.turret >= 0) { const t = this.turrets.find((q) => q.id === p.turret); if (!t) this.unmanTurret(p); else { p.x = t.x + Math.sin(t.yaw) * 0.9; p.z = t.z + Math.cos(t.yaw) * 0.9; p.vx = p.vz = 0; } }
     if (p.phase === Phase.GulagWait) return;
     // auto pickups
-    if (p.phase === Phase.Alive && !this.inWarmup) for (const itm of this.itemsNear(p.x, p.z, 1.6)) if (Math.abs(itm.y - p.y) < 1.6 && (itm.kind === ItemKind.Ammo || itm.kind === ItemKind.Plate || itm.kind === ItemKind.Cash)) tryPickup(this, p, itm, false);
+    if (p.phase === Phase.Alive && !this.inWarmup) for (const itm of this.itemsNear(p.x, p.z, 1.6)) if (Math.abs(itm.y - p.y) < 1.6 && (itm.kind === ItemKind.Ammo || itm.kind === ItemKind.Plate || itm.kind === ItemKind.Cash) && !((itm as any).droppedBy === p.id && (itm as any).dropUntil > this.time)) tryPickup(this, p, itm, false);
     // interact (edge + hold)
     const press = it.interact && !(p as any).prevInteract;
     (p as any).prevInteract = it.interact;

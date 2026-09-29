@@ -92,8 +92,11 @@ export class Match {
   get me() { return this.sim.players[0]; }
 
   private fillIntent() {
-    const blocked = !!this.hud.panel || this.paused || this.menuOpen;
+    // the backpack (Tab) keeps movement; any other panel / menu blocks input
+    const bp = this.hud.backpackOpen;
+    const blocked = (!!this.hud.panel && !bp) || this.paused || this.menuOpen;
     this.controls.apply(this.me, this.camYaw, this.camPitch, blocked);
+    if (bp) { const it = this.me.intent; it.fire = it.ads = it.jump = it.interact = it.plate = false; }
     (this.me as any).prefs = { autoChute: this.settings.chuteAutoDeploy, emptySwitch: this.settings.depletedAmmoSwitch };
     if (this.mapOpen) { this.me.intent.fire = false; this.me.intent.ads = false; }
   }
@@ -114,6 +117,20 @@ export class Match {
 
   frame(dt: number, time: number) {
     const inp = this.input;
+    // Tab: open / close the backpack
+    {
+      const codes = this.settings.binds.scoreboard ?? [];
+      const tab = codes.some((c) => c && inp.wasPressed(c));
+      const me = this.me;
+      if (tab && !this.menuOpen && !this.settingsEl) {
+        if (this.hud.backpackOpen) this.hud.closePanel();
+        else if (!this.hud.panel && (me.phase === Phase.Alive || me.phase === Phase.Downed || me.phase === Phase.Gulag || me.phase === Phase.GulagWait || me.phase === Phase.Freefall || me.phase === Phase.Chute)) {
+          document.exitPointerLock?.();
+          this.hud.openBackpack((what, arg) => { const ok = this.sim.dropFromBackpack(me, what, arg); audio.play(ok ? 'uiBuy' : 'uiDeny', { ui: true, vol: 0.35, rate: ok ? 1.3 : 1 }); return ok; }, () => (document.getElementById('game') as HTMLElement).requestPointerLock?.());
+        }
+      }
+      if (this.hud.backpackOpen) this.hud.refreshBackpack();
+    }
     if (inp.wasPressed('Escape')) { if (this.settingsEl) this.closeSettings(); else if (this.hud.panel) this.hud.closePanel(); else if (this.mapOpen) this.mapOpen = false; else this.togglePause(); }
     this.paused = this.menuOpen && this.settings.pauseOnMenu;
     this.look();

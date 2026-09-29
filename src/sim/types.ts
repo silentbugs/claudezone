@@ -62,6 +62,9 @@ export interface Player {
   spectating: number;
 }
 
+/** Things the Tab backpack can drop. */
+export type BackpackDrop = 'weapon' | 'ammo' | 'plate' | 'cash' | 'lethal' | 'tactical' | 'killstreak' | 'gasMask' | 'selfRevive';
+
 export const enum ItemKind { Weapon, Ammo, Plate, Cash, Lethal, Tactical, Killstreak, SelfRevive, GasMask, Satchel }
 export interface Item {
   id: number; kind: ItemKind;
@@ -111,6 +114,7 @@ export type SimEvent =
   | { t: 'uav'; squad: number }
   | { t: 'cuav'; squad: number }
   | { t: 'stim'; p: number }
+  | { t: 'drop'; p: number; what: BackpackDrop }
   | { t: 'ascender'; p: number; on: boolean }
   | { t: 'door'; x: number; y: number; z: number; open: boolean; loud: boolean; p: number }
   | { t: 'eping'; squad: number; by: number; target: number; x: number; y: number; z: number }

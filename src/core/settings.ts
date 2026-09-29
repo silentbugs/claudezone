@@ -31,7 +31,7 @@ export const ACTIONS: { id: Action; label: string; group: string }[] = [
   { id: 'interact', label: 'Use / pick up / revive', group: 'Interaction' },
   { id: 'ping', label: 'Ping', group: 'Interaction' },
   { id: 'map', label: 'Tac map', group: 'Interaction' },
-  { id: 'scoreboard', label: 'Scoreboard', group: 'Interaction' },
+  { id: 'scoreboard', label: 'Backpack / scoreboard', group: 'Interaction' },
   { id: 'thirdPerson', label: 'Third person (while parachuting, hold)', group: 'Interaction' },
 ];
 
@@ -54,6 +54,8 @@ export interface Settings {
   renderScale: number; foliage: number;
   /** screen-space ambient occlusion, independent of the preset */
   ao: boolean;
+  /** play fullscreen with the keyboard locked, so browser shortcuts (Ctrl+W etc.) reach the game */
+  fullscreen: boolean;
   /** how far full-detail buildings, trees and terrain reach (and how thick the haze is) */
   drawDistance: 'near' | 'medium' | 'far' | 'max'; showFps: boolean; hitmarkerSounds: boolean; announcer: boolean;
   brightness: number; minimapShape: 'circle' | 'square'; showCompass: boolean; showKillfeed: boolean; showCrosshair: boolean; showHitmarkers: boolean;
@@ -73,7 +75,7 @@ export const DEFAULT_SETTINGS: Settings = {
   sens: 1, adsSens: 1, invertY: false,
   fov: 80, adsFovAffected: true,
   volume: 0.7, sfx: 1, ui: 0.8,
-  quality: 'high', renderScale: 1, foliage: 1, ao: false, drawDistance: 'far', showFps: false, hitmarkerSounds: true, announcer: true,
+  quality: 'high', renderScale: 1, foliage: 1, ao: false, drawDistance: 'far', fullscreen: true, showFps: false, hitmarkerSounds: true, announcer: true,
   brightness: 1, minimapShape: 'circle', showCompass: true, showKillfeed: true, showCrosshair: true, showHitmarkers: true,
   chuteAutoDeploy: true, depletedAmmoSwitch: true, pauseOnMenu: true, musicVolume: 0.6,
 };

@@ -6,7 +6,7 @@
  */
 import type { Sim } from '../sim/sim';
 import { LOADOUTS } from '../sim/sim';
-import { ItemKind, Phase, Player, SimEvent, Item } from '../sim/types';
+import { ItemKind, Phase, Player, SimEvent, Item, BackpackDrop } from '../sim/types';
 import { WEAPON, RARITY_COLORS, RARITY_NAMES, CLASS_NAMES, AMMO_NAMES, attachmentsFor, blueprintName, WeaponDef, damageAt } from '../data/weapons';
 import { LETHAL_NAMES, TACTICAL_NAMES, KILLSTREAK_NAMES, FIELD_UPGRADE_NAMES } from '../sim/loot';
 import { CIRCLES } from '../sim/config';
@@ -512,6 +512,67 @@ export class Hud {
     p.innerHTML = `<div class="bbox"><div class="bhead"><span>${ICON.loadout} LOADOUT DROP</span><span class="bcash">Choose a custom class</span></div><div class="bgrid">${LOADOUTS.map((l, i) => `<div class="bit" data-i="${i}"><div class="bic lo">${sil(l.guns[0], 5)}</div><div class="bn">${l.name}</div><div class="bd">${WEAPON[l.guns[0]].name} + ${WEAPON[l.guns[1]].name} · ${LETHAL_NAMES[l.lethal]} · ${TACTICAL_NAMES[l.tactical]}</div></div>`).join('')}</div></div>`;
     p.querySelectorAll<HTMLElement>('.bit').forEach((n) => n.onclick = () => { onPick(+n.dataset.i!); this.closePanel(); });
     this.panel = p; this.root.appendChild(p);
+  }
+  /**
+   * Tab backpack (Warzone 2020): squad on the left, your backpack in the middle (weapons, the five ammo
+   * pools, plates, cash, equipment, killstreak, field upgrade) with a Drop action on everything
+   * droppable, match info + contract on the right. The cursor is free; you can keep moving.
+   */
+  openBackpack(onDrop: (what: BackpackDrop, arg?: number | string) => boolean, onClose: () => void) {
+    this.closePanel();
+    const p = el('div', 'bp');
+    (p as any).kind = 'backpack'; (p as any).onDrop = onDrop; (p as any).onClose = onClose;
+    p.addEventListener('click', (e) => {
+      const b = (e.target as HTMLElement).closest('[data-drop]') as HTMLElement | null; if (!b) return;
+      const arg = b.dataset.arg === undefined ? undefined : isNaN(+b.dataset.arg) ? b.dataset.arg : +b.dataset.arg;
+      if (onDrop(b.dataset.drop as BackpackDrop, arg)) this.refreshBackpack(true);
+    });
+    this.panel = p; this.root.appendChild(p);
+    this.refreshBackpack(true);
+  }
+  get backpackOpen() { return (this.panel as any)?.kind === 'backpack'; }
+  private bpLast = '';
+  /** Rebuild the backpack contents (only when something changed). */
+  refreshBackpack(force = false) {
+    const p = this.panel; if (!p || (p as any).kind !== 'backpack') return;
+    const sim = this.sim, me = sim.players[this.localId];
+    const btn = (what: string, label = 'Drop', arg?: string | number, on = true) => `<button class="bpd ${on ? '' : 'off'}" data-drop="${what}"${arg !== undefined ? ` data-arg="${arg}"` : ''}${on ? '' : ' disabled'}>${label}</button>`;
+    // weapons
+    const wrow = (i: number) => {
+      const w = me.weapons[i]; if (!w) return `<div class="bpw empty"><div class="sil"></div><div class="nm">${i === 0 ? 'Primary' : 'Secondary'} — empty</div></div>`;
+      const d = WEAPON[w.id], bp = blueprintName(w.id, w.rarity), rc = RARITY_COLORS[w.rarity];
+      const att = attachmentsFor(w.id, w.rarity, 0);
+      return `<div class="bpw ${i === me.cur ? 'cur' : ''}" style="--rc:${rc}"><div class="sil">${sil(w.id, w.rarity)}</div><div class="nm"><b>${bp ? '"' + bp + '" ' : ''}${d.name}</b><span style="color:${rc}">${RARITY_NAMES[w.rarity]} ${CLASS_NAMES[d.cls]}</span><small>${att.join(' · ') || 'No attachments'}</small></div><div class="mag">${d.cls === 'melee' ? '' : w.mag + ' / ' + (me.ammo[d.ammo] ?? 0)}</div>${btn('weapon', 'Drop', i)}</div>`;
+    };
+    const ammoTypes: [keyof typeof AMMO_NAMES, string][] = [['light', 'light'], ['heavy', 'heavy'], ['sniper', 'sniper'], ['shotgun', 'shotgun'], ['rocket', 'rocket']];
+    const ammo = ammoTypes.map(([t]) => `<div class="bpa"><i class="am ${t}"></i><span>${AMMO_NAMES[t]}</span><b>${me.ammo[t as keyof typeof me.ammo] ?? 0}</b>${btn('ammo', 'Drop', t, (me.ammo[t as keyof typeof me.ammo] ?? 0) > 0)}</div>`).join('');
+    const eq = (icon: string, name: string, n: string, what: string, on: boolean) => `<div class="bpe ${on ? '' : 'none'}"><div class="ic">${icon}</div><span>${name}</span><b>${n}</b>${btn(what, 'Drop', undefined, on)}</div>`;
+    const lethal = me.lethal ? eq(ICON[LETHAL_ICON[me.lethal.type]], LETHAL_NAMES[me.lethal.type], 'x' + me.lethal.n, 'lethal', true) : eq('', 'Lethal', '—', 'lethal', false);
+    const tact = me.tactical ? eq(ICON[TACTICAL_ICON[me.tactical.type]], TACTICAL_NAMES[me.tactical.type], 'x' + me.tactical.n, 'tactical', true) : eq('', 'Tactical', '—', 'tactical', false);
+    const ks = me.killstreak ? eq(ICON[STREAK_ICON[me.killstreak]], KILLSTREAK_NAMES[me.killstreak], '', 'killstreak', true) : eq('', 'Killstreak', '—', 'killstreak', false);
+    const fu = `<div class="bpe ${me.fieldUpgrade ? '' : 'none'}"><div class="ic">${me.fieldUpgrade ? ICON[me.fieldUpgrade] : ''}</div><span>${me.fieldUpgrade ? FIELD_UPGRADE_NAMES[me.fieldUpgrade] : 'Field Upgrade'}</span><b>${me.fieldUpgrade ? 'Ready' : '—'}</b></div>`;
+    const mask = eq(ICON.gasMask, 'Gas Mask', me.hasMask ? Math.ceil((me.gasMask / 12) * 100) + '%' : '—', 'gasMask', me.hasMask);
+    const sr = eq(ICON.selfRevive, 'Self-Revive Kit', me.selfRevive ? '1' : '—', 'selfRevive', me.selfRevive);
+    const plates = `<div class="bpp"><div class="ic">${me.maxPlates > 5 ? ICON.satchel : ICON.plate}</div><span>Armor Plates</span><b>${me.plates} / ${me.maxPlates}</b>${btn('plate', 'Drop 1', undefined, me.plates > 0)}</div>`;
+    const cash = `<div class="bpc"><div class="ic">${ICON.cash}</div><span>Cash</span><b>${me.cash.toLocaleString()}</b>${btn('cash', '$100', 100, me.cash > 0)}${btn('cash', '$1,000', 1000, me.cash >= 1000)}${btn('cash', 'All', 'all', me.cash > 0)}</div>`;
+    // squad
+    const mates = sim.players.filter((q) => q.squad === me.squad);
+    const squad = mates.map((q, i) => {
+      const st = q.phase === Phase.Dead ? 'Dead' : q.phase === Phase.Downed ? 'Downed' : q.phase === Phase.Gulag || q.phase === Phase.GulagWait ? 'Gulag' : q.phase === Phase.Plane ? 'In plane' : q.phase === Phase.Freefall || q.phase === Phase.Chute ? 'Deploying' : 'Alive';
+      return `<div class="bps ${q.id === me.id ? 'me' : ''}"><i style="background:${SQUAD_COLORS[i] ?? '#fff'}"></i><b>${q.name}</b><span class="st ${st.toLowerCase()}">${st}</span><span>${q.kills} kills</span><span>${q.cash.toLocaleString()}</span><span>${q.plates} plates</span></div>`;
+    }).join('');
+    // match + contract
+    const ac = sim.active.find((a) => a.squad === me.squad);
+    const c = sim.circle;
+    const contract = ac ? `<div class="bpk"><b>${ac.kind[0].toUpperCase() + ac.kind.slice(1)} Contract</b><span>${ac.kind === 'bounty' ? 'Eliminate the marked target' : ac.kind === 'recon' ? 'Secure the marked location' : 'Open the marked supply boxes'}</span></div>` : '<div class="bpk none">No active contract</div>';
+    const mins = (t: number) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
+    const html = `<div class="bpcol l"><h3>Squad</h3>${squad}<h3>Contract</h3>${contract}</div>
+      <div class="bpcol m"><h2>Backpack</h2><h3>Weapons</h3>${wrow(0)}${wrow(1)}<div class="bpgrid"><div><h3>Ammo</h3>${ammo}</div><div><h3>Equipment</h3>${lethal}${tact}${ks}${fu}${mask}${sr}</div></div>${plates}${cash}</div>
+      <div class="bpcol r"><h3>Match</h3><div class="bpm"><span>Players left</span><b>${sim.aliveCount}</b></div><div class="bpm"><span>Squads left</span><b>${sim.squadsLeft()}</b></div><div class="bpm"><span>Your kills</span><b>${me.kills}</b></div><div class="bpm"><span>Damage</span><b>${Math.round(me.damage)}</b></div><div class="bpm"><span>Match time</span><b>${mins(sim.time)}</b></div><div class="bpm"><span>Circle</span><b>${c.done ? 'Final' : (c.closing ? 'Closing ' : 'Next in ') + fmtT(c.t)}</b></div>
+      <div class="bph">${this.k('scoreboard')} / Esc to close · Click Drop to leave an item for your squad</div></div>`;
+    const key = html.length + ':' + html.slice(0, 64) + me.cash + me.plates + JSON.stringify(me.ammo) + me.weapons.map((w) => w?.id + ':' + w?.mag).join() + mins(sim.time) + sim.aliveCount;
+    if (!force && key === this.bpLast) return;
+    this.bpLast = key; p.innerHTML = html;
   }
   closePanel() { if (this.panel) { const cb = (this.panel as any).onClose; this.panel.remove(); this.panel = null; cb?.(); } }
 }

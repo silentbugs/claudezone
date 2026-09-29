@@ -12,12 +12,19 @@ export class Input {
   /** When set, the next code pressed is delivered here instead (key rebinding). */
   capture: ((code: string) => void) | null = null;
   onUnlock: () => void = () => {};
+  /** set while a match is running: all keys are captured */
+  inGame = false;
 
   constructor(private el: HTMLElement) {
     addEventListener('keydown', (e) => {
       if (this.capture) { e.preventDefault(); const c = this.capture; this.capture = null; c(e.code); return; }
       if (!this.enabled) return;
-      if (e.code === 'Tab' || e.code === 'Space' || e.code.startsWith('Arrow') || (e.ctrlKey && e.code === 'KeyW')) e.preventDefault();
+      // in a match, every key belongs to the game: no browser shortcuts (Ctrl+F find, Ctrl+S save, Ctrl+D bookmark,
+      // Shift/Ctrl+Shift+C, F-keys, Alt menus...). Ctrl+W / Ctrl+T / Ctrl+N are only deliverable in fullscreen
+      // with the Keyboard Lock API (see lockKeyboard()); text fields keep normal typing.
+      const typing = e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement;
+      if (this.inGame && !typing) e.preventDefault();
+      else if (e.code === 'Tab' || e.code === 'Space' || e.code.startsWith('Arrow') || (e.ctrlKey && e.code === 'KeyW')) e.preventDefault();
       this.down(e.code);
     });
     addEventListener('keyup', (e) => this.up(e.code));
@@ -38,6 +45,8 @@ export class Input {
       if (this.locked) { this.pressed.add(code); }
     }, { passive: true });
     addEventListener('contextmenu', (e) => e.preventDefault());
+    addEventListener('wheel', (e) => { if (this.inGame && (e.ctrlKey || e.metaKey)) e.preventDefault(); }, { passive: false }); // no Ctrl+wheel page zoom
+    addEventListener('keydown', (e) => { if (this.inGame && (e.ctrlKey || e.metaKey) && ['Equal', 'Minus', 'Digit0', 'NumpadAdd', 'NumpadSubtract'].includes(e.code)) e.preventDefault(); }, { capture: true });
     document.addEventListener('pointerlockchange', () => {
       const was = this.locked;
       this.locked = document.pointerLockElement === el;
@@ -56,4 +65,16 @@ export class Input {
   endFrame() { this.pressed.clear(); this.released.clear(); }
   clearAll() { this.pressed.clear(); this.released.clear(); this.held.clear(); }
   lock() { this.el.requestPointerLock?.(); }
+  /**
+   * Fullscreen + Keyboard Lock: the only way a web page can receive browser-reserved shortcuts like Ctrl+W,
+   * Ctrl+T, Ctrl+N, Ctrl+Tab (Chrome/Edge; Esc still works, hold it to leave fullscreen). Must run from a
+   * user gesture (a click).
+   */
+  async lockKeyboard() {
+    try {
+      if (!document.fullscreenElement) await document.documentElement.requestFullscreen({ navigationUI: 'hide' } as FullscreenOptions);
+      await (navigator as any).keyboard?.lock?.();
+    } catch { /* not supported / denied: preventDefault still covers most shortcuts */ }
+  }
+  unlockKeyboard() { try { (navigator as any).keyboard?.unlock?.(); } catch { /* */ } }
 }

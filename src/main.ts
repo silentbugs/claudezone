@@ -61,14 +61,19 @@ async function boot() {
     match.onSettingChange = applySetting;
     match.onEnd = (won, place, me) => {
       document.exitPointerLock?.();
+      input.inGame = false; input.unlockKeyboard();
       const e = document.createElement('div'); e.className = 'endscr';
       e.innerHTML = `<div class="big ${won ? 'win' : ''}">${won ? 'WARZONE VICTORY' : `#${place}`}</div><div class="stats"><div><b>${me.kills}</b>Kills</div><div><b>${Math.round(me.damage)}</b>Damage</div><div><b>${Math.floor(match!.sim.time / 60)}:${String(Math.floor(match!.sim.time % 60)).padStart(2, '0')}</b>Time</div></div><button data-a="again">Play again</button><button data-a="menu">Main menu</button>`;
       e.querySelector('[data-a=again]')!.addEventListener('click', () => { e.remove(); match!.dispose(); match = null; try { sessionStorage.setItem('vd-autostart', '1'); } catch { /* */ } location.reload(); });
       e.querySelector('[data-a=menu]')!.addEventListener('click', () => { e.remove(); match!.dispose(); match = null; showMenu(); });
       ui.appendChild(e);
     };
+    input.inGame = true;
+    if (settings.fullscreen) input.lockKeyboard();
     input.lock();
   };
+  // clicking back into the game re-enters fullscreen with the keyboard locked (e.g. after holding Esc)
+  canvas.addEventListener('mousedown', () => { if (match && settings.fullscreen && !document.fullscreenElement) input.lockKeyboard(); });
   showMenu();
   // "Play again" reloads the page for a clean slate and jumps straight back into the same mode
   try { if (sessionStorage.getItem('vd-autostart')) { sessionStorage.removeItem('vd-autostart'); addEventListener('click', () => { if (!match) start(); }, { once: true }); } } catch { /* */ }
