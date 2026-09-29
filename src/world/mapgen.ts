@@ -6,7 +6,7 @@
 import { Rng, hash2 } from '../core/rng';
 import { clamp, smoothstep } from '../core/math';
 import { CollisionWorld, Heightfield, makeStructure, Mat, Structure, Part } from './collision';
-import { block2020 } from './blocks2020';
+import { block2020, tenement2020 } from './blocks2020';
 import { Builder, house, apartment, tower, warehouse, shop, garageRow, Style } from './builder';
 import { MapMasks, MAP_SIZE, M_BUILT, M_ROAD, M_SNOW, POIS, Poi } from './mapdata';
 import { buildTerrain, riverQuery, TerrainExtras, waterSurfaceAt } from './terrain';
@@ -320,6 +320,8 @@ function makeBuilding(rng: Rng, d: District, w: number, dd: number, x: number, z
     const st = styleFor(rng, 'shop'); return { b: shop(rng, w, dd, st), kind: 'shop', style: 3, lod: st.wallColor };
   }
   if (d === 'urban') {
+    // long 3-storey tenements (Torsk Bloc style)
+    if (w >= 34 && dd <= 13.5 && rng.chance(0.45)) { const st = styleFor(rng, 'block'); return { b: tenement2020(rng, w, dd, st), kind: 'tenement', style: 1, lod: st.wallColor }; }
     if (big > 280) { const st = styleFor(rng, 'block'); return { b: block2020(rng, w, dd, st, { kind: 'panel', floors: rng.int(3, 5) }), kind: 'block', style: 1, lod: st.wallColor }; }
     if (big > 110) { const st = styleFor(rng, rng.chance(0.5) ? 'shop' : 'block'); return rng.chance(0.5) ? { b: block2020(rng, w, dd, st, { kind: 'walkup', floors: rng.int(2, 3) }), kind: 'block', style: 1, lod: st.wallColor } : { b: shop(rng, w, dd, st), kind: 'shop', style: 3, lod: st.wallColor }; }
     const st = styleFor(rng, 'house'); return { b: house(rng, w, dd, 2, st), kind: 'house', style: 0, lod: st.wallColor };

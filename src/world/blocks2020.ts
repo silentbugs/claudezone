@@ -186,3 +186,103 @@ export function block2020(rng: Rng, w: number, d: number, st: Style, o: BlockOpt
   b.addLoot(hw - 2, top, -hd + 2);
   return b;
 }
+
+/**
+ * Tenement block (Torsk Bloc style, archetype D): ~36-45 × 12 m, 3 floors, flat roof and parapet.
+ * Two stairwells near the ends (dogleg stairs up to emergency roof huts), a zig-zag corridor linking
+ * them on every floor, 1F laundry (W) and mail room (E) with the rear double doors, single front doors
+ * into the stairwells. The flats are closed (locked doors, glazed windows you can smash). Ladders on
+ * both short walls. Glazed balconies on the front are decoration only.
+ */
+export function tenement2020(rng: Rng, w: number, d: number, st: Style): Builder {
+  const b = new Builder(), hw = w / 2, hd = d / 2, F = 3, E = 0.45;
+  const lvl = (f: number) => E + f * H, top = lvl(F);
+  const z0 = -hd + T / 2, zc = z0 + 7.2; // stair shaft depth from the front wall
+  const cores = [-hw + 4.5, hw - 4.5];
+  b.box(-hw - 0.1, -1.6, -hd - 0.1, hw + 0.1, E, hd + 0.1, Mat.Concrete, { color: 0x7d7a76 });
+  const shafts: [number, number, number, number][] = [];
+  for (const c of cores) shafts.push(dogleg2(b, c - 1.5, c + 1.5, z0, zc, E, F, H));
+  const hallC = 0xd0c8b8, inner = (f: number) => (f === 0 ? 0xc8c0b0 : hallC);
+  // corridor geometry (x relative to the west core; mirrored for the east)
+  const cw = cores[0], ce = cores[1], cz0 = -hd + 0.15, cz1 = cz0 + 2.0; // front band (at the landings)
+  for (let f = 0; f < F; f++) {
+    const y = lvl(f), wh = H - 0.05, locked = { locked: true };
+    // facades
+    const front: Opening[] = [], back: Opening[] = [];
+    for (let x = -hw + 1.5; x < hw - 1.5; x += 3) {
+      if (!cores.some((c) => x + 1.5 > c - 1.8 && x < c + 1.8)) front.push(op(-hw, x, x + 1.5, 0.9, 2.3, { glass: true }));
+      back.push(op(-hw, x, x + 1.5, 0.9, 2.3, { glass: true }));
+    }
+    // stairwells: single front doors on 1F, landing windows above
+    for (const c of cores) front.push(f === 0 ? op(-hw, c + 0.3, c + 1.3, 0, 2.2) : op(-hw, c - 0.6, c + 0.9, 0.9, 2.3, { glass: true }));
+    if (f === 0) {
+      // rear double doors into the laundry (W) and the mail room (E); no windows over them
+      const drs: [number, number][] = [[cw + 2.6, cw + 4.4], [ce - 4.4, ce - 2.6]];
+      for (let i = back.length - 1; i >= 0; i--) { const o = back[i], a = o.u0 - hw, c2 = o.u1 - hw; if (drs.some(([d0, d1]) => c2 > d0 - 0.3 && a < d1 + 0.3)) back.splice(i, 1); }
+      for (const [d0, d1] of drs) back.push(op(-hw, d0, d1, 0, 2.3));
+    }
+    wallX(b, -hd, -hw, hw, y, wh, st, front, -1);
+    wallX(b, hd, -hw, hw, y, wh, st, back, 1);
+    b.wall(1, -hd + T / 2, hd - T / 2, -hw, y, wh, T, st.wall, [op(-hd, -1, 0.5, 0.9, 2.3, { glass: true })], st.wallColor, -1);
+    b.wall(1, -hd + T / 2, hd - T / 2, hw, y, wh, T, st.wall, [op(-hd, -1, 0.5, 0.9, 2.3, { glass: true })], st.wallColor, 1);
+    for (const [c, s] of [[cw, 1], [ce, -1]] as [number, number][]) {
+      const xi = c + s * 1.5; // stairwell inner wall with the landing doorway into the corridor
+      b.wall(1, -hd + T / 2, hd - T / 2, xi, y, wh, 0.2, Mat.Plaster, [op(-hd + T / 2, cz0 + 0.1, cz0 + 1.35, 0, 2.2)], inner(f));
+      const xa = c + s * 1.5, xk = c + s * 7.5, xm = c + s * 5.5; // first segment, kink
+      // back of the first segment (flat / laundry door), kink walls
+      wallX(b, cz1, Math.min(xa, xm), Math.max(xa, xm), y, wh, st, [op(Math.min(xa, xm), Math.min(xa, xm) + 1.2, Math.min(xa, xm) + 2.2, 0, 2.2, f === 0 ? {} : locked)], 0, 0.2, Mat.Plaster, inner(f));
+      b.wall(1, cz0, -1, xk, y, wh, 0.2, Mat.Plaster, [], inner(f));
+      b.wall(1, cz1, 1, xm, y, wh, 0.2, Mat.Plaster, [], inner(f));
+      // stair shaft back part (behind the dogleg): closed storage
+      wallX(b, zc, c - 1.5, c + 1.5, y, wh, st, [], 0, 0.2, Mat.Plaster, inner(f));
+      // 1F laundry / mail room: between the stairwell and the kink, behind the corridor
+      if (f === 0) { b.wall(1, cz1, hd - T / 2, xm, y, wh, 0.2, Mat.Plaster, [], inner(f)); }
+    }
+    // central segment: z -1..1 between the two kinks, flat doors (locked) both sides
+    const xl = cw + 5.5, xr = ce - 5.5, xl2 = cw + 7.5, xr2 = ce - 7.5;
+    const doorsAlong = (xa: number, xb: number) => { const o: Opening[] = []; for (let x = xa + 2; x < xb - 2; x += 6) o.push(op(xa, x, x + 1, 0, 2.2, { locked: true })); return o; };
+    wallX(b, -1, xl2, xr2, y, wh, st, doorsAlong(xl2, xr2), 0, 0.2, Mat.Plaster, inner(f));
+    wallX(b, 1, xl, xr, y, wh, st, doorsAlong(xl, xr), 0, 0.2, Mat.Plaster, inner(f));
+    for (const lx of [cw + 3.5, (xl + xr) / 2, ce - 3.5, xl + 6, xr - 6]) b.light(lx, y + wh - 0.1, lx === cw + 3.5 || lx === ce - 3.5 ? cz0 + 1 : 0);
+    // floor above (holes for both shafts)
+    b.slab(-hw, -hd, hw, hd, lvl(f + 1), 0.25, Mat.Concrete, shafts);
+  }
+  // entrance steps: front doors of both stairwells, rear double doors
+  const steps = (x0: number, x1: number, zo: number, sgn: number) => { b.box(x0, -0.6, zo + sgn * 0.1, x1, E * 0.5, zo + sgn * 1.1, Mat.Concrete, { color: 0x8a8680 }); b.box(x0, -0.6, zo + sgn * 0.1, x1, E, zo + sgn * 0.6, Mat.Concrete, { color: 0x8a8680 }); };
+  for (const c of cores) steps(c - 0.2, c + 1.8, -hd, -1);
+  steps(cw + 2.3, cw + 4.7, hd, 1); steps(ce - 4.7, ce - 2.3, hd, 1);
+  // 1F furnishings: washing machines (laundry), mailbox wall (mail room)
+  for (let i = 0; i < 3; i++) b.box(cw + 1.9 + i * 1.1, E, hd - 1.1, cw + 2.8 + i * 1.1, E + 0.9, hd - 0.4, Mat.Metal, { color: 0xe6e6e0 });
+  b.box(ce - 5.3, E, 2.5, ce - 5.1, E + 1.8, 5, Mat.Metal, { color: 0x6a7a6a });
+  b.addLoot(cw + 3.5, E, 3.5); b.addLoot(ce - 3.5, E, 3.5); b.addLoot(0, E, 0); b.addLoot(0, lvl(1), 0); b.addLoot(0, lvl(2), 0); b.addLoot(cw + 3.5, lvl(2), cz0 + 1);
+  // roof: parapet, emergency exit huts over the stairwells (door onto the roof), ladders on both ends
+  wallX(b, -hd, -hw, hw, top, 0.9, st, [], 0); wallX(b, hd, -hw, hw, top, 0.9, st, [], 0);
+  b.wall(1, -hd, hd, -hw, top, 0.9, T, st.wall, [], st.wallColor); b.wall(1, -hd, hd, hw, top, 0.9, T, st.wall, [], st.wallColor);
+  for (const [c, s] of [[cw, 1], [ce, -1]] as [number, number][]) {
+    const x0 = c - 1.6, x1 = c + 1.6, hz1 = zc + 0.1;
+    b.wall(1, z0, hz1, c - s * 1.6, top, 2.6, 0.2, st.wall, [], st.wallColor);
+    b.wall(1, z0, hz1, c + s * 1.6, top, 2.6, 0.2, st.wall, [op(z0, z0 + 0.1, z0 + 1.35, 0, 2.2)], st.wallColor);
+    wallX(b, hz1, x0, x1, top, 2.6, st, [], 0);
+    wallX(b, -hd, x0, x1, top + 0.9, 1.7, st, [], 0);
+    b.box(x0 - 0.1, top + 2.6, -hd - 0.1, x1 + 0.1, top + 2.8, hz1 + 0.1, st.roof, { color: st.roofColor });
+  }
+  b.ladder(-hw - 0.15, 1.5, -1, 0, E, top); b.ladder(hw + 0.15, 1.5, 1, 0, E, top);
+  // glazed balconies (decoration)
+  for (let f = 1; f < F; f++) for (let x = -hw + 8; x < hw - 8; x += 6) b.box(x, lvl(f), -hd - 1.1, x + 2.6, lvl(f) + 2.2, -hd - 0.15, Mat.Glass, { noCollide: true });
+  void rng;
+  return b;
+}
+
+/** Dogleg stair (same layout as landmarks2020 dogleg) with a landing at every level; returns the slab hole. */
+function dogleg2(b: Builder, x0: number, x1: number, z0: number, z1: number, y0: number, levels: number, h: number): [number, number, number, number] {
+  const Lf = 1.4, Lh = 1.3, xm = (x0 + x1) / 2;
+  for (let k = 0; k < levels; k++) {
+    const y = y0 + k * h, mid = y + h / 2;
+    b.ramp(x0 + 0.1, y, z0 + Lf, xm - 0.05, mid, z1 - Lh, 1, 1, Mat.Concrete);
+    b.ramp(xm + 0.05, mid, z0 + Lf, x1 - 0.1, y + h, z1 - Lh, 1, -1, Mat.Concrete);
+    b.box(x0 + 0.1, mid - 0.2, z1 - Lh, x1 - 0.1, mid, z1, Mat.Concrete, { color: 0x9a968f });
+    b.box(xm - 0.05, y, z0 + Lf + 0.6, xm + 0.05, y + h, z1 - Lh - 0.7, Mat.Plaster, { color: 0xbfb8aa });
+    b.light(xm, y + h - 0.1, z0 + Lf / 2);
+  }
+  return [x0, z0 + Lf, x1, z1];
+}

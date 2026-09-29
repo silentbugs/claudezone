@@ -214,7 +214,7 @@ export class StructureMesh {
       for (const r of s.ramps) { em.setPart(s, B.d, r.mat ?? Mat.Concrete, r.mat === Mat.Roof ? undefined : r.color ?? 0x9a968e); if (r.mat === Mat.Roof) continue; em.ramp(r); }
       // LOD shell
       const big = s.by1 > 5 && (s.bx1 - s.bx0) * (s.bz1 - s.bz0) > 40;
-      const lodMat = big && ['block', 'tower', 'hospital', 'terminal', 'tvstation', 'keep', 'cellblock', 'barracks', 'station', 'house', 'shop'].includes(s.kind) ? 15 : Mat.Concrete;
+      const lodMat = big && ['block', 'tenement', 'tower', 'hospital', 'terminal', 'tvstation', 'keep', 'cellblock', 'barracks', 'station', 'house', 'shop'].includes(s.kind) ? 15 : Mat.Concrete;
       em.setPart(s, B.l, lodMat as Mat, lodMat === 15 ? mixTint(s.lodColor ?? 0xcccccc) : s.lodColor ?? 0xaaaaaa);
       em.scale = lodMat === 15 ? 12.8 : 6;
       if (s.kind === 'house') {

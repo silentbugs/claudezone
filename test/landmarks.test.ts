@@ -193,3 +193,19 @@ test('Military base: tent compound (through a wall gap into a tent, up to the up
   console.log('front -> rear corridor -> out', r4);
   assert.ok(typeof r4 === 'number', 'out through the rear door (the ground behind may be lower)');
 });
+
+test('Tenement (2020 D): front door -> west stairwell -> up 3 floors -> roof hut -> roof; 1F zig-zag corridor to the east stairwell', () => {
+  const sim = newSim();
+  const s = world.col.structures.find((q) => q.kind === 'tenement')!;
+  assert.ok(s, 'tenements placed');
+  const f = { x: s.x, z: s.z, y: s.y, a: s.angle };
+  const hw = s.parts[0].x1 - 0.1, hd = s.parts[0].z1 - 0.1, c = -hw + 4.5, ce = hw - 4.5, E = 0.45, H = 3.2, zc = -hd + 0.15 + 7.2;
+  const up: number[][] = [];
+  for (let k = 0; k < 3; k++) up.push([c - 0.75, -hd + 0.9], [c - 0.75, zc - 0.6], [c + 0.75, zc - 0.6], [c + 0.75, -hd + 0.9]);
+  const r1 = walkRoute(sim, f, [c + 0.8, -hd - 2.5], [[c + 0.8, -hd - 0.6], [c + 0.8, -hd + 0.9], ...up, [c + 1.2, -hd + 0.9], [c + 3, -hd + 0.9], [c + 5, -hd + 1.5]]);
+  console.log('stairwell -> roof', r1);
+  assert.ok(typeof r1 === 'number' && Math.abs(r1 - (E + 3 * H)) < 0.4, 'on the roof');
+  const r2 = walkRoute(sim, f, [c + 0.8, -hd - 2.5], [[c + 0.8, -hd - 0.6], [c + 0.8, -hd + 0.9], [c + 3, -hd + 0.9], [c + 6.5, -hd + 0.9], [c + 6.5, 0], [0, 0], [ce - 6.5, 0], [ce - 6.5, -hd + 0.9], [ce - 1, -hd + 0.9]]);
+  console.log('1F corridor W -> E stairwell', r2);
+  assert.ok(typeof r2 === 'number' && Math.abs(r2 - E) < 0.3, 'reached the east stairwell landing');
+});
