@@ -12,7 +12,7 @@ import { LETHAL_NAMES, TACTICAL_NAMES, KILLSTREAK_NAMES, FIELD_UPGRADE_NAMES } f
 import { CIRCLES } from '../sim/config';
 import { POIS, MAP_SIZE } from '../world/mapdata';
 import { vehicleOf, VEHICLES } from '../sim/vehicles';
-import { ICON, LETHAL_ICON, TACTICAL_ICON, STREAK_ICON } from './icons';
+import { ICON, LETHAL_ICON, TACTICAL_ICON, STREAK_ICON, contractBadge } from './icons';
 import { describeGun, gunSilhouette } from '../render/gunModel';
 import { models } from '../render/models';
 import { keyName, Settings, Action } from '../core/settings';
@@ -64,6 +64,9 @@ export class Hud {
   private note = el('div', 'note');
   private dmg = el('div', 'dmg');
   private low = el('div', 'lowhp'); private lowPulse = 0;
+  /** 2020 hit feedback: red splatter pulse round the screen edge (blue-white burst when your armor breaks) */
+  private hurtEl = el('div', 'hurt'); private hurtK = 0; private breakEl = el('div', 'abreak'); private breakK = 0;
+  hurt(dmg: number, armorBroke: boolean) { this.hurtK = Math.min(1, this.hurtK + 0.35 + dmg / 60); if (armorBroke) this.breakK = 1; }
   /** 0..1 low-health overlay strength */
   setLowHealth(k: number) { this.lowPulse = Math.max(0, this.lowPulse - 0.03); const a = Math.min(1, k * (0.75 + 0.25 * this.lowPulse)); this.low.style.opacity = a < 0.01 ? '0' : a.toFixed(3); }
   beat(k: number) { this.lowPulse = 1; void k; }
@@ -77,6 +80,7 @@ export class Hud {
   private fmCanvas: HTMLCanvasElement;
   panel: HTMLElement | null = null;
   private hmT = 0; private hmGlyphT = 0; private bannerT = 0; private noteT = 0; private nameT = 0;
+  private uavSnapT = -99; private uavDots: [number, number][] = [];
   private dmgArcs: { a: number; t: number; e: HTMLElement }[] = [];
   private last: Record<string, string> = {};
   private cardKey = ''; private cardSince = 0;
@@ -93,7 +97,7 @@ export class Hud {
     this.fmCanvas = document.createElement('canvas'); this.fmCanvas.width = this.fmCanvas.height = 1200;
     this.fullmap.append(this.fmCanvas, el('div', 'legend', '<b style="color:#fff;font-size:18px">TAC MAP</b><br>White ring: next safe zone<br>Red: gas<br>Coloured arrows: your squad<br>Dashed line: C-130 route<br>Red dots: enemies (UAV / gunfire)<br>Orange carts: buy stations<br><br>Click to place a marker — your squad will head there'));
     this.fmCanvas.addEventListener('mousedown', (e) => { const r = this.fmCanvas.getBoundingClientRect(); const x = ((e.clientX - r.left) / r.width) * MAP_SIZE, z = ((e.clientY - r.top) / r.height) * MAP_SIZE; this.pings = [{ x, z, t: 999 }]; (this.sim.players[this.localId] as any).ping = { x, z }; });
-    this.root.append(this.low, this.vig, this.scope, mmw, this.circ, this.compass, this.cpings, this.heading, this.loc, this.counters, this.feed, this.squad, this.inv, this.fu, this.weap, this.xh, this.hm, this.tags, this.lcard, this.hold, this.prog, this.ctx, this.alt, this.banner, this.note, this.dmg, this.flash, this.dot, this.fullmap);
+    this.root.append(this.low, this.hurtEl, this.breakEl, this.vig, this.scope, mmw, this.circ, this.compass, this.cpings, this.heading, this.loc, this.counters, this.feed, this.squad, this.inv, this.fu, this.weap, this.xh, this.hm, this.tags, this.lcard, this.hold, this.prog, this.ctx, this.alt, this.banner, this.note, this.dmg, this.flash, this.dot, this.fullmap);
     this.buildCompass();
   }
 
@@ -124,7 +128,8 @@ export class Hud {
         }
         if (e.victim === this.localId && e.attacker >= 0) {
           const a = this.sim.players[e.attacker];
-          const i = el('i'); this.dmg.appendChild(i); this.dmgArcs.push({ a: Math.atan2(a.x - me.x, a.z - me.z), t: 1.4, e: i });
+          const i = el('i'); this.dmg.appendChild(i); this.dmgArcs.push({ a: Math.atan2(a.x - me.x, a.z - me.z), t: 2.2, e: i });
+          this.hurt(e.dmg, e.armorBroke);
         }
         break;
       case 'kill': case 'down': {
@@ -248,6 +253,8 @@ export class Hud {
     else if (inGas) vig = 'radial-gradient(circle, rgba(170,150,30,0.22) 20%, rgba(150,140,20,0.55))';
     if (this.last.vig !== vig) { this.last.vig = vig; this.vig.style.background = vig; }
     const fo = parseFloat(this.flash.style.opacity || '0'); if (fo > 0) this.flash.style.opacity = String(Math.max(0, fo - dt * (view.flashT > 0 ? 0.25 : 1.5)));
+    this.hurtK = Math.max(0, this.hurtK - dt * 1.6); this.breakK = Math.max(0, this.breakK - dt * 2.2);
+    this.hurtEl.style.opacity = this.hurtK < 0.01 ? '0' : Math.min(1, this.hurtK).toFixed(3); this.breakEl.style.opacity = this.breakK < 0.01 ? '0' : this.breakK.toFixed(3);
     for (const a of this.dmgArcs) { a.t -= dt; a.e.style.opacity = String(Math.min(1, a.t)); a.e.style.transform = `rotate(${((Math.PI - a.a + camYaw) * 180) / Math.PI}deg)`; if (a.t <= 0) a.e.remove(); }
     this.dmgArcs = this.dmgArcs.filter((a) => a.t > 0);
     // --- interaction card / prompts
@@ -430,11 +437,26 @@ export class Hud {
       else { g.strokeStyle = color; g.lineWidth = 1.6 * px; g.beginPath(); g.moveTo(x - size * px, z - size * px); g.lineTo(x - size * 0.6 * px, z + size * 0.4 * px); g.lineTo(x + size * px, z + size * 0.4 * px); g.lineTo(x + size * 1.1 * px, z - size * 0.5 * px); g.stroke(); g.beginPath(); g.arc(x - size * 0.4 * px, z + size * px, size * 0.3 * px, 0, 7); g.arc(x + size * 0.7 * px, z + size * px, size * 0.3 * px, 0, 7); g.fill(); }
     };
     for (const b of sim.buyStations) icon(b.x, b.z, '#f39a2a', 'cart', 6);
-    for (const k of sim.contracts) if (!k.taken) icon(k.x, k.z, k.kind === 'bounty' ? '#ff6a4a' : k.kind === 'recon' ? '#f6c343' : '#6ab0ff', 'diamond', 5);
+    // contracts: large badges with a pulse so they stand out on both maps
+    for (const k of sim.contracts) if (!k.taken) { const pu = 1 + 0.1 * Math.sin(sim.time * 4 + k.id), r = (mini ? 13 : 16) * px * pu; g.drawImage(contractBadge(k.kind), k.x - r, k.z - r, r * 2, r * 2); }
     if (mini) for (const v of sim.vehicles) if (v.alive && Math.hypot(v.x - me.x, v.z - me.z) < 400) icon(v.x, v.z, 'rgba(255,255,255,0.8)', 'sq', 3);
     for (const cr of sim.crates) if (cr.squad === me.squad) icon(cr.x, cr.z, '#ff6fb5', 'sq', 5);
     const uav = sim.squadUav.get(me.squad);
-    if (uav && uav.until > sim.time) for (const p of sim.players) if (p.alive && p.squad !== me.squad && p.phase === Phase.Alive && Math.hypot(p.x - uav.x, p.z - uav.z) < 450) icon(p.x, p.z, '#ff3a2a', 'dot', 4);
+    if (uav && uav.until > sim.time) {
+      // 2020 UAV: a sweep pulses out from the drone's centre every second; each sweep refreshes the red dots of
+      // enemies inside its radius, which then fade until the next sweep
+      const R = 450;
+      if (sim.time - this.uavSnapT >= 1 || sim.time < this.uavSnapT) {
+        this.uavSnapT = sim.time; this.uavDots = [];
+        for (const p of sim.players) if (p.alive && p.squad !== me.squad && (p.phase === Phase.Alive || p.phase === Phase.Downed) && Math.hypot(p.x - uav.x, p.z - uav.z) < R) this.uavDots.push([p.x, p.z]);
+      }
+      const age = sim.time - this.uavSnapT, k = Math.min(1, age / 0.55);
+      g.strokeStyle = 'rgba(255,70,50,0.35)'; g.lineWidth = 1.5 * px; g.beginPath(); g.arc(uav.x, uav.z, R, 0, Math.PI * 2); g.stroke();
+      g.strokeStyle = `rgba(255,90,60,${0.85 * (1 - k)})`; g.lineWidth = 3 * px; g.beginPath(); g.arc(uav.x, uav.z, R * k, 0, Math.PI * 2); g.stroke();
+      g.fillStyle = `rgba(255,60,40,${0.1 * (1 - k)})`; g.beginPath(); g.arc(uav.x, uav.z, R * k, 0, Math.PI * 2); g.fill();
+      const a = Math.max(0.25, 1 - age * 0.6);
+      for (const [x, z] of this.uavDots) { g.fillStyle = `rgba(255,40,30,${a})`; g.beginPath(); g.arc(x, z, 5 * px, 0, Math.PI * 2); g.fill(); g.strokeStyle = `rgba(0,0,0,${a * 0.8})`; g.lineWidth = 1.2 * px; g.stroke(); }
+    }
     // unsuppressed gunfire: a red dot for ~3 s within 250 m (suppressors hide it)
     for (const p of sim.players) { const age = sim.time - ((p as any).lastLoudShot ?? -99); if (p.alive && p.squad !== me.squad && age < 3 && Math.hypot(p.x - me.x, p.z - me.z) < 250) icon(p.x, p.z, `rgba(255,60,40,${(0.95 * Math.min(1, (3 - age) / 1)).toFixed(2)})`, 'dot', 3.5); }
     const ac = sim.active.find((a) => a.squad === me.squad);
@@ -455,7 +477,6 @@ export class Hud {
     g.drawImage(this.tac, 0, 0, W, W);
     g.save(); g.scale(s, s);
     this.drawOverlays(g, me, 1 / s);
-    g.fillStyle = '#f6b03a'; g.save(); g.translate(me.x, me.z); g.rotate(-me.yaw); g.beginPath(); g.moveTo(0, -14 / s); g.lineTo(10 / s, 10 / s); g.lineTo(-10 / s, 10 / s); g.closePath(); g.fill(); g.restore();
     g.restore();
     g.strokeStyle = 'rgba(255,255,255,0.12)'; g.lineWidth = 1; g.fillStyle = 'rgba(255,255,255,0.55)'; g.font = '600 15px Rajdhani, sans-serif';
     // grid registered to the 2020 tac map: column B starts at x=85 m, row 1 at z=118 m, cells 381 m
@@ -467,6 +488,18 @@ export class Hud {
     }
     g.font = '700 16px Rajdhani, sans-serif'; g.textAlign = 'center';
     for (const p of POIS) if (p.tier === 'major') { g.fillStyle = 'rgba(0,0,0,0.55)'; const tw = g.measureText(p.name).width; g.fillRect(p.x * s - tw / 2 - 5, p.z * s - 12, tw + 10, 20); g.fillStyle = '#fff'; g.fillText(p.name, p.x * s, p.z * s + 3); }
+    // you (2020 tac map): big yellow arrow with a dark outline, a view cone and a pulsing ring, drawn over everything
+    {
+      const px = me.x * s, pz = me.z * s, t = performance.now() / 1000, pul = (t * 0.9) % 1;
+      g.save(); g.translate(px, pz);
+      g.strokeStyle = `rgba(246,195,67,${(1 - pul) * 0.9})`; g.lineWidth = 3; g.beginPath(); g.arc(0, 0, 14 + pul * 34, 0, Math.PI * 2); g.stroke();
+      g.rotate(-me.yaw);
+      const cone = g.createRadialGradient(0, 0, 4, 0, 0, 90); cone.addColorStop(0, 'rgba(246,195,67,0.45)'); cone.addColorStop(1, 'rgba(246,195,67,0)');
+      g.fillStyle = cone; g.beginPath(); g.moveTo(0, 0); g.arc(0, 0, 90, -Math.PI / 2 - 0.55, -Math.PI / 2 + 0.55); g.closePath(); g.fill();
+      g.beginPath(); g.moveTo(0, -20); g.lineTo(14, 14); g.lineTo(0, 7); g.lineTo(-14, 14); g.closePath();
+      g.fillStyle = '#ffd24a'; g.fill(); g.lineWidth = 3.5; g.strokeStyle = '#111'; g.stroke();
+      g.restore();
+    }
     g.textAlign = 'left';
   }
 

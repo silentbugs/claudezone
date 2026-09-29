@@ -38,9 +38,9 @@ export class Soldiers {
   private now = 0;
 
   /** A body that plays the death clip where a player fell (the player itself has already moved on to the Gulag / spectating). */
-  addCorpse(x: number, y: number, z: number, yaw: number, squad: number, now: number) {
+  addCorpse(x: number, y: number, z: number, yaw: number, squad: number, now: number, lying = false) {
     if (!this.ready) return;
-    let c = this.corpses.length >= 8 ? this.corpses.shift()! : null;
+    let c = this.corpses.length >= 20 ? this.corpses.shift()! : null;
     const s = c?.s ?? this.make();
     s.mixer.stopAllAction(); s.cur = ''; s.gun.visible = false; s.proneK = 0;
     s.tilt.rotation.set(0, 0, 0); s.tilt.position.set(0, 0, 0);
@@ -49,6 +49,8 @@ export class Soldiers {
     for (const m of s.mats[1]) m.color.setHex(cm[1]);
     s.root.position.set(x, y, z); s.root.rotation.set(0, yaw, 0); s.root.visible = true;
     this.play(s, 'Death', 0);
+    // already on the ground (downed / prone): start at the end of the fall so the body never gets back up
+    if (lying) { const a = s.actions.get('Death'); if (a) { a.time = a.getClip().duration; s.mixer.update(0); } }
     this.corpses.push({ s, t0: now });
   }
 
@@ -88,14 +90,14 @@ export class Soldiers {
   update(players: Player[], alpha: number, cam: THREE.Vector3, dt: number, now = 0) {
     this.ids.clear();
     if (!this.ready) return;
-    // bodies: play the fall once, lie there, then sink away after 25 s
+    // bodies: play the fall once and stay down (2020: they lie there for the rest of the fight), then sink away
     this.now = now;
     for (const c of this.corpses) {
       const age = now - c.t0;
-      c.s.mixer.update(dt);
-      if (age > 25) c.s.root.position.y -= dt * 0.25;
+      if (age < 4) c.s.mixer.update(dt);
+      if (age > 145) c.s.root.position.y -= dt * 0.25;
     }
-    while (this.corpses.length && now - this.corpses[0].t0 > 30) { const c = this.corpses.shift()!; this.group.remove(c.s.root); }
+    while (this.corpses.length && now - this.corpses[0].t0 > 150) { const c = this.corpses.shift()!; this.group.remove(c.s.root); }
     // nearest eligible players get a slot
     const cand: [number, Player][] = [];
     for (const p of players) {

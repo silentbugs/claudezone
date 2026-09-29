@@ -58,3 +58,29 @@ export const ICON: Record<string, string> = {
 export const LETHAL_ICON: Record<string, string> = { frag: 'frag', semtex: 'semtex', knife: 'knife', molotov: 'molotov', c4: 'c4', claymore: 'claymore' };
 export const TACTICAL_ICON: Record<string, string> = { stun: 'stun', flash: 'flash', smoke: 'smoke', heartbeat: 'heartbeat', stim: 'stim' };
 export const STREAK_ICON: Record<string, string> = { uav: 'uav', cuav: 'cuav', cluster: 'cluster', airstrike: 'airstrike', turret: 'turret', counterUav: 'counterUav' };
+
+/** Contract badge (canvas, 128 px) for the floating world marker and the maps: coloured disc + glyph per type. */
+const badgeCache = new Map<string, HTMLCanvasElement>();
+export const CONTRACT_COLOR: Record<string, string> = { bounty: '#e8503a', scavenger: '#3aa0e8', recon: '#f0b830' };
+export function contractBadge(kind: string): HTMLCanvasElement {
+  let c = badgeCache.get(kind); if (c) return c;
+  c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d')!;
+  const col = CONTRACT_COLOR[kind] ?? '#fff';
+  g.translate(64, 64);
+  g.shadowColor = col; g.shadowBlur = 14;
+  g.beginPath(); g.arc(0, 0, 50, 0, Math.PI * 2); g.fillStyle = 'rgba(12,14,16,0.82)'; g.fill();
+  g.lineWidth = 7; g.strokeStyle = col; g.stroke(); g.shadowBlur = 0;
+  g.strokeStyle = g.fillStyle = col; g.lineCap = 'round';
+  if (kind === 'bounty') { // crosshair on a target
+    g.lineWidth = 6; g.beginPath(); g.arc(0, 0, 22, 0, Math.PI * 2); g.stroke();
+    g.beginPath(); g.arc(0, 0, 7, 0, Math.PI * 2); g.fill();
+    for (const [x0, y0, x1, y1] of [[0, -36, 0, -16], [0, 16, 0, 36], [-36, 0, -16, 0], [16, 0, 36, 0]]) { g.beginPath(); g.moveTo(x0, y0); g.lineTo(x1, y1); g.stroke(); }
+  } else if (kind === 'scavenger') { // magnifier over a supply box
+    g.fillRect(-26, 4, 30, 22); g.fillStyle = 'rgba(12,14,16,0.9)'; g.fillRect(-24, 13, 26, 3); g.fillStyle = col;
+    g.lineWidth = 6; g.beginPath(); g.arc(8, -10, 14, 0, Math.PI * 2); g.stroke(); g.lineWidth = 8; g.beginPath(); g.moveTo(18, 0); g.lineTo(30, 12); g.stroke();
+  } else { // recon: flag on a pole
+    g.lineWidth = 6; g.beginPath(); g.moveTo(-18, -30); g.lineTo(-18, 32); g.stroke();
+    g.beginPath(); g.moveTo(-15, -30); g.lineTo(26, -30); g.lineTo(16, -17); g.lineTo(26, -4); g.lineTo(-15, -4); g.closePath(); g.fill();
+  }
+  badgeCache.set(kind, c); return c;
+}

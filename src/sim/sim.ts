@@ -77,7 +77,8 @@ export class Sim {
   nav: NavGrid;
   aliveCount = PLAYERS;
   over = false; winner = -1;
-  squadUav = new Map<number, { until: number; x: number; z: number }>();
+  /** squad UAVs: the scan area follows whoever called it in */
+  squadUav = new Map<number, { until: number; x: number; z: number; by?: number }>();
   /** active Counter UAVs: enemies within COUNTER_UAV_R have their minimap scrambled */
   counterUavs: { squad: number; x: number; z: number; until: number }[] = [];
   /** enemy pings ("enemy spotted"): a red marker where the enemy was, shared with the squad for a few seconds */
@@ -400,16 +401,19 @@ export class Sim {
         if (--p.tactical.n <= 0) p.tactical = null;
       }
     }
-    if (it.killstreak) { it.killstreak = false; if (p.killstreak && p.phase === Phase.Alive && p.turret < 0) this.useKillstreak(p); }
+    // killstreaks (2020): pull out the tablet / radio and call it in (~1 s, weapon down), then it activates
+    if (it.killstreak) { it.killstreak = false; if (p.killstreak && p.phase === Phase.Alive && p.turret < 0 && !((p as any).callT > 0)) { (p as any).callT = 1.1; (p as any).callK = p.killstreak; this.emit({ t: 'callin', p: p.id, kind: p.killstreak }); } }
+    if ((p as any).callT > 0) { (p as any).callT -= dt; if ((p as any).callT <= 0 && p.phase === Phase.Alive && p.killstreak) this.useKillstreak(p); }
     if ((it as any).fieldUpgrade) { (it as any).fieldUpgrade = false; this.deployFieldUpgrade(p); }
     if (p.turret >= 0) { const t = this.turrets.find((q) => q.id === p.turret); if (!t) this.unmanTurret(p); else { p.x = t.x + Math.sin(t.yaw) * 0.9; p.z = t.z + Math.cos(t.yaw) * 0.9; p.vx = p.vz = 0; } }
     if (p.phase === Phase.GulagWait) return;
     // auto pickups
-    if (p.phase === Phase.Alive && !this.inWarmup) for (const itm of this.itemsNear(p.x, p.z, 1.6)) if (Math.abs(itm.y - p.y) < 1.6 && (itm.kind === ItemKind.Ammo || itm.kind === ItemKind.Plate || itm.kind === ItemKind.Cash) && !((itm as any).droppedBy === p.id && (itm as any).dropUntil > this.time)) tryPickup(this, p, itm, false);
+    if (p.phase === Phase.Alive) for (const itm of this.itemsNear(p.x, p.z, 1.6)) if (Math.abs(itm.y - p.y) < 1.6 && (itm.kind === ItemKind.Ammo || itm.kind === ItemKind.Plate || (itm.kind === ItemKind.Cash && !this.inWarmup)) && !((itm as any).droppedBy === p.id && (itm as any).dropUntil > this.time)) tryPickup(this, p, itm, false);
     // interact (edge + hold)
     const press = it.interact && !(p as any).prevInteract;
     (p as any).prevInteract = it.interact;
-    if (it.interact && p.phase === Phase.Alive && !this.inWarmup) this.interact(p, press, dt); else p.interactT = 0;
+    // pre-game (2020 warmup): guns, ammo, doors, chests and vehicles work; no contracts, buying or loadouts
+    if (it.interact && p.phase === Phase.Alive) this.interact(p, press, dt); else p.interactT = 0;
   }
 
   /** What the player is looking at to interact with (for prompts and for the action). */
@@ -453,6 +457,7 @@ export class Sim {
     if (!t) { p.interactT = 0; return; }
     if (t.kind === 'revive') { const q = this.players[t.id]; if (q.reviveBy < 0) { q.reviveBy = p.id; q.reviveT = 0; } return; }
     if (!press) return;
+    if (this.inWarmup && (t.kind === 'buy' || t.kind === 'contract' || t.kind === 'crate' || t.kind === 'balloon')) return;
     if (t.kind === 'chest') { const c = this.chests.find((c2) => c2.id === t.id)!; c.opened = true; for (const itm of chestContents(this, c.x, c.y, c.z, c.legendary)) this.addItem(itm); this.emit({ t: 'chest', p: p.id, x: c.x, y: c.y, z: c.z }); }
     else if (t.kind === 'item') { const itm = this.itemById.get(t.id); if (itm) tryPickup(this, p, itm, true); }
     else if (t.kind === 'door') this.doors?.interact(t.id, p);
@@ -564,12 +569,12 @@ export class Sim {
   kill(v: Player, attacker: number, weapon: string, head: boolean, finish: boolean) {
     if (v.turret >= 0) this.unmanTurret(v);
     if ((v as any).vehicle !== undefined) exitVehicle(this, v);
-    if (this.inWarmup) { this.emit({ t: 'kill', victim: v.id, attacker, w: weapon, head, finish, x: v.x, y: v.y, z: v.z, yaw: v.yaw }); if (attacker >= 0) this.players[attacker].kills++; v.phase = Phase.Dead; (v as any).respawnAt = this.time + 3; return; }
+    if (this.inWarmup) { this.emit({ t: 'kill', victim: v.id, attacker, w: weapon, head, finish, x: v.x, y: v.y, z: v.z, yaw: v.yaw, lying: v.phase === Phase.Downed || v.stance === Stance.Prone }); if (attacker >= 0) this.players[attacker].kills++; v.phase = Phase.Dead; (v as any).respawnAt = this.time + 3; return; }
     const inGulag = v.phase === Phase.Gulag;
     v.health = 0; v.armor = 0;
     const att = attacker >= 0 ? this.players[attacker] : null;
     if (att && att.squad !== v.squad) att.kills++;
-    this.emit({ t: 'kill', victim: v.id, attacker, w: weapon, head, finish, x: v.x, y: v.y, z: v.z, yaw: v.yaw });
+    this.emit({ t: 'kill', victim: v.id, attacker, w: weapon, head, finish, x: v.x, y: v.y, z: v.z, yaw: v.yaw, lying: v.phase === Phase.Downed || v.stance === Stance.Prone });
     this.checkBounty(v, attacker);
     if (inGulag) { this.gulagResult(v.id); return; }
     dropBag(this, v);
@@ -603,6 +608,7 @@ export class Sim {
     }
   }
   private updateExplosions(dt: number) {
+    for (const u of this.squadUav.values()) { const b = u.by !== undefined ? this.players[u.by] : null; if (b && b.alive && (b.phase === Phase.Alive || b.phase === Phase.Downed)) { u.x = b.x; u.z = b.z; } }
     for (const e of this.pending) { e.delay -= dt; if (e.delay <= 0) this.explode(e.x, e.y, e.z, e.r, e.dmg, e.owner, e.kind); }
     this.pending = this.pending.filter((e) => e.delay > 0);
   }
@@ -648,13 +654,13 @@ export class Sim {
   }
   useKillstreak(p: Player, tx?: number, tz?: number) {
     const k = p.killstreak!; p.killstreak = null;
-    if (k === 'uav') { this.squadUav.set(p.squad, { until: this.time + 40, x: p.x, z: p.z }); this.emit({ t: 'uav', squad: p.squad }); return; }
+    if (k === 'uav') { this.squadUav.set(p.squad, { until: this.time + 40, x: p.x, z: p.z, by: p.id }); this.emit({ t: 'uav', squad: p.squad }); return; }
     if (k === 'cuav') { this.counterUavs.push({ squad: p.squad, x: p.x, z: p.z, until: this.time + 40 }); this.emit({ t: 'cuav', squad: p.squad }); return; }
     if (k === 'turret') { this.deployTurret(p); return; }
     let [x, , z] = this.aimPoint(p);
     if (tx !== undefined && tz !== undefined) { x = tx; z = tz; }
     const g = this.world.hf.at(x, z);
-    this.emit({ t: 'marker', x, z, kind: k, squad: p.squad, dur: 6 });
+    this.emit({ t: 'marker', x, z, kind: k, squad: p.squad, dur: 6, yaw: p.yaw });
     if (k === 'cluster') for (let i = 0; i < 12; i++) this.pending.push({ x: x + this.rng.range(-18, 18), y: g + 0.5, z: z + this.rng.range(-18, 18), r: 8, dmg: 140, owner: p.id, delay: 3.5 + i * 0.22, kind: 'cluster' });
     else for (let i = 0; i < 3; i++) { const o = (i - 1) * 14; const a = p.yaw; this.pending.push({ x: x - Math.sin(a) * o, y: g + 0.5, z: z - Math.cos(a) * o, r: 14, dmg: 260, owner: p.id, delay: 4.5 + i * 0.35, kind: 'airstrike' }); }
   }

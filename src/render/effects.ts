@@ -1,5 +1,6 @@
 /** Particles, tracers, gas wall, world props for loot/chests/stations, the C-130. */
 import * as THREE from 'three';
+import { contractBadge, CONTRACT_COLOR } from '../ui/icons';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { Sim } from '../sim/sim';
 import { ItemKind, Phase, SimEvent } from '../sim/types';
@@ -106,6 +107,12 @@ export class Effects {
   private lightT: number[] = [];
   private itemTimer = 0;
   private stations = new THREE.Group();
+  private badgeTex = new Map<string, THREE.Texture>();
+  private badges = new Map<number, { sp: THREE.Sprite; beam: THREE.Mesh; y: number; ph: number }>();
+  private badgeT = 0;
+  /** strike jets: fly over the target line just before the bombs land */
+  private jets: { m: THREE.Object3D; x: number; z: number; dx: number; dz: number; y: number; t: number }[] = [];
+  private jetGeo: THREE.BufferGeometry | null = null;
   private tablets = new Map<number, THREE.Object3D>();
   private crates = new Map<number, THREE.Object3D>();
   flashes: { x: number; y: number; z: number; t: number }[] = [];
@@ -133,7 +140,17 @@ export class Effects {
     const bm = new THREE.MeshStandardMaterial({ color: 0xd8d4c8, roughness: 0.8 });
     const bgeo = mergeGeometries([new THREE.SphereGeometry(5, 16, 12).scale(1, 1.25, 1).translate(0, 42, 0), new THREE.CylinderGeometry(0.03, 0.03, 36, 4).translate(0, 18, 0), new THREE.CylinderGeometry(1.2, 1.4, 1.2, 10).translate(0, 0.6, 0), new THREE.CylinderGeometry(0.8, 0.2, 1.6, 10).translate(0, 36.8, 0)])!;
     for (const b of this.sim.world.balloons) { const m = new THREE.Mesh(bgeo, bm); m.position.set(b.x, b.y, b.z); m.castShadow = true; this.stations.add(m); }
-    for (const c of this.sim.contracts) { const m = new THREE.Mesh(tab, tm); m.position.set(c.x, c.y + 0.02, c.z); this.tablets.set(c.id, m); this.group.add(m); }
+    for (const c of this.sim.contracts) {
+      const m = new THREE.Mesh(tab, tm); m.position.set(c.x, c.y + 0.02, c.z); this.tablets.set(c.id, m); this.group.add(m);
+      // floating holo badge above the tablet (bobs, pulses, faces you) + a faint beam of its colour
+      let tex = this.badgeTex.get(c.kind);
+      if (!tex) { tex = new THREE.CanvasTexture(contractBadge(c.kind)); tex.colorSpace = THREE.SRGBColorSpace; this.badgeTex.set(c.kind, tex); }
+      const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, fog: false }));
+      sp.scale.setScalar(0.9); sp.position.set(c.x, c.y + 1.5, c.z); sp.renderOrder = 3;
+      const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.22, 3, 8, 1, true).translate(0, 1.5, 0), new THREE.MeshBasicMaterial({ color: new THREE.Color(CONTRACT_COLOR[c.kind] ?? '#fff'), transparent: true, opacity: 0.25, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }));
+      beam.position.set(c.x, c.y, c.z);
+      this.badges.set(c.id, { sp, beam, y: c.y, ph: (c.id * 1.7) % 6.28 }); this.group.add(sp, beam);
+    }
   }
 
   /** React to sim events with visuals. */
@@ -162,6 +179,18 @@ export class Effects {
         // a burst of shards falling out along the direction of travel, and a little glitter dust
         for (let i = 0; i < 26; i++) this.smoke.spawn(e.x + (R() - 0.5) * 0.9, e.y + (R() - 0.5) * 0.9, e.z + (R() - 0.5) * 0.9, e.nx * (1.5 + R() * 3) + (R() - 0.5) * 2, R() * 2, e.nz * (1.5 + R() * 3) + (R() - 0.5) * 2, 0.7 + R() * 0.5, 0.05, 0.04, 0.78, 0.88, 0.95, 0.9, 0.5, 9.8);
         for (let i = 0; i < 6; i++) this.smoke.spawn(e.x, e.y, e.z, (R() - 0.5), R() * 0.5, (R() - 0.5), 0.6, 0.2, 0.6, 0.85, 0.9, 0.95, 0.3, 2, 0);
+        break;
+      }
+      case 'marker': {
+        if (e.kind !== 'airstrike' && e.kind !== 'cluster') break;
+        if (!this.jetGeo) this.jetGeo = mergeGeometries([colored(new THREE.CylinderGeometry(0.7, 0.45, 15, 10).rotateX(Math.PI / 2), 0x6a7074), colored(new THREE.BoxGeometry(11, 0.25, 4).translate(0, 0, 1.5), 0x5e6468), colored(new THREE.BoxGeometry(4.6, 0.2, 1.8).translate(0, 0, 6.4), 0x5e6468), colored(new THREE.BoxGeometry(0.2, 2.6, 2.2).translate(0, 1.3, 6.4), 0x5e6468), colored(new THREE.ConeGeometry(0.7, 2.4, 10).rotateX(-Math.PI / 2).translate(0, 0, -8.7), 0x4a4f52)])!;
+        const a = e.yaw ?? 0, dx = -Math.sin(a), dz = -Math.cos(a), g = this.sim.world.hf.at(e.x, e.z);
+        const passAt = e.kind === 'cluster' ? 3.1 : 3.9, n = e.kind === 'cluster' ? 2 : 1;
+        for (let i = 0; i < n; i++) {
+          const m = new THREE.Mesh(this.jetGeo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.5, metalness: 0.3 })); m.visible = false; this.group.add(m);
+          // t counts to the pass over the target (t = 0); 190 m/s, 110-130 m up
+          this.jets.push({ m, x: e.x + (i ? dz * 30 : 0), z: e.z - (i ? dx * 30 : 0), dx, dz, y: g + 115 + i * 15, t: -passAt - i * 0.25 });
+        }
         break;
       }
       case 'hit': {
@@ -221,7 +250,24 @@ export class Effects {
       m.position.set(c.x, c.y + 0.55 + k * 350, c.z);
     }
     for (const [id, m] of this.crates) if (!sim.crates.some((c) => c.id === id)) { this.group.remove(m); this.crates.delete(id); }
-    for (const c of sim.contracts) { const m = this.tablets.get(c.id); if (m) m.visible = !c.taken; }
+    for (const j of this.jets) {
+      j.t += dt; const d = j.t * 190;
+      j.m.visible = j.t > -5 && j.t < 5;
+      j.m.position.set(j.x + j.dx * d, j.y, j.z + j.dz * d); j.m.rotation.set(0, Math.atan2(-j.dx, -j.dz), 0);
+    }
+    for (const j of this.jets) if (j.t >= 5) this.group.remove(j.m);
+    this.jets = this.jets.filter((j) => j.t < 5);
+    this.badgeT += dt;
+    for (const c of sim.contracts) {
+      const m = this.tablets.get(c.id); if (m) m.visible = !c.taken;
+      const b = this.badges.get(c.id); if (!b) continue;
+      b.sp.visible = b.beam.visible = !c.taken;
+      if (c.taken) continue;
+      const t = this.badgeT + b.ph;
+      b.sp.position.y = b.y + 1.5 + Math.sin(t * 1.8) * 0.12;
+      b.sp.scale.setScalar(0.9 * (1 + Math.sin(t * 3.2) * 0.06));
+      (b.beam.material as THREE.MeshBasicMaterial).opacity = 0.18 + 0.1 * (0.5 + 0.5 * Math.sin(t * 2.4));
+    }
     // muzzle flash lights (a few)
     for (const f of this.flashes) { this.light(f.x, f.y, f.z, 0xffc070, 6); }
     this.flashes.length = 0;

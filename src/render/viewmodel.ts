@@ -99,6 +99,7 @@ export class ViewModel {
     this.flash = new THREE.Mesh(fg, fm); this.flash.visible = false;
     fm.side = THREE.DoubleSide;
     this.root.add(this.gun, this.arms, this.plate, this.flash, this.flashLight, this.armL);
+    this.scene.add(this.tablet); this.tablet.visible = false;
     this.armL.add(this.mag); this.mag.position.set(0, -0.07, 0); this.mag.visible = false; this.armL.visible = false;
     this.plate.visible = false;
     this.root.scale.setScalar(0.7);
@@ -125,6 +126,18 @@ export class ViewModel {
   /** recoil is a damped spring: each shot is an impulse, so automatic fire stacks and settles like MW's */
   fire() { this.kickVel += 26; this.kickRotVel += 22; this.flashT = 0.05; this.flash.rotation.z = Math.random() * 3; }
   private kickVel = 0; private kickRotVel = 0;
+  /** killstreak tablet (call-in): a rugged tablet raised in both hands with a glowing map screen */
+  private tablet = (() => {
+    const g = new THREE.Group();
+    g.add(new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.14, 0.018), new THREE.MeshStandardMaterial({ color: 0x2a2d2a, roughness: 0.7 })));
+    const c = document.createElement('canvas'); c.width = 128; c.height = 96; const x = c.getContext('2d')!;
+    x.fillStyle = '#0d2a1a'; x.fillRect(0, 0, 128, 96); x.strokeStyle = 'rgba(80,255,140,0.35)'; for (let i = 0; i < 128; i += 16) { x.beginPath(); x.moveTo(i, 0); x.lineTo(i, 96); x.stroke(); } for (let i = 0; i < 96; i += 16) { x.beginPath(); x.moveTo(0, i); x.lineTo(128, i); x.stroke(); }
+    x.strokeStyle = '#6aff9a'; x.lineWidth = 3; x.beginPath(); x.arc(64, 48, 22, 0, 7); x.stroke(); x.fillStyle = '#ff5a3a'; x.beginPath(); x.arc(64, 48, 5, 0, 7); x.fill();
+    const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+    const scr = new THREE.Mesh(new THREE.PlaneGeometry(0.17, 0.11), new THREE.MeshBasicMaterial({ map: t })); scr.position.z = 0.0095; g.add(scr);
+    for (const sx of [-1, 1]) { const h = new THREE.Mesh(new RoundedBoxGeometry(0.05, 0.08, 0.05, 2, 0.015), new THREE.MeshStandardMaterial({ color: 0x2e2d2a, roughness: 0.85 })); h.position.set(sx * 0.11, -0.03, -0.01); g.add(h); }
+    return g;
+  })();
   private sprintK = 0; private tacK = 0; private crawlK = 0; private slideK = 0; private idleT = 0;
 
   /** Hands on the parachute toggles / spread in freefall (first-person infil view). */
@@ -222,7 +235,7 @@ export class ViewModel {
     const w = dropping ? p.weapons[P.swapFrom] : p.weapons[p.cur];
     const hidden = !w || p.phase === Phase.Downed || p.phase === Phase.Freefall || p.phase === Phase.Chute || p.phase === Phase.Plane || p.phase === Phase.Dead || p.phase === Phase.GulagWait || p.swimming;
     this.root.visible = !hidden;
-    if (hidden) return;
+    if (hidden) { this.tablet.visible = false; return; }
     const k = `${w!.id}:${w!.rarity}`;
     if (k !== this.key) {
       this.key = k;
@@ -318,6 +331,15 @@ export class ViewModel {
       else { const r = 1 - this.swap, c1 = 1.9, c3 = c1 + 1; e = 1 - (1 + c3 * Math.pow(r - 1, 3) + c1 * Math.pow(r - 1, 2)); }
       pos.y -= e * 0.28; pos.x += e * 0.05; rx -= e * 0.8; rz += e * 0.35; ry -= e * 0.15;
     }
+    // killstreak call-in: weapon dropped out of view, tablet raised, tapped, lowered
+    const callT = (p as any).callT ?? 0;
+    if (callT > 0) {
+      const u = 1 - callT / 1.1, up = smooth(u / 0.25) * (1 - smooth((u - 0.85) / 0.15));
+      pos.y -= 0.4 * up; rx -= 0.9 * up;
+      this.tablet.visible = true;
+      this.tablet.position.set(0, -0.36 + 0.22 * up, -0.34); this.tablet.rotation.set(0.45 - 0.2 * up, 0, 0);
+      if (u > 0.55 && u < 0.62) this.tablet.position.z -= 0.01; // the tap
+    } else this.tablet.visible = false;
     // mantle: weapon tucked down and away, left hand reaches out and plants on the ledge
     if (p.mantleT > 0) {
       const T = P.mantleDur ?? 0.5, u = 1 - p.mantleT / T, k = Math.sin(Math.min(1, u) * Math.PI);

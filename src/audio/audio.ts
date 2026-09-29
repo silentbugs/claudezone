@@ -16,7 +16,7 @@ export type SoundName =
   | 'hit' | 'hitArmor' | 'armorBreak' | 'headshot' | 'kill' | 'down' | 'selfArmorBreak' | 'bodyHit'
   | 'plate' | 'magOut' | 'magIn' | 'bolt' | 'swap' | 'dry' | 'melee' | 'throw' | 'pin'
   | 'step_dirt' | 'step_concrete' | 'step_metal' | 'step_wood' | 'land' | 'jump' | 'slide' | 'gear'
-  | 'pickup' | 'cash' | 'chute' | 'chuteCut' | 'explosion' | 'explosionFar' | 'whiz' | 'impact' | 'impactMetal' | 'impactWood' | 'impactGlass' | 'impactWater'
+  | 'jet' | 'callin' | 'contractStart' | 'contractDone' | 'contractStep' | 'pickup' | 'cash' | 'chute' | 'chuteCut' | 'explosion' | 'explosionFar' | 'whiz' | 'impact' | 'impactMetal' | 'impactWood' | 'impactGlass' | 'impactWater'
   | 'musicInfil' | 'musicVictory' | 'musicDefeat'
   | 'uiOpen' | 'uiHover' | 'uiBuy' | 'uiDeny' | 'downed' | 'cough' | 'heartbeat' | 'breath' | 'doorOpen' | 'doorClose' | 'doorSlam' | 'beep' | 'revive' | 'crate' | 'stinger' | 'flag' | 'rock';
 
@@ -408,6 +408,14 @@ export class Audio {
       this.add('musicVictory', vic);
       this.add('musicDefeat', pad(49, 3.5).mix(drum(4200), 1.5).mix(pad(58.3, 3.5), 0.6));
     }
+    // contract cues: a rising three-note radio chime on accept, a brighter fanfare on completion, a blip per step
+    const notes = (fs: number[], gap: number, dec: number) => (t: number) => fs.reduce((a, f, k) => a + (t > k * gap ? (Math.sin(2 * Math.PI * f * t) + 0.35 * Math.sin(4 * Math.PI * f * t)) * Math.exp(-(t - k * gap) * dec) : 0), 0) * 0.55;
+    // jet flyover: a roar that swells and fades with a falling whine (Doppler-ish)
+    this.add('jet', N(4, 4321).filter('lp', 900).env((t) => Math.exp(-Math.pow((t - 1.6) / 0.7, 2)) * 1.3).mix(tone(4, (t) => Math.sin(2 * Math.PI * (1500 - t * 260) * t) * 0.06 * Math.exp(-Math.pow((t - 1.5) / 0.6, 2))), 1));
+    this.add('callin', tone(0.5, (t) => (Math.sin(2 * Math.PI * 1760 * t) * (t < 0.08 ? 1 : 0) + Math.sin(2 * Math.PI * 1320 * t) * (t > 0.12 && t < 0.2 ? 1 : 0)) * 0.3).mix(N(0.3, 77).filter('bp', 2500, 0.5).env((t) => Math.exp(-t * 20) * 0.15), 1));
+    this.add('contractStart', tone(0.9, notes([587, 784, 1175], 0.11, 5)));
+    this.add('contractDone', tone(1.3, notes([784, 988, 1175, 1568], 0.1, 3.5)));
+    this.add('contractStep', tone(0.35, notes([988, 1319], 0.07, 9)));
     this.add('flag', tone(0.5, (t) => Math.sin(2 * Math.PI * (440 + t * 400) * t) * Math.exp(-t * 5)));
     // ---- body / status
     this.add('downed', tone(1.2, (t) => Math.sin(2 * Math.PI * 62 * t) * Math.exp(-t * 2.5)).mix(N(1.2, 2000).filter('lp', 300).env((t) => Math.exp(-t * 3)), 0.5));

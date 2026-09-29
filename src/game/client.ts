@@ -50,6 +50,7 @@ export class Match {
   spectate = -1;
   private lastMouse = { dx: 0, dy: 0 };
   private landDip = 0;
+  private flinchP = 0; private flinchY = 0; private flinchR = 0;
   private done = false;
   onEnd: (won: boolean, placement: number, me: Player) => void = () => {};
   private pauseEl: HTMLElement | null = null;
@@ -208,7 +209,7 @@ export class Match {
     switch (e.t) {
       case 'kill': {
         const v = sim.players[e.victim];
-        if (e.victim !== this.viewId() && e.x !== undefined && d(e.x, e.y!, e.z!) < 90 && v.phase !== Phase.Gulag) this.soldiers.addCorpse(e.x, e.y!, e.z!, e.yaw!, v.squad, sim.time);
+        if (e.victim !== this.viewId() && e.x !== undefined && d(e.x, e.y!, e.z!) < 90 && v.phase !== Phase.Gulag) this.soldiers.addCorpse(e.x, e.y!, e.z!, e.yaw!, v.squad, sim.time, !!e.lying);
         break;
       }
       case 'shot': {
@@ -224,7 +225,11 @@ export class Match {
         if (e.attacker === 0 && hs) {
           audio.play(e.kill ? 'kill' : e.down ? 'down' : e.armorBroke ? 'armorBreak' : e.armorHit ? 'hitArmor' : e.head ? 'headshot' : 'hit', { vol: e.armorBroke ? 0.95 : 0.7 });
         }
-        if (e.victim === 0) { audio.play(e.armorBroke ? 'selfArmorBreak' : 'bodyHit', { vol: 0.7 }); }
+        if (e.victim === 0) {
+          audio.play(e.armorBroke ? 'selfArmorBreak' : 'bodyHit', { vol: 0.7 });
+          // flinch: the view is knocked up and sideways, harder for bigger hits, recovering quickly
+          const k = Math.min(1, 0.35 + e.dmg / 50); this.flinchP += 0.035 * k; this.flinchY += (Math.random() - 0.5) * 0.05 * k; this.flinchR = (Math.random() - 0.5) * 0.06 * k;
+        }
         break;
       }
       case 'impact': if (d(e.x, e.y, e.z) < 30) audio.play(e.water ? 'impactWater' : e.mat === 3 || e.mat === 9 ? 'impactMetal' : e.mat === 4 ? 'impactWood' : e.mat === 5 ? 'impactGlass' : 'impact', { x: e.x, y: e.y, z: e.z, range: 10, vol: 0.45, throttle: 0.03 }); break;
@@ -257,12 +262,14 @@ export class Match {
       case 'gas': if (e.p === 0 && Math.random() < 0.35) audio.play('cough', { vol: 0.55, throttle: 1.2 }); break;
       case 'throw': if (e.p === 0) { audio.play('pin', { vol: 0.4 }); audio.play('throw', { vol: 0.5 }); } break;
       case 'melee': if (e.p === 0) audio.play('melee', { vol: 0.6 }); break;
-      case 'marker': if (e.squad === me.squad) audio.say(e.kind === 'loadout' ? 'Loadout drop inbound.' : e.kind === 'cluster' ? 'Cluster strike inbound.' : 'Precision airstrike inbound.'); break;
+      case 'callin': if (e.p === this.viewId()) audio.play('callin', { ui: true, vol: 0.6 }); break;
+      case 'marker': if (e.kind === 'airstrike' || e.kind === 'cluster') { const pass = e.kind === 'cluster' ? 3.1 : 3.9, gy = sim.world.hf.at(e.x, e.z); setTimeout(() => audio.play('jet', { x: e.x, y: gy + 100, z: e.z, range: 600, vol: 1.2 }), Math.max(0, (pass - 1.6) * 1000)); }
+        if (e.squad === me.squad) audio.say(e.kind === 'loadout' ? 'Loadout drop inbound.' : e.kind === 'cluster' ? 'Cluster strike inbound.' : 'Precision airstrike inbound.'); break;
       case 'circle': if (e.closing) audio.play('stinger', { music: true, vol: 0.7 }); break;
       case 'win': audio.play(e.squad === me.squad ? 'musicVictory' : 'musicDefeat', { music: true }); break;
       case 'gulag': if (e.p === 0 && e.msg === 'enter') audio.say('Welcome to the Gulag.'); if (e.p === 0 && e.msg === 'overtime') audio.play('flag', { ui: true }); break;
       case 'squadwipe': if (e.squad === me.squad) audio.say('Your squad has been eliminated.'); break;
-      case 'contract': if (e.p >= 0 && sim.players[e.p].squad === me.squad) audio.say(e.msg === 'start' ? 'Contract accepted.' : e.msg === 'done' ? 'Contract complete.' : e.msg === 'fail' ? 'Contract failed.' : 'Next target marked.'); break;
+      case 'contract': if (e.p >= 0 && sim.players[e.p].squad === me.squad) audio.play(e.msg === 'start' ? 'contractStart' : e.msg === 'done' ? 'contractDone' : e.msg === 'fail' ? 'uiDeny' : 'contractStep', { ui: true, vol: 0.7 }); if (e.p >= 0 && sim.players[e.p].squad === me.squad) audio.say(e.msg === 'start' ? 'Contract accepted.' : e.msg === 'done' ? 'Contract complete.' : e.msg === 'fail' ? 'Contract failed.' : 'Next target marked.'); break;
       case 'announce':
         if (e.text === '__infil__') { audio.play('musicInfil', { music: true, vol: 0.8 }); this.hud.showBanner('Verdansk', `Battle Royale — ${['Solos', 'Duos', 'Trios'][sim.squadSize - 1] ?? 'Quads'} • 150 players`); this.camYaw = Math.atan2(-sim.plane.dx, -sim.plane.dz); this.camPitch = -0.2; audio.play('uiBuy', { vol: 0.4 }); }
         if (e.text === '__buy__' && e.squad === me.squad && me.phase === Phase.Alive && sim.interactTarget(me)?.kind === 'buy') { document.exitPointerLock?.(); this.hud.openBuy((k, a) => { const r = sim.buy(me, k, a); if (!r) audio.play('uiBuy'); return r; }, () => (document.getElementById('game') as HTMLElement).requestPointerLock?.()); }
@@ -300,6 +307,7 @@ export class Match {
     let fov = this.settings.fov;
     this.chars.hidden = 0; this.chars.canopyOnly = false;
     this.landDip = Math.max(0, this.landDip - dt * 1.5);
+    { const k = Math.exp(-dt * 9); this.flinchP *= k; this.flinchY *= k; this.flinchR *= k; }
     const phase = vp.phase;
     const yaw = this.spectate >= 0 ? vp.yaw : this.camYaw + me.recoilYaw, pitch = this.spectate >= 0 ? vp.pitch : this.camPitch + me.recoil;
     if (phase === Phase.Plane) {
@@ -356,7 +364,7 @@ export class Match {
       // mantle: the head dips toward the ledge and rolls slightly as you haul yourself over
       let mp = 0, mr = 0;
       if (vp === me && meR.mantleT > 0) { const T = (me as any).mantleDur ?? 0.5, u = Math.min(1, 1 - meR.mantleT / T), w = Math.sin(Math.PI * u); mp = -0.11 * w; mr = 0.035 * w * ((me as any).vaulting ? -1 : 1); }
-      cam.rotation.set(pitch + mp, yaw, this.roll + mr, 'YXZ');
+      cam.rotation.set(pitch + mp + this.flinchP, yaw + this.flinchY, this.roll + mr + this.flinchR, 'YXZ');
       if (vp.slideT > 0) fov += 4;
       if (def && me.ads > 0 && (this.settings.adsFovAffected || def.scope)) fov = fov / (1 + (this.zoomNow - 1) * meR.ads);
       if (me.tacSprint > 0) fov += 6;

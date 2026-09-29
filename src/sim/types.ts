@@ -96,7 +96,7 @@ export type SimEvent =
   | { t: 'impact'; x: number; y: number; z: number; nx: number; ny: number; nz: number; mat: number; water: boolean }
   | { t: 'hit'; attacker: number; victim: number; dmg: number; head: boolean; armorBroke: boolean; armorHit: boolean; kill: boolean; down: boolean; x: number; y: number; z: number }
   | { t: 'down'; victim: number; attacker: number; w: string }
-  | { t: 'kill'; victim: number; attacker: number; w: string; head: boolean; finish: boolean; x?: number; y?: number; z?: number; yaw?: number }
+  | { t: 'kill'; victim: number; attacker: number; w: string; head: boolean; finish: boolean; x?: number; y?: number; z?: number; yaw?: number; lying?: boolean }
   | { t: 'revive'; p: number }
   | { t: 'plate'; p: number; done: boolean }
   | { t: 'reload'; p: number; w: string }
@@ -130,4 +130,5 @@ export type SimEvent =
   | { t: 'slide'; p: number }
   | { t: 'melee'; p: number }
   | { t: 'flash'; p: number; s: number }
-  | { t: 'marker'; x: number; z: number; kind: string; squad: number; dur: number };
+  | { t: 'marker'; x: number; z: number; kind: string; squad: number; dur: number; yaw?: number }
+  | { t: 'callin'; p: number; kind: string };
