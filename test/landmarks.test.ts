@@ -101,3 +101,14 @@ test('Airport control tower: courtyard door, ascender to the office level, stair
   console.log('into the cab', r2);
   assert.ok(typeof r2 === 'number' && Math.abs(r2 - 46) < 0.4, 'in the cab');
 });
+
+test('Superstore: front doors, SW stairwell to the 2F offices and out onto the annex roof; east gantry, balcony ladder to the roof', () => {
+  const sim = newSim(), f = frameOf('superstore', 60);
+  const up1 = (xL: number, xR: number, zF: number, zB: number) => [[xL, zF + 0.1], [xL, zB - 0.4], [xR, zB - 0.4], [xR, zF + 0.1]];
+  const r1 = walkRoute(sim, f, [-20, 42], [[-20, 38], [-20, 33], [-17.5, 32], [-17.5, 17.2], [-38, 17.2], [-38, 16.5], [-42, 16.5], [-50, 21.6], [-53, 21.6], [-56.3, 21.8], ...up1(-56.3, -53.3, 21, 36.8), [-50, 21.7], [-47.3, 21.8], [-47.3, 14.5], [-57.5, 14.5], [-60, 14.5], [-65, 14.5]]);
+  console.log('front -> SW stair -> annex roof', r1);
+  assert.ok(typeof r1 === 'number' && Math.abs(r1 - 4.2) < 0.4, 'on the annex roof');
+  const r2 = walkRoute(sim, f, [62, -10], [[59.2, -7], [59.2, 14], [59.7, 20], [59.7, 33.2]]);
+  console.log('east gantry -> balcony', r2);
+  assert.ok(typeof r2 === 'number' && Math.abs(r2 - 4.2) < 0.4, 'on the balcony');
+});

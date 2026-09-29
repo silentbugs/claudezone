@@ -543,3 +543,104 @@ export function controlTower2020(ctx: GenContext, x: number, z: number) {
   t.addLoot(2, CAB, -3); t.addLoot(-5, TOP, 3); t.addLoot(0, 0.05, -4); t.addLoot(-6, CAB + 4, 0);
   sub(ctx, f, 0, 0, 0, t);
 }
+
+/**
+ * Atlas Superstore (Zone 2E). A blue corrugated box (116 × 74 m, 11 m walls with a yellow cap band),
+ * single storey inside with columns on a 10 m grid (yellow bases), pallet racking in N-S aisles,
+ * checkouts along the S wall, a hazmat drum stack in the middle. 2F exists only in corner pockets: SW
+ * offices (stairwell down to 1F, door out onto the low west annex roof), NW office over the floor, a
+ * small SE office reached only from the east gantry. The roof is reachable only from outside: ladder
+ * onto the west annex, the east gantry stair to a balcony and a ladder on, and a ladder on the north
+ * wall. Three double doors under the sign (S), two loading openings (N), unloading bay B (E), cross-
+ * shaped glass skylights, solar panels, and a covered car park in front.
+ */
+export function superstore2020(ctx: GenContext) {
+  const p = poi('superstore');
+  const f = frame(ctx, 'superstore', p.x, p.z - 10, 0, 150, 120, 'superstore', 0x2d5a9a);
+  const blue = 0x2d5a9a, yellow = 0xe0b020, HW = 58, HD = 37, H = 11, F2 = 4.2;
+  const b = new Builder();
+  b.box(-HW - 0.2, -1.5, -HD - 0.2, HW + 0.2, 0.05, HD + 0.2, Mat.Concrete, { color: 0x8e8c86 });
+  const door = (u: number, w = 1.8) => ({ u0: u, u1: u + w, v0: 0, v1: 2.4 });
+  // S (front): 3 double doors under the sign + 2 in the SE unloading area; high windows
+  b.wall(0, -HW, HW, HD, 0.05, H, 0.3, Mat.Metal, [door(HW - 20.9), door(HW - 0.9), door(HW + 19.1), door(HW + 40), door(HW + 46), { u0: HW - 30, u1: HW + 30, v0: 7.5, v1: 9.5, glass: true }], blue, 1);
+  // N: two big loading openings (open), a door
+  b.wall(0, -HW, HW, -HD, 0.05, H, 0.3, Mat.Metal, [{ u0: HW - 28, u1: HW - 22, v0: 0, v1: 4.6, open: true }, { u0: HW + 2, u1: HW + 8, v0: 0, v1: 4.6, open: true }, door(HW + 30, 1)], blue, -1);
+  // W: a door to the rear lot; at 2F a door out onto the annex roof
+  b.wall(1, -HD, HD, -HW, 0.05, H, 0.3, Mat.Metal, [door(HD + 8, 1), { u0: HD + 14, u1: HD + 15, v0: F2, v1: F2 + 2.2 }], blue, -1);
+  // E: unloading garage B (open), locker-room door, alcove double doors; 2F door onto the balcony
+  b.wall(1, -HD, HD, HW, 0.05, H, 0.3, Mat.Metal, [{ u0: HD - 22, u1: HD - 16, v0: 0, v1: 4.6, open: true }, door(HD - 8, 1), door(4), { u0: HD + 27, u1: HD + 28, v0: F2, v1: F2 + 2.2 }], blue, 1);
+  // yellow cap band + parapet
+  for (const [x0, z0, x1, z1] of [[-HW, HD - 0.2, HW, HD + 0.3], [-HW, -HD - 0.3, HW, -HD + 0.2], [-HW - 0.3, -HD, -HW + 0.2, HD], [HW - 0.2, -HD, HW + 0.3, HD]]) {
+    b.box(x0, H - 1.2, z0, x1, H + 0.9, z1, Mat.Trim, { color: yellow, noCollide: true });
+  }
+  // ---- interior: columns (10 m grid), racking, checkouts, drums, platform, frozen aisle
+  for (let x = -HW + 8; x < HW; x += 10) for (let z = -HD + 7; z < HD; z += 10) {
+    b.box(x - 0.25, 0.05, z - 0.25, x + 0.25, H, z + 0.25, Mat.Metal, { color: 0xd8d8d0 });
+    b.box(x - 0.3, 0.05, z - 0.3, x + 0.3, 1.2, z + 0.3, Mat.Metal, { color: yellow });
+  }
+  for (let x = -36; x <= 36; x += 7) for (const [z0, z1] of [[-28, -10], [-6, 16]]) {
+    if (Math.abs(x) < 4) continue; // central drum area
+    b.box(x - 0.6, 0.05, z0, x + 0.6, 4.5, z1, Mat.Metal, { color: 0xc47a1e });
+  }
+  for (let x = -30; x <= 30; x += 5) b.box(x - 0.4, 0.05, 28, x + 0.4, 1.1, 31, Mat.Metal, { color: 0x5a6066 }); // checkouts
+  for (let i = 0; i < 9; i++) b.box(-3 + (i % 3) * 1.1, 0.05 + Math.floor(i / 3) * 0 , -3 + Math.floor(i / 3) * 1.1, -2.1 + (i % 3) * 1.1, 1.2, -2.1 + Math.floor(i / 3) * 1.1, Mat.Metal, { color: 0xe6e6e0, shape: 'cyl' }); // hazmat drums
+  b.box(-10, 0.05, -33, 10, 1.4, -29, Mat.Wood, { color: 0x7a5a38 }); // raised platform (N)
+  b.box(-38, 0.05, 20, -24, 1.6, 22, Mat.Metal, { color: 0xe6e8ea }); // frozen food cabinets (SW of the floor)
+  for (let x = -HW + 8; x < HW; x += 12) for (let z = -HD + 8; z < HD; z += 12) b.light(x, H - 0.8, z);
+  for (const [x, z] of [[-40, -20], [-20, 0], [0, 10], [20, -20], [40, 5], [-30, 25], [30, 25], [0, -30], [50, -30], [-50, 5]]) b.addLoot(x, 0.05, z);
+  // ---- 2F pockets
+  // SW offices + break room (x -58..-40, z 10..37) with a stairwell down to 1F and the annex-roof door
+  b.slab(-HW, 10, -40, HD, F2, 0.3, Mat.Concrete, [[-57.8, 22.4, -52, 36.8]]);
+  const swHole = dogleg(b, -57.8, -52, 21, 36.8, 0.05, 1, F2 - 0.05); void swHole;
+  b.wall(1, 21, 36.8, -51.9, 0.05, F2 - 0.05, 0.2, Mat.Plaster, [{ u0: 0.15, u1: 1.3, v0: 0, v1: 2.2 }], 0xcfc8bb);
+  b.wall(0, -57.8, -51.9, 20.9, 0.05, F2 - 0.05, 0.2, Mat.Plaster, [], 0xcfc8bb);
+  b.wall(0, -HW, -40, 10, 0.05, F2 + 3, 0.2, Mat.Plaster, [{ u0: 10, u1: 11, v0: 0, v1: 2.2 }, { u0: 4, u1: 8, v0: F2 + 1, v1: F2 + 2.4, glass: true }], 0xd8d0c0);
+  b.wall(1, 10, HD, -40, 0.05, F2 + 3, 0.2, Mat.Plaster, [{ u0: 6, u1: 7, v0: 0, v1: 2.2 }, { u0: 12, u1: 20, v0: F2 + 1, v1: F2 + 2.4, glass: true }], 0xd8d0c0);
+  b.slab(-HW, 10, -40, HD, F2 + 3, 0.2, Mat.Concrete, []);
+  b.wall(0, -51.8, -40.2, 21, F2, 3, 0.12, Mat.Plaster, [{ u0: 4, u1: 5, v0: 0, v1: 2.2 }], 0xd8d0c0); // offices / break room
+  b.light(-46, F2 + 2.9, 16); b.light(-46, F2 + 2.9, 30); b.light(-55, F2 + 2.9, 15);
+  b.addLoot(-45, F2, 15); b.addLoot(-45, F2, 30);
+  // NW office over the floor (x -58..-44, z -37..-25) + its stairwell
+  b.slab(-HW, -HD, -44, -25, F2, 0.3, Mat.Concrete, [[-57.8, -35.6, -52, -25]]);
+  dogleg(b, -57.8, -52, -37, -25, 0.05, 1, F2 - 0.05);
+  b.wall(1, -37, -25, -51.9, 0.05, F2 - 0.05, 0.2, Mat.Plaster, [{ u0: 0.15, u1: 1.3, v0: 0, v1: 2.2 }], 0xcfc8bb);
+  b.wall(0, -57.8, -51.9, -24.9, 0.05, F2 - 0.05, 0.2, Mat.Plaster, [], 0xcfc8bb);
+  b.wall(0, -HW, -44, -25, F2, 3, 0.2, Mat.Plaster, [{ u0: 3, u1: 12, v0: 0.9, v1: 2.4, glass: true }], 0xd8d0c0);
+  b.wall(1, -HD, -25, -44, F2, 3, 0.2, Mat.Plaster, [{ u0: 2, u1: 10, v0: 0.9, v1: 2.4, glass: true }], 0xd8d0c0);
+  b.slab(-HW, -HD, -44, -25, F2 + 3, 0.2, Mat.Concrete, []);
+  b.block(-48, -33, 0.8, 1.6, F2, F2 + 2, Mat.Metal, { color: 0x2a2d30 }); b.light(-49, F2 + 2.9, -31); b.addLoot(-47, F2, -29);
+  // SE office over the checkouts (x 46..58, z 22..37), only reached from the east gantry balcony
+  b.slab(46, 22, HW, HD, F2, 0.3, Mat.Concrete, []);
+  b.wall(1, 22, HD, 46, F2, 3, 0.2, Mat.Plaster, [{ u0: 3, u1: 10, v0: 0.9, v1: 2.4, glass: true }], 0xd8d0c0);
+  b.wall(0, 46, HW, 22, F2, 3, 0.2, Mat.Plaster, [], 0xd8d0c0);
+  b.slab(46, 22, HW, HD, F2 + 3, 0.2, Mat.Concrete, []);
+  b.light(52, F2 + 2.9, 30); b.addLoot(52, F2, 30);
+  // ---- roof: parapet, cross skylights (glass), solar panels, AC units
+  b.slab(-HW - 0.2, -HD - 0.2, HW + 0.2, HD + 0.2, H, 0.4, Mat.Roof, [[-45, -3, 45, 3], [-3, -30, 3, 30]]);
+  b.box(-45, H - 0.1, -3, 45, H, 3, Mat.Glass, {}); b.box(-3, H - 0.1, -30, 3, H, 30, Mat.Glass, {});
+  b.box(-45, H, -3.2, 45, H + 2, 3.2, Mat.Glass, { shape: 'gable', noCollide: true });
+  for (let x = -50; x <= 50; x += 6) for (const z of [-25, -18, 10, 18, 25]) if (Math.abs(x) > 5) b.box(x - 2.2, H, z - 1.2, x + 2.2, H + 0.9, z + 1.2, Mat.Metal, { color: 0x1d2a3a });
+  for (const [x, z] of [[30, -30], [-30, 30], [50, 30]]) b.box(x - 1.5, H, z - 1, x + 1.5, H + 1.4, z + 1, Mat.Metal, { color: 0xa0a6aa });
+  for (const [x0, z0, x1, z1] of [[-HW, HD - 0.3, HW, HD], [-HW, -HD, HW, -HD + 0.3], [-HW, -HD, -HW + 0.3, HD], [HW - 0.3, -HD, HW, HD]]) b.box(x0, H, z0, x1, H + 0.9, z1, Mat.Metal, { color: blue });
+  b.addLoot(0, H, -20); b.addLoot(40, H, 30); b.addLoot(-40, H, -30);
+  // ---- outside: west annex (low roof), east gantry + balcony, ladders
+  b.box(-70, -1.2, -10, -58.3, 0.05, 20, Mat.Concrete, { color: 0x8e8c86 });
+  b.wall(1, -10, 20, -70, 0.05, F2 - 0.05, 0.3, Mat.Metal, [door(12, 1)], blue, -1);
+  b.wall(0, -70, -58.3, -10, 0.05, F2 - 0.05, 0.3, Mat.Metal, [], blue, -1); b.wall(0, -70, -58.3, 20, 0.05, F2 - 0.05, 0.3, Mat.Metal, [door(5, 1)], blue, 1);
+  b.slab(-70.2, -10.2, -58.3, 20.2, F2, 0.3, Mat.Roof, []);
+  b.ladder(-70.15, 0, -1, 0, 0.05, F2); // up the annex's west wall
+  b.light(-64, F2 - 0.3, 5); b.addLoot(-64, 0.05, 5);
+  b.ramp(HW + 0.3, 0.05, -5, HW + 2.2, F2, 15, 1, 1, Mat.Metal); // east gantry stair, rising south
+  b.box(HW + 0.3, F2 - 0.2, 15, HW + 3, F2, 35, Mat.Metal, { color: 0x6d7378 }); // balcony
+  b.box(HW + 2.9, F2, 15, HW + 3, F2 + 1, 35, Mat.Metal, { color: 0x6d7378 }); // rail
+  b.ladder(HW + 0.15, 34, 1, 0, F2, H); // balcony -> main roof
+  b.ladder(20, -HD - 0.15, 0, -1, 0.05, H); // north wall ladder
+  // ---- covered car park in front
+  for (const z of [46, 57]) {
+    b.box(-28, 4, z - 5, 28, 4.3, z + 5, Mat.Metal, { color: 0x2d5a9a });
+    for (let x = -26; x <= 26; x += 13) b.box(x - 0.2, 0.05, z - 0.2, x + 0.2, 4, z + 0.2, Mat.Metal, { color: 0x8a8f94 });
+  }
+  sub(ctx, f, 0, 0, 0, b);
+  ctx.buyStations.push({ x: p.x + 40, y: 0, z: p.z + 45, a: 0 });
+  ctx.contracts.push({ x: p.x - 70, y: 0, z: p.z + 30 });
+}

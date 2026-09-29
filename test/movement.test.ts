@@ -181,7 +181,7 @@ test('jumping indoors (floors, stairs) never goes through the ceiling', () => {
             p.intent.mz = 1; if (t % 9 === 0) p.intent.jump = true; sim.tick(1 / 60); sim.events.length = 0;
             // body moved through solid geometry this tick (checked at knee and chest height)
             const clear = (x: number, y: number, z: number) => world.col.fits(x, y + 0.1, z, 1.0, 0.15);
-            const thru = clear(ox, oy, oz) && clear(p.x, p.y, p.z) && [1.2].some((hh) => !world.col.los(ox, oy + hh, oz, p.x, p.y + hh, p.z));
+            const thru = Math.hypot(p.x - ox, p.z - oz) < 5 /* not a respawn */ && clear(ox, oy, oz) && clear(p.x, p.y, p.z) && [1.2].some((hh) => !world.col.los(ox, oy + hh, oz, p.x, p.y + hh, p.z));
             if (thru) { bad++; if (bad <= 8) console.log('try', tries, 'through', s.kind, 'dy', (p.y - oy).toFixed(2), 'mantle', p.mantleT.toFixed(2), 'from y', (oy - s.y).toFixed(2), 'to', (p.y - s.y).toFixed(2)); break; }
           }
         }
