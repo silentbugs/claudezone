@@ -6,7 +6,7 @@
 import { Mat } from './collision';
 import { Builder, apartment, warehouse, garageRow, house, shop, FLOOR_H } from './builder';
 import { poi } from './mapdata';
-import { tvStation2020 } from './landmarks2020';
+import { tvStation2020, trainStation2020, sub } from './landmarks2020';
 import type { GenContext } from './mapgen';
 import { Rng } from '../core/rng';
 
@@ -328,7 +328,7 @@ function trainStation(ctx: GenContext) {
     p = { ...p0, x: rp[bi] - nx * 31, z: rp[bi + 2] - nz * 31 };
   }
   const st = { wall: Mat.Concrete, wallColor: 0xcfc6b2, trim: 0, roof: Mat.Roof, roofColor: 0x5a5048 };
-  ctx.place(apartment(rng, 90, 20, 2, st, { glassBands: true }), 'station', p.x, p.z, ang, { poi: 'train_station', lodColor: 0xcfc6b2 });
+  const sf = trainStation2020(ctx, p.x, p.z, ang); void st;
   // platforms + canopy + parked trains
   const b = new Builder();
   for (const zz of [22, 40]) {
@@ -341,7 +341,7 @@ function trainStation(ctx: GenContext) {
     const x0 = -70 + k * 24;
     b.box(x0, 0.4, zz - 1.6, x0 + 22, 4.4, zz + 1.6, Mat.Metal, { color: k === 0 ? 0x8a3a2a : 0x4f6a5a });
   }
-  ctx.place(b, 'platforms', p.x, p.z, ang, { poi: 'train_station', lodColor: 0x8a8a84 });
+  sub(ctx, sf, 0, 0, 0, b, 'platforms');
   ctx.buyStations.push({ x: p.x - 30, y: 0, z: p.z - 30, a: 0 });
   ctx.contracts.push({ x: p.x + 40, y: 0, z: p.z - 40 });
 }

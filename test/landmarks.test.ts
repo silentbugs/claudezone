@@ -45,3 +45,18 @@ test('TV Station: foyer stairs, mezzanine, 2F, maintenance stair to roof, SW ste
     assert.ok(typeof r === 'number' && Math.abs(r - want) < 0.5, name);
   }
 });
+
+test('Train Station: hall stairwell to the dome roof, pavilion stairs, back doors to the platform', () => {
+  const sim = newSim(), f = frameOf('station', 60);
+  const up = (xL: number, xR: number, zF: number, zB: number, n: number) => { const r: number[][] = []; for (let k = 0; k < n; k++) r.push([xL, zF + 0.1], [xL, zB - 0.4], [xR, zB - 0.4], [xR, zF + 0.1]); return r; };
+  const routes: [string, number[], number[][], number][] = [
+    ['front doors -> NE stair -> roof', [0, -16], [[0, -13], [0, -10], [6, 1.9], [9.7, 1.9], ...up(9.7, 13.1, 2, 10.8, 4), [9.5, 1.9], [6, 1.9]], 20],
+    ['wing -> pavilion -> roof', [28, -12], [[28, -10], [28, -6], [29, -0.2], [46, -0.2], [58, 1.6], [62, 1.6], [66, -10.8], [70.5, -10.8], ...up(70.5, 73.4, -10.9, -2, 3), [70.4, -10.8], [66, -10.8]], 13.5],
+    ['back doors -> platform', [-5, 8], [[-5, 11], [-5, 13], [-5, 18.5], [-5, 20]], 1.1],
+  ];
+  for (const [name, st, pts, want] of routes) {
+    const r = walkRoute(sim, f, st, pts);
+    console.log(name, r);
+    assert.ok(typeof r === 'number' && Math.abs(r - want) < 0.6, name);
+  }
+});

@@ -187,3 +187,118 @@ export function tvStation2020(ctx: GenContext) {
   ctx.buyStations.push({ x: p.x - 40, y: 0, z: p.z + 40, a: 0 });
   ctx.contracts.push({ x: p.x + 10, y: 0, z: p.z + 45 });
 }
+
+/**
+ * Enclosed dogleg stair shaft: x0..x1 × z0..z1, `levels` flights-pairs of height h from y0. Front landing
+ * at z0 (depth 1.3), half landing against z1. Returns the slab hole to leave at every upper level.
+ */
+export function dogleg(b: Builder, x0: number, x1: number, z0: number, z1: number, y0: number, levels: number, h: number, mat = Mat.Concrete): [number, number, number, number] {
+  const Lf = 1.4, Lh = 1.3, xm = (x0 + x1) / 2;
+  for (let k = 0; k < levels; k++) {
+    const y = y0 + k * h, mid = y + h / 2;
+    b.ramp(x0 + 0.1, y, z0 + Lf, xm - 0.05, mid, z1 - Lh, 1, 1, mat);
+    b.ramp(xm + 0.05, mid, z0 + Lf, x1 - 0.1, y + h, z1 - Lh, 1, -1, mat);
+    b.box(x0 + 0.1, mid - 0.2, z1 - Lh, x1 - 0.1, mid, z1, mat, { color: 0x9a968f });
+    b.box(x0 + 0.1, y + h - 0.2, z0, x1 - 0.1, y + h, z0 + Lf, mat, { color: 0x9a968f }); // landing at the next level
+    b.box(xm - 0.05, y, z0 + Lf + 0.6, xm + 0.05, y + h, z1 - Lh - 0.7, Mat.Plaster, { color: 0xbfb8aa });
+    b.light(xm, y + h - 0.1, z0 + Lf / 2);
+  }
+  return [x0, z0 + Lf, x1, z1];
+}
+
+/**
+ * Verdansk Train Station (Zone 3B), frame x along the tracks, front (plaza) at -z, platforms at +z.
+ * Central domed block with the ticket hall (15 m+ tall volume, pilasters, info kiosk, chandeliers, arched
+ * window over 3 double doors, back doors to the platforms, NE stairwell to the roof beside the dome);
+ * 2-storey wings; 3-storey end pavilions with stairwells to their roofs; ladders link the roof levels.
+ */
+export function trainStation2020(ctx: GenContext, x: number, z: number, a: number) {
+  const f = frame(ctx, 'train_station', x, z, a, 170, 110, 'station', 0xd9c79a);
+  const cream = 0xd9c79a, band = 0xb9a57a, st = Mat.Plaster;
+  const b = new Builder();
+  b.box(-76, -1.5, -13, 76, 0.05, 13, Mat.Concrete, { color: 0x9a968f });
+  // ---- central block x -15..15, z -12..12, 20 m
+  const CH = 20;
+  const front: any[] = [{ u0: 8.6, u1: 10.4, v0: 0, v1: 3 }, { u0: 14.1, u1: 15.9, v0: 0, v1: 3 }, { u0: 19.6, u1: 21.4, v0: 0, v1: 3 }, { u0: 8, u1: 22, v0: 6, v1: 15, glass: true }, { u0: 2, u1: 5, v0: 8, v1: 12, glass: true }, { u0: 25, u1: 28, v0: 8, v1: 12, glass: true }];
+  b.wall(0, -15, 15, -12, 0.05, CH, 0.5, st, front, cream, -1, 0xece2c6);
+  b.wall(0, -15, 15, 12, 0.05, CH, 0.5, st, [{ u0: 9.2, u1: 11, v0: 0, v1: 3 }, { u0: 19, u1: 20.8, v0: 0, v1: 3 }, { u0: 11, u1: 19, v0: 8, v1: 14, glass: true }], cream, 1, 0xece2c6);
+  b.wall(1, -12, 12, -15, 0.05, CH, 0.5, st, [{ u0: 11.1, u1: 12.9, v0: 0, v1: 3 }], cream);
+  b.wall(1, -12, 12, 15, 0.05, CH, 0.5, st, [{ u0: 11.1, u1: 12.9, v0: 0, v1: 3 }], cream);
+  // pilasters, clocks, the info kiosk and benches, chandeliers
+  for (const px of [-11, -6, 6, 11]) { b.box(px - 0.5, 0.05, -11.8, px + 0.5, 15, -11.2, st, { color: 0xe6dcc0 }); b.box(px - 0.5, 0.05, 11.2, px + 0.5, 15, 11.8, st, { color: 0xe6dcc0 }); }
+  for (const pz of [-6, 6]) { b.box(-14.8, 0.05, pz - 0.5, -14.2, 15, pz + 0.5, st, { color: 0xe6dcc0 }); }
+  b.box(-1.5, 0.05, 2, 1.5, 2.8, 5, Mat.Plaster, { color: 0xe8e2d2 }); // info kiosk
+  for (const bx of [-9, 9]) b.block(bx, -3, 3.5, 0.6, 0.05, 0.5, Mat.Wood, { color: 0x5a3d26 });
+  b.box(-4, 9, -0.2, 4, 11.5, 0.2, Mat.Trim, { color: 0x1c1f22, noCollide: true }); // departures board
+  for (const [lx, lz] of [[0, -5], [0, 5], [-8, 0], [8, 0]]) b.light(lx, 12, lz);
+  b.addLoot(-10, 0.05, -8); b.addLoot(10, 0.05, -8); b.addLoot(0, 0.05, 7); b.addLoot(-12, 0.05, 9);
+  // NE stairwell (just inside, to the right) up to the roof: 4 levels of 5 m
+  const sh = dogleg(b, 8.2, 14.6, 1.2, 11.6, 0.05, 4, (CH - 0.05) / 4);
+  b.wall(1, 1.2, 11.6, 8.1, 0.05, CH, 0.2, Mat.Plaster, [{ u0: 0.2, u1: 1.3, v0: 0, v1: 2.2 }], 0xcfc8bb);
+  b.wall(0, 8.1, 14.75, 1.1, 0.05, CH, 0.2, Mat.Plaster, [], 0xcfc8bb);
+  // roof: flat at 20 with a balustrade, the dome tower, the stair hut beside it
+  b.slab(-15.25, -12.25, 15.25, 12.25, CH, 0.4, Mat.Roof, [sh]);
+  b.wall(0, -15, 15, -11.9, CH, 1.1, 0.3, st, [], cream); b.wall(0, -15, 15, 11.9, CH, 1.1, 0.3, st, [], cream);
+  b.wall(1, -12, 12, -14.9, CH, 1.1, 0.3, st, [], cream); b.wall(1, -12, 12, 14.9, CH, 1.1, 0.3, st, [], cream);
+  b.box(-6, CH, -6, 6, CH + 5, 6, st, { color: cream });
+  b.box(-5.2, CH + 5, -5.2, 5.2, CH + 8, 5.2, Mat.Metal, { color: 0x9a9280, shape: 'cyl' });
+  b.box(-3.4, CH + 8, -3.4, 3.4, CH + 10, 3.4, Mat.Metal, { color: 0x9a9280, shape: 'cyl' });
+  b.wall(1, 1.2, 11.6, 8.1, CH, 2.6, 0.2, st, [{ u0: 0.2, u1: 1.3, v0: 0, v1: 2.2 }], cream);
+  b.wall(1, 1.2, 11.6, 14.75, CH, 2.6, 0.2, st, [], cream);
+  b.wall(0, 8.1, 14.75, 1.1, CH, 2.6, 0.2, st, [], cream); b.wall(0, 8.1, 14.75, 11.7, CH, 2.6, 0.2, st, [], cream);
+  b.box(7.9, CH + 2.6, 0.9, 14.95, CH + 2.8, 11.9, Mat.Roof);
+  b.box(-4, CH - 3, -12.4, 4, CH - 1.2, -12.25, Mat.Trim, { color: 0xb3261e, noCollide: true }); // ВОКЗАЛ sign
+  // front steps and a brick plinth band
+  for (let k = 0; k < 3; k++) b.box(-11, -0.4 + k * 0.15, -14.4 + k * 0.6, 11, -0.25 + k * 0.15, -12.25, Mat.Concrete, { color: 0xb0aca2 });
+  // back doors down to platform 1 (1.1 m up): ramps
+  for (const rx of [-5.9, 4.1]) b.ramp(rx, 0.05, 12.3, rx + 1.8, 1.1, 18.2, 1, 1, Mat.Concrete);
+  // ---- wings (2 storeys) and pavilions (3 storeys), mirrored
+  for (const sgn of [-1, 1]) {
+    const wx0 = sgn > 0 ? 15 : -60, wx1 = sgn > 0 ? 60 : -15, WZ = 9, WH = 9;
+    for (const [y, h] of [[0.05, 4.45], [4.5, 4.5]]) {
+      const wins = []; for (let u = 3; u < 44; u += 5) wins.push({ u0: u, u1: u + 1.6, v0: 1, v1: 3, glass: false });
+      const doorsF = y < 1 ? [{ u0: 12, u1: 13.8, v0: 0, v1: 2.4 }, { u0: 30, u1: 31.8, v0: 0, v1: 2.4 }] : [];
+      b.wall(0, wx0, wx1, -WZ, y, h, 0.4, st, [...wins.filter((o) => !doorsF.some((d) => o.u1 > d.u0 - 0.3 && o.u0 < d.u1 + 0.3)), ...doorsF], cream, -1, 0xece2c6);
+      b.wall(0, wx0, wx1, WZ, y, h, 0.4, st, [...wins.filter((o) => y > 1 || Math.abs(o.u0 - 22) > 3), ...(y < 1 ? [{ u0: 22, u1: 23.8, v0: 0, v1: 2.4 }] : [])], cream, 1, 0xece2c6);
+      for (const cxw of [wx0 + 15, wx0 + 30]) b.wall(1, -WZ + 0.2, WZ - 0.2, cxw, y, h, 0.15, Mat.Plaster, [{ u0: 8, u1: 9.2, v0: 0, v1: 2.2 }], 0xd8d0c0);
+      for (let lx = wx0 + 7; lx < wx1; lx += 15) b.light(lx, y + h - 0.1, 0);
+      b.addLoot(wx0 + 5, y, -5); b.addLoot(wx0 + 22, y, 5); b.addLoot(wx0 + 38, y, -4);
+    }
+    b.box(wx0, -0.3, -WZ - 0.05, wx1, 1.2, -WZ + 0.05, Mat.Brick, { color: band, noCollide: true });
+    b.slab(wx0, -WZ, wx1, WZ, 4.5, 0.25, Mat.Concrete, []);
+    b.slab(wx0 - 0.2, -WZ - 0.2, wx1 + 0.2, WZ + 0.2, WH, 0.3, Mat.Roof, []);
+    b.wall(0, wx0, wx1, -WZ + 0.1, WH, 0.9, 0.2, st, [], cream); b.wall(0, wx0, wx1, WZ - 0.1, WH, 0.9, 0.2, st, [], cream);
+    // pavilion
+    const px0 = sgn > 0 ? 60 : -75, px1 = sgn > 0 ? 75 : -60, PH = 13.5;
+    const outer = sgn > 0 ? px1 : px0, inner = sgn > 0 ? px0 : px1;
+    for (const [y, h] of [[0.05, 4.45], [4.5, 4.5], [9, 4.5]] as [number, number][]) {
+      const wins = [{ u0: 2.5, u1: 4.5, v0: 1, v1: 3 }, { u0: 10.5, u1: 12.5, v0: 1, v1: 3 }];
+      b.wall(0, px0, px1, -12, y, h, 0.4, st, y < 1 ? [{ u0: 6.6, u1: 8.4, v0: 0, v1: 2.4 }, ...wins] : wins, cream, -1, 0xece2c6);
+      b.wall(0, px0, px1, 12, y, h, 0.4, st, wins, cream, 1, 0xece2c6);
+      b.wall(1, -12, 12, outer, y, h, 0.4, st, [{ u0: 4, u1: 6, v0: 1, v1: 3 }, { u0: 18, u1: 20, v0: 1, v1: 3 }], cream, sgn as 1 | -1);
+      // inner wall: doors into the wing on both wing levels; above, a plain wall facing the wing roof
+      b.wall(1, -12, 12, inner, y, h, 0.4, st, y < 5 ? [{ u0: 13, u1: 14.2, v0: 0, v1: 2.2 }] : [], cream);
+      b.light((px0 + px1) / 2 - sgn * 2, y + h - 0.1, 4);
+      b.addLoot((px0 + px1) / 2, y, 6);
+    }
+    // stair shaft on the pavilion's outer side, 3 levels to the roof
+    const sx0 = sgn > 0 ? 69.4 : -74.6, sx1 = sgn > 0 ? 74.6 : -69.4, sInner = sgn > 0 ? sx0 - 0.1 : sx1 + 0.1;
+    const hole = dogleg(b, sx0, sx1, -11.6, -1.2, 0.05, 3, 4.5);
+    for (const y of [0.05, 4.5, 9]) b.wall(1, -11.6, -1.2, sInner, y, 4.45, 0.2, Mat.Plaster, [{ u0: 0.2, u1: 1.3, v0: 0, v1: 2.2 }], 0xcfc8bb);
+    b.wall(0, Math.min(sx0, sx1) - 0.1, Math.max(sx0, sx1) + 0.1, -1.1, 0.05, PH, 0.2, Mat.Plaster, [], 0xcfc8bb);
+    for (const y of [4.5, 9]) b.slab(px0, -12, px1, 12, y, 0.25, Mat.Concrete, [hole]);
+    b.slab(px0 - 0.2, -12.2, px1 + 0.2, 12.2, PH, 0.3, Mat.Roof, [hole]);
+    b.wall(0, px0, px1, -11.9, PH, 1.0, 0.3, st, [], cream); b.wall(0, px0, px1, 11.9, PH, 1.0, 0.3, st, [], cream); b.wall(1, -12, 12, outer - sgn * 0.1, PH, 1.0, 0.3, st, [], cream);
+    b.wall(1, -12, 12, inner + sgn * 0.1, PH, 1.0, 0.3, st, [{ u0: 16, u1: 18, v0: 0, v1: 1.0 }], cream); // gap where the ladder comes up
+    // roof hut over the pavilion stair
+    b.wall(1, -11.6, -1.2, sInner, PH, 2.6, 0.2, st, [{ u0: 0.2, u1: 1.3, v0: 0, v1: 2.2 }], cream);
+    b.wall(0, Math.min(sx0, sx1) - 0.1, Math.max(sx0, sx1) + 0.1, -1.1, PH, 2.6, 0.2, st, [], cream);
+    b.box(Math.min(sx0, sx1) - 0.3, PH + 2.6, -11.9, Math.max(sx0, sx1) + 0.3, PH + 2.8, -0.9, Mat.Roof);
+    b.box(Math.min(px0, px1) + 3, PH - 2.5, -12.45, Math.max(px0, px1) - 3, PH - 1, -12.25, Mat.Trim, { color: 0xb3261e, noCollide: true }); // ВОКЗАЛ
+    // ladders: wing roof -> pavilion roof, wing roof -> central roof
+    b.ladder(inner - sgn * 0.2, 5, -sgn, 0, WH, PH);
+    b.ladder(sgn * 15.25 + sgn * 0.05, 7, sgn, 0, WH, CH);
+  }
+  sub(ctx, f, 0, 0, 0, b);
+  return f;
+}

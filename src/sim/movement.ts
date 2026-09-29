@@ -272,6 +272,8 @@ function tryMantle(sim: Sim, p: Player): boolean {
     if (top <= p.y + 0.3 || top <= base + MOVE.step || top > reach) continue;
     // headroom: we rise in place first, so nothing may be overhead (stair landings, the floor above)
     if (col.ceilingAt(p.x, p.z, p.y + 0.3, MOVE.radius * 0.7) < top + 0.95) continue;
+    // ...and no walkable surface (stair flight, sloped roof) between our head and the ledge
+    if (col.groundAt(p.x, p.z, top - 0.1, 0.2) > p.y + 1.7) continue;
     // what is behind the obstacle's top surface?
     let drop = -1, deep = false;
     for (const e of [0.3, 0.5, 0.75]) {

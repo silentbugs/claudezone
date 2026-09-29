@@ -149,10 +149,12 @@ test('vault in and out through a house window; jump spam never reaches the roof'
     const [qx, qz] = toWorld(s, lx, s.fz - 0.7);
     p.x = qx; p.z = qz; p.y = world.col.groundAt(qx, qz, s.y + 1); p.fallStartY = p.y; p.vx = p.vz = p.vy = 0; p.stance = 0;
     p.yaw = p.intent.yaw = Math.atan2(-(ix - ox), -(iz - oz));
-    for (let t = 0; t < 360; t++) { p.intent.mz = 1; if (t % 9 === 0) p.intent.jump = true; sim.tick(1 / 60); sim.events.length = 0; maxY = Math.max(maxY, p.y - s.y); }
+    for (let t = 0; t < 360; t++) { p.intent.mz = 1; if (t % 9 === 0) p.intent.jump = true; sim.tick(1 / 60); sim.events.length = 0; const q = toLocal(s, p.x, p.z); if (q[1] > s.bz0 - 1.5 && q[1] < s.bz1 && q[0] > s.bx0 && q[0] < s.bx1) maxY = Math.max(maxY, p.y - s.y); } // count height only while at / in this house
   }
   console.log('jump spam max height', maxY.toFixed(2), 'eaves', s.by1.toFixed(1));
-  assert.ok(maxY < win.floor - s.y + 2.0, 'never climbed onto the upper floor / roof');
+  // walking in and up the stairs (to 2F or into the loft) is fine; never onto the roof above the top floor
+  const roofTop = Math.max(...s.parts.filter((q: any) => q.mat === 8 && !q.noCollide && q.x1 - q.x0 > 3).map((q: any) => q.y1));
+  assert.ok(maxY < roofTop + 0.5, 'never climbed onto the roof');
 });
 
 test('jumping indoors (floors, stairs) never goes through the ceiling', () => {

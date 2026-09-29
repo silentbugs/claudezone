@@ -173,6 +173,12 @@ export class CollisionWorld {
         const b = s.y + p.y0;
         if (b >= y && b < c) c = b;
       }
+      // sloped roofs are ceilings from inside (lofts); stair flights are not
+      for (const r of s.ramps) {
+        if (r.mat !== Mat.Roof || lx < r.x0 || lx > r.x1 || lz < r.z0 || lz > r.z1) continue;
+        const b = s.y + this.rampHeight(r, lx, lz) - 0.25;
+        if (b >= y && b < c) c = b;
+      }
     }
     return c;
   }
