@@ -1,4 +1,5 @@
 import { models } from './render/models';
+import { DIFFICULTY, type Difficulty } from './sim/bots';
 import { WEAPON } from './data/weapons';
 import '@fontsource/rajdhani/500.css';
 import '@fontsource/rajdhani/600.css';
@@ -47,12 +48,19 @@ async function boot() {
   };
   const lastMode = () => { try { const m = +(localStorage.getItem('vd-mode') ?? 3); return m >= 1 && m <= 3 ? m : 3; } catch { return 3; } };
   const menu = document.createElement('div'); menu.className = 'menu';
+  let selMode = lastMode();
+  let selDiff: Difficulty = (() => { try { const d = localStorage.getItem('vd-diff'); return d && d in DIFFICULTY ? d as Difficulty : 'normal'; } catch { return 'normal'; } })();
   const showMenu = () => {
     menu.innerHTML = `<h1>VERDANSK</h1><h2>BATTLE ROYALE • 2020</h2>
-      <div class="modes">${[1, 2, 3].map((n) => `<button data-m="${n}" class="${n === lastMode() ? 'sel' : ''}">${['Solos', 'Duos', 'Trios'][n - 1]}<small>150 players · ${[150, 75, 50][n - 1]} ${n === 1 ? 'players' : 'squads'}</small></button>`).join('')}</div>
+      <div class="mlabel">MODE</div><div class="modes">${[1, 2, 3].map((n) => `<button data-m="${n}" class="${n === selMode ? 'sel' : ''}">${['Solos', 'Duos', 'Trios'][n - 1]}<small>150 players · ${[150, 75, 50][n - 1]} ${n === 1 ? 'players' : 'squads'}</small></button>`).join('')}</div>
+      <div class="mlabel">BOT DIFFICULTY</div><div class="modes diffs">${(['easy', 'normal', 'hard', 'veteran'] as Difficulty[]).map((d) => `<button data-d="${d}" class="${d === selDiff ? 'sel' : ''}">${DIFFICULTY[d].label}<small>${{ easy: 'slow, inaccurate bots', normal: 'fair fights', hard: 'sharp, quick bots', veteran: 'very accurate, fast' }[d]}</small></button>`).join('')}</div>
+      <button class="startbtn" data-a="start">START GAME</button>
       <button data-a="settings">Settings</button>
       <div class="sub">A fan rebuild of the original 2020 Verdansk: the map traced from the 2020 tac map, C-130 infil, gas circles, armor plates, loot rarities, supply boxes, buy stations, contracts, the Gulag, redeploys and 149 bots in Solos, Duos or Trios. Soldiers, guns, photo textures and most sounds are CC0 assets; the rest is generated in code.<br><br>Esc during a match opens the menu and settings.</div>`;
-    menu.querySelectorAll<HTMLElement>('[data-m]').forEach((b) => b.onclick = () => start(+b.dataset.m!));
+    // pick a mode and a difficulty, then Start Game
+    menu.querySelectorAll<HTMLElement>('[data-m]').forEach((b) => b.onclick = () => { selMode = +b.dataset.m!; menu.querySelectorAll('[data-m]').forEach((q) => q.classList.toggle('sel', q === b)); });
+    menu.querySelectorAll<HTMLElement>('[data-d]').forEach((b) => b.onclick = () => { selDiff = b.dataset.d as Difficulty; try { localStorage.setItem('vd-diff', selDiff); } catch { /* */ } menu.querySelectorAll('[data-d]').forEach((q) => q.classList.toggle('sel', q === b)); });
+    menu.querySelector<HTMLElement>('[data-a=start]')!.onclick = () => start(selMode);
     menu.querySelector<HTMLElement>('[data-a=settings]')!.onclick = () => { const sMenu = new SettingsMenu(settings, input, applySetting, () => sMenu.el.remove()); ui.appendChild(sMenu.el); };
     ui.appendChild(menu);
   };
@@ -60,7 +68,7 @@ async function boot() {
     try { localStorage.setItem('vd-mode', String(mode)); } catch { /* storage blocked */ }
     audio.init(); audio.setVolume(settings.volume, settings.sfx, settings.ui); audio.voiceOn = settings.announcer;
     menu.remove();
-    match = new Match(sm, world, input, tac, ui, settings, (Date.now() & 0xffff) + 1, mode);
+    match = new Match(sm, world, input, tac, ui, settings, (Date.now() & 0xffff) + 1, mode, selDiff);
     match.onSettingChange = applySetting;
     sm.prewarm([match.vm.scene]); // the match's own meshes (soldiers, loot, effects, viewmodel)
     match.onEnd = (won, place, me) => {

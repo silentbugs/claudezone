@@ -16,6 +16,14 @@ import { vehicleOf, enterVehicle, exitVehicle, VEHICLES } from './vehicles';
 
 type Goal = 'drop' | 'loot' | 'rotate' | 'fight' | 'revive' | 'buy' | 'idle' | 'follow';
 
+/** Bot difficulty (chosen on the menu): skill range, aim error, extra reaction time, aim turn speed. */
+export type Difficulty = 'easy' | 'normal' | 'hard' | 'veteran';
+export const DIFFICULTY: Record<Difficulty, { lo: number; hi: number; err: number; react: number; turn: number; label: string }> = {
+  easy: { lo: 0.1, hi: 0.4, err: 3.5, react: 0.55, turn: 0.55, label: 'Easy' },
+  normal: { lo: 0.25, hi: 0.65, err: 2, react: 0.25, turn: 0.8, label: 'Normal' },
+  hard: { lo: 0.35, hi: 0.9, err: 1, react: 0, turn: 1, label: 'Hard' },
+  veteran: { lo: 0.6, hi: 1, err: 0.75, react: -0.08, turn: 1.15, label: 'Veteran' },
+};
 export class BotBrain {
   goal: Goal = 'drop';
   tx = 0; tz = 0; // current move target
@@ -36,6 +44,8 @@ export class BotBrain {
   chestId = -1; chestT = 0;
   lootScanAt = 0; gunScanAt = 0;
   constructor(public id: number, r: number) { this.skill = 0.35 + r * 0.55; this.wanderA = r * 6.28; }
+  /** difficulty tuning shared by all bots (see DIFFICULTY) */
+  static tune = { err: 1, react: 0, turn: 1 };
 }
 
 const hitBuf: RayHit = { t: 0, nx: 0, ny: 0, nz: 0, structure: -1, part: -1, mat: Mat.Rock, terrain: false, water: false };
@@ -205,9 +215,10 @@ export function botThink(sim: Sim, b: BotBrain, p: Player, dt: number, think: bo
     const ax = q.x + q.vx * tof, az = q.z + q.vz * tof;
     const wantYaw = Math.atan2(-(ax - p.x), -(az - p.z));
     const wantPitch = Math.atan2(aimY - ey, dist) + (def ? 0.5 * 9.8 * 0.55 * tof * tof / Math.max(1, dist) : 0);
-    b.aimErr = Math.max(0.008 + (1 - b.skill) * 0.02, b.aimErr - dt * (0.1 + b.skill * 0.22));
+    const T = BotBrain.tune;
+    b.aimErr = Math.max((0.008 + (1 - b.skill) * 0.02) * T.err, b.aimErr - dt * (0.1 + b.skill * 0.22));
     const errYaw = Math.sin(sim.time * 3.1 + b.id) * b.aimErr * (1 + dist / 120), errPitch = Math.cos(sim.time * 2.3 + b.id * 1.7) * b.aimErr * 0.7 * (1 + dist / 120);
-    const turn = Math.min(1, dt * (6 + b.skill * 10));
+    const turn = Math.min(1, dt * (6 + b.skill * 10) * T.turn);
     it.yaw = lerpYaw(it.yaw, wantYaw + errYaw, turn);
     it.pitch += (wantPitch + errPitch - p.recoil * (0.4 + b.skill * 0.5) - it.pitch) * turn;
     const aimed = Math.abs(wrapAngle(p.yaw - wantYaw)) < 0.12 + 2 / Math.max(5, dist);
@@ -371,8 +382,8 @@ function decide(sim: Sim, b: BotBrain, p: Player, inGulag: boolean) {
     }
     if (best) {
       b.target = best.id; b.seenAt = sim.time; b.engageStart = sim.time; b.lastSeenX = best.x; b.lastSeenZ = best.z;
-      b.reactAt = sim.time + 0.35 + (1 - b.skill) * 0.6 + Math.hypot(best.x - p.x, best.z - p.z) / 300;
-      b.aimErr = 0.07 + (1 - b.skill) * 0.1;
+      b.reactAt = sim.time + Math.max(0.15, 0.35 + (1 - b.skill) * 0.6 + BotBrain.tune.react) + Math.hypot(best.x - p.x, best.z - p.z) / 300;
+      b.aimErr = (0.07 + (1 - b.skill) * 0.1) * BotBrain.tune.err;
       const dist = Math.hypot(best.x - p.x, best.z - p.z);
       const slot = bestWeaponFor(p, dist); if (slot !== p.cur) it.slot = slot + 1;
       return;

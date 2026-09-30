@@ -1,5 +1,6 @@
 /** Runs a match: fixed-step sim + interpolated rendering, input, camera, audio, HUD. */
 import * as THREE from 'three';
+import type { Difficulty } from '../sim/bots';
 import { Sim } from '../sim/sim';
 import { Phase, Player, SimEvent, Stance } from '../sim/types';
 import { WEAPON, rarityMods } from '../data/weapons';
@@ -61,8 +62,8 @@ export class Match {
   /** Dev/test: pin the camera (position + look target) regardless of phase. */
   debugCam: { pos: [number, number, number]; target: [number, number, number] } | null = null;
 
-  constructor(public sm: SceneMgr, private world: WorldData, private input: Input, tac: HTMLCanvasElement, private ui: HTMLElement, public settings: Settings, seed: number, squadSize = 3) {
-    this.sim = new Sim(world, seed, { humans: 1, warmup: 45, squadSize });
+  constructor(public sm: SceneMgr, private world: WorldData, private input: Input, tac: HTMLCanvasElement, private ui: HTMLElement, public settings: Settings, seed: number, squadSize = 3, difficulty: Difficulty = 'normal') {
+    this.sim = new Sim(world, seed, { humans: 1, warmup: 45, squadSize, difficulty });
     this.controls = new Controls(input, settings);
     input.onUnlock = () => { if (!this.menuOpen && !this.hud.panel && !this.mapOpen && !this.done) this.togglePause(); };
     this.fpsEl.className = 'fps'; ui.appendChild(this.fpsEl);

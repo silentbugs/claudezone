@@ -19,7 +19,7 @@ import { Bullet, Chest, emptyIntent, Explosion, Item, ItemKind, BackpackDrop, Ph
 import { movePlayer, eyeHeight } from './movement';
 import { weaponTick, updateBullets, updateThrowables, throwItem, aimDir } from './combat';
 import { randomItem, chestContents, tryPickup, dropBag, magSize } from './loot';
-import { BotBrain, botThink } from './bots';
+import { BotBrain, DIFFICULTY, type Difficulty, botThink } from './bots';
 import { Mat, RayHit, makeStructure } from '../world/collision';
 import type { BuyId } from '../data/buy';
 import { Vehicle, VehicleType, VEHICLES, makeVehicle, updateVehicles, enterVehicle, exitVehicle, vehicleOf } from './vehicles';
@@ -96,14 +96,16 @@ export class Sim {
   warmup = 0;
   /** 1 = Solos, 2 = Duos, 3 = Trios */
   squadSize = SQUAD_SIZE;
-  constructor(public world: WorldData, seed = 1, opts: { humans?: number; players?: number; warmup?: number; squadSize?: number } = {}) {
+  constructor(public world: WorldData, seed = 1, opts: { humans?: number; players?: number; warmup?: number; squadSize?: number; difficulty?: Difficulty } = {}) {
     this.squadSize = opts.squadSize ?? SQUAD_SIZE;
     this.rng = new Rng(seed);
     this.nav = (world as any).__nav ?? ((world as any).__nav = new NavGrid(world.col));
     const n = opts.players ?? PLAYERS;
     for (let i = 0; i < n; i++) this.players.push(this.makePlayer(i, Math.floor(i / this.squadSize), i >= (opts.humans ?? 1)));
     this.players[0].name = 'You';
-    this.brains = this.players.map((p) => new BotBrain(p.id, this.rng.next()));
+    const D = DIFFICULTY[opts.difficulty ?? 'hard'];
+    BotBrain.tune = { err: D.err, react: D.react, turn: D.turn };
+    this.brains = this.players.map((p) => { const b = new BotBrain(p.id, this.rng.next()); b.skill = D.lo + ((b.skill - 0.35) / 0.55) * (D.hi - D.lo); return b; });
     // plane path: a random chord through the map's middle third
     const a = this.rng.range(0, Math.PI * 2), c = MAP_SIZE / 2;
     const ox = c + this.rng.range(-400, 400), oz = c + this.rng.range(-300, 300);
