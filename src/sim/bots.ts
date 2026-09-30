@@ -46,10 +46,16 @@ export class BotBrain {
   style: 'aggressive' | 'contractor' | 'looter' | 'camper';
   contractScanAt = 0; tabletId = -1; holdUntil = 0; holdX = 0; holdZ = 0;
   lootScanAt = 0; gunScanAt = 0;
+  /** vehicles: how far a trip has to be before this player looks for a ride (Infinity = only when the gas forces it) */
+  rideAt = Infinity; boardWait = 0; ramming = false;
   constructor(public id: number, r: number) {
     this.skill = 0.35 + r * 0.55; this.wanderA = r * 6.28;
     const k = ((id * 2654435761) >>> 0) % 100;
     this.style = k < 30 ? 'aggressive' : k < 60 ? 'contractor' : k < 85 ? 'looter' : 'camper';
+    // 2020 lobbies: some squads drive everywhere, some only when the gas forces them, a few never leave their feet
+    const drive = ((id * 40503) >>> 0) % 100 / 100;
+    const keen = { aggressive: 0.8, contractor: 0.7, looter: 0.5, camper: 0.3 }[this.style];
+    if (drive < keen) this.rideAt = { aggressive: 150, contractor: 200, looter: 260, camper: 360 }[this.style] + drive * 120;
   }
   /** difficulty tuning shared by all bots (see DIFFICULTY) */
   static tune = { err: 1, react: 0, turn: 1 };
@@ -148,6 +154,44 @@ function openDoorNear(sim: Sim, p: Player) {
     if (i !== undefined && Math.abs(doors.target[i]) < 0.15 && !sim.world.doors[i].locked) { doors.interact(i, p); return; }
   }
 }
+/** Target scan only (passengers in a vehicle): nearest visible enemy in range. */
+function scanForTarget(sim: Sim, b: BotBrain, p: Player) {
+  if (b.target >= 0) {
+    const q = sim.players[b.target];
+    if (q.alive && canSee(sim, p, q)) { b.seenAt = sim.time; b.lastSeenX = q.x; b.lastSeenZ = q.z; return; }
+    if (q.alive && sim.time - b.seenAt < 3) return;
+    b.target = -1;
+  }
+  let best: Player | null = null, bd = 140;
+  for (const q of sim.playersNear(p.x, p.z, 140)) {
+    if (q.squad === p.squad || !q.alive || (q.phase !== Phase.Alive && q.phase !== Phase.Downed)) continue;
+    const d = Math.hypot(q.x - p.x, q.z - p.z);
+    if (d < bd && canSee(sim, p, q)) { bd = d; best = q; }
+  }
+  if (best) { b.target = best.id; b.seenAt = sim.time; b.engageStart = sim.time; b.lastSeenX = best.x; b.lastSeenZ = best.z; b.reactAt = sim.time + 0.5 + (1 - b.skill) * 0.6; b.aimErr = (0.12 + (1 - b.skill) * 0.12) * BotBrain.tune.err; }
+}
+/**
+ * Going far? Take a car (2020): a free vehicle close by when the trip is longer than this player's ride distance,
+ * or hop into a squadmate's car that is waiting. The walk to the vehicle keeps the real goal in tx2 / tz2.
+ */
+function rideDecision(sim: Sim, b: BotBrain, p: Player) {
+  if (b.target >= 0 || p.phase !== Phase.Alive || vehicleOf(sim, p) || sim.inWarmup) return;
+  // a squadmate's car waiting for us
+  for (const v of sim.vehicles) {
+    if (!v.alive || v.seats[0] < 0 || v.speed > 4) continue;
+    const drv = sim.players[v.seats[0]]; if (drv.squad !== p.squad || !v.seats.some((sid) => sid < 0)) continue;
+    const d = Math.hypot(v.x - p.x, v.z - p.z); if (d > 60) continue;
+    if (d < VEHICLES[v.type].len / 2 + 2.2) { enterVehicle(sim, p, v); return; }
+    b.goal = 'rotate'; b.tx = v.x; b.tz = v.z; return;
+  }
+  const trip = Math.hypot(b.tx - p.x, b.tz - p.z);
+  if (trip < b.rideAt) return;
+  const v = sim.vehicles.find((q) => q.alive && q.type !== 'heli' && q.seats[0] < 0 && q.health > VEHICLES[q.type].health * 0.4 && Math.hypot(q.x - p.x, q.z - p.z) < 70);
+  if (!v) return;
+  if (Math.hypot(v.x - p.x, v.z - p.z) < VEHICLES[v.type].len / 2 + 2.2) {
+    if (enterVehicle(sim, p, v)) { b.boardWait = sim.time + 9; b.tx2 = b.tx; b.tz2 = b.tz; }
+  } else { b.tx2 = b.tx; b.tz2 = b.tz; b.tx = v.x; b.tz = v.z; }
+}
 const lerpYaw = (a: number, b: number, t: number) => a + wrapAngle(b - a) * t;
 
 function humanIn(sim: Sim, p: Player): boolean { for (const q of sim.players) if (q.squad === p.squad && !q.bot) return true; return false; }
@@ -231,8 +275,11 @@ export function botThink(sim: Sim, b: BotBrain, p: Player, dt: number, think: bo
   // ------------------------------------------------ Alive / Gulag
   const inGulag = p.phase === Phase.Gulag;
   const veh = vehicleOf(sim, p);
-  if (veh) { botDrive(sim, b, p, veh, dt, think); return; }
-  if (think) decide(sim, b, p, inGulag);
+  if (veh) {
+    // passengers pick targets and shoot from their seats (2020); the driver drives
+    if (veh.seats[0] !== p.id) { if (think) scanForTarget(sim, b, p); if (b.target < 0 || !sim.players[b.target].alive) { b.target = -1; botDrive(sim, b, p, veh, dt, think); return; } }
+    else { botDrive(sim, b, p, veh, dt, think); return; }
+  } else if (think) { decide(sim, b, p, inGulag); rideDecision(sim, b, p); }
   const w = p.weapons[p.cur];
   const def = w ? WEAPON[w.id] : null;
   // --- combat
@@ -454,8 +501,8 @@ function decide(sim: Sim, b: BotBrain, p: Player, inGulag: boolean) {
     }
     if (Math.hypot(b.tx - p.x, b.tz - p.z) > 350) {
       // grab a free ground vehicle close by
-      const v = sim.vehicles.find((q) => q.alive && q.type !== 'heli' && q.seats[0] < 0 && Math.hypot(q.x - p.x, q.z - p.z) < 45);
-      if (v) { if (Math.hypot(v.x - p.x, v.z - p.z) < VEHICLES[v.type].len / 2 + 2.2) enterVehicle(sim, p, v); else { b.tx2 = b.tx; b.tz2 = b.tz; b.tx = v.x; b.tz = v.z; } }
+      const v = vehicleOf(sim, p) ? null : sim.vehicles.find((q) => q.alive && q.type !== 'heli' && q.seats[0] < 0 && Math.hypot(q.x - p.x, q.z - p.z) < 45);
+      if (v) { if (Math.hypot(v.x - p.x, v.z - p.z) < VEHICLES[v.type].len / 2 + 2.2) { if (enterVehicle(sim, p, v)) b.boardWait = sim.time + 7; } else { b.tx2 = b.tx; b.tz2 = b.tz; b.tx = v.x; b.tz = v.z; } }
     }
     return;
   }
@@ -629,9 +676,31 @@ function humanLeader(sim: Sim, p: Player): Player | null {
 function botDrive(sim: Sim, b: BotBrain, p: Player, v: import('./vehicles').Vehicle, dt: number, think: boolean) {
   const it = p.intent;
   it.fire = false; it.ads = false; (it as any).up = false;
-  if (p.id !== v.seats[0]) { it.mz = 0; it.mx = 0; return; } // passengers just ride (and shoot via combat if targets)
+  if (p.id !== v.seats[0]) {
+    // passengers ride (they fight from the seat when they have a target) and get out with the driver, or when the
+    // car has stopped for good / is burning / the gas is on it
+    it.mz = 0; it.mx = 0;
+    const c0 = sim.circle, gas = Math.hypot(v.x - c0.cx, v.z - c0.cz) > c0.r - 5;
+    if (think && (v.seats[0] < 0 || v.health < VEHICLES[v.type].health * 0.25 || gas || (v.speed < 0.5 && sim.rng.chance(0.15)))) { exitVehicle(sim, p); b.goal = 'idle'; }
+    return;
+  }
   const c = sim.circle;
   if (think && (b.tx2 || b.tz2)) { b.tx = b.tx2; b.tz = b.tz2; b.tx2 = b.tz2 = 0; }
+  // hold a few seconds for squadmates walking over to get in
+  if (sim.time < b.boardWait) {
+    const coming = sim.players.some((q) => q.squad === p.squad && q.id !== p.id && q.phase === Phase.Alive && !vehicleOf(sim, q) && Math.hypot(q.x - v.x, q.z - v.z) < 60);
+    if (coming && v.seats.some((sid) => sid < 0)) { it.mz = 0; it.mx = 0; (it as any).up = true; return; }
+    b.boardWait = 0;
+  }
+  // aggressive drivers run people over (2020 ATV / SUV roadkills): aim the car at an enemy on foot close ahead
+  b.ramming = false;
+  if (b.style === 'aggressive' && v.type !== 'heli' && v.health > VEHICLES[v.type].health * 0.35) {
+    for (const q of sim.playersNear(v.x, v.z, 70)) {
+      if (q.squad === p.squad || !q.alive || q.phase !== Phase.Alive || vehicleOf(sim, q)) continue;
+      const a = Math.atan2(-(q.x - v.x), -(q.z - v.z));
+      if (Math.abs(wrapAngle(a - v.yaw)) < 1.1) { b.ramming = true; const dx0 = q.x - v.x, dz0 = q.z - v.z; b.tx2 = b.tx2 || b.tx; b.tz2 = b.tz2 || b.tz; b.tx = q.x + dx0 * 0.2; b.tz = q.z + dz0 * 0.2; break; }
+    }
+  }
   const dx = b.tx - v.x, dz = b.tz - v.z, dist = Math.hypot(dx, dz);
   const want = Math.atan2(-dx, -dz), err = wrapAngle(want - v.yaw);
   it.mx = clamp(-err * 1.8, -1, 1);
@@ -640,7 +709,7 @@ function botDrive(sim: Sim, b: BotBrain, p: Player, v: import('./vehicles').Vehi
   if (v.speed < 1.5) b.driveStuck += dt; else b.driveStuck = Math.max(0, b.driveStuck - dt);
   if (b.driveStuck > 1.5) { it.mz = -1; it.mx = -it.mx; if (b.driveStuck > 3) b.driveStuck = 0; }
   // bail out near the destination, when shot at, or when the car is burning
-  const hurt = sim.time - p.lastDamaged < 0.5 && dist < 250;
-  if (dist < 60 || hurt || v.health < VEHICLES[v.type].health * 0.25 || (think && sim.rng.chance(0.002))) { exitVehicle(sim, p); b.goal = 'idle'; }
+  const hurt = sim.time - p.lastDamaged < 0.5 && dist < 250 && !b.ramming && b.style !== 'aggressive';
+  if ((dist < 60 && !b.ramming) || hurt || v.health < VEHICLES[v.type].health * 0.25 || (think && sim.rng.chance(0.002))) { exitVehicle(sim, p); b.goal = 'idle'; }
   void c;
 }
