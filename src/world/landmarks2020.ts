@@ -704,7 +704,7 @@ export function gasStation(): Builder {
   b.wall(0, -4.4, -1.5, 4, 0.05, 3.5, 0.12, Mat.Plaster, [{ u0: 1, u1: 2, v0: 0, v1: 2.2 }], 0xd8d0c0); // office
   b.box(-1.2, 0.05, 1, 0.5, 1.1, 2.2, Mat.Wood, { color: 0x6b4a2f }); // counter
   b.box(-4.3, 0.05, 1.2, -3.8, 1.8, 2, Mat.Metal, { color: 0x3a4a5a }); // ATM
-  for (const x of [-3, 0]) b.box(x - 0.5, 0.05, 3, x + 0.5, 1.6, 3.4, Mat.Metal, { color: 0xc8c8c0 }); // shelves
+  for (const z of [1.9, 3.1]) b.box(-1.0, 0.05, z, 0.1, 1.6, z + 0.4, Mat.Metal, { color: 0xc8c8c0 }); // shelves (clear of the office door)
   b.slab(-4.7, -0.2, 4.7, 7.2, 3.6, 0.25, Mat.Roof, []);
   b.box(-4.8, 3.6, -0.3, 4.8, 4.1, -0.2, Mat.Trim, { color: brand, noCollide: true });
   b.ladder(3.5, 7.15, 0, 1, 0.05, 3.6);

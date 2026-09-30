@@ -61,6 +61,8 @@ export class Builder {
    */
   wall(axis: 0 | 1, a: number, b: number, c: number, y0: number, h: number, t: number, mat: Mat, openings: Opening[] = [], color?: number, out: 0 | 1 | -1 = 0, trim = 0xd8d4ca) {
     const len = b - a;
+    // a door that can never open isn't built: sealed flats and closets are plain wall (every door you see opens)
+    openings = openings.filter((o) => !o.locked);
     if (out) for (const o of openings) {
       // decorative trims on the outside face: sill + head for windows, jambs + head for doors
       const u0 = Math.max(0, o.u0), u1 = Math.min(len, o.u1), f = c + out * (t / 2), e = 0.12 * out;
@@ -154,8 +156,24 @@ export interface Style { wall: Mat; wallColor: number; trim: number; roof: Mat; 
 export function house(rng: Rng, w: number, d: number, floors: number, st: Style): Builder {
   // 2020 village houses sit on a plinth ~0.5 m up, with a few concrete steps at every door
   const b = new Builder(), hw = w / 2, hd = d / 2, H = FLOOR_H, E = 0.45;
-  let lastPx = 0;
   b.box(-hw - 0.1, -1.5, -hd - 0.1, hw + 0.1, E + 0.05, hd + 0.1, Mat.Concrete, { color: 0x8a8580 }); // plinth + floor
+  // layout first (2020 atlas houses: clean rooms): the stair and the partition must never cross, and the partition
+  // stays clear of both doors with room to walk round the stair ends
+  const sw = 1.1, run = 4.2;
+  const sx0 = -hw + WALL_T / 2 + 0.05, sz1 = hd - WALL_T / 2 - 0.05;
+  const loft = floors === 1 && w >= 8;
+  const srun = w >= 10 ? 5.4 : 4.6;
+  const side = rng.chance(0.5) ? 1 : -1, sxLo = side * (hw - 0.4), sxHi = side * (hw - 0.4 - srun);
+  const bdx = -hw + w * 0.72;
+  const stairX: [number, number] | null = floors > 1 ? [sx0 - 0.3, sx0 + run + 1.0] : loft ? [Math.min(sxLo, sxHi) - 1.2, Math.max(sxLo, sxHi) + 0.3] : null;
+  const okPx = (x: number) => Math.abs(x) >= 1.4 && Math.abs(x - bdx) >= 1.4 && Math.abs(x) <= hw - 2.2 && !(stairX && x > stairX[0] && x < stairX[1]);
+  let px = NaN;
+  for (let k = 0; k < 24 && !okPx(px); k++) px = rng.range(-hw + 2.2, hw - 2.2);
+  const partition = w > 7 && okPx(px);
+  // no room for a lengthwise wall (two-storey houses: the stair takes the back-left): a cross wall instead - front room
+  // and a back room with the stair, the doorway in line with the front door
+  const crossZ = !partition && floors > 1 && w > 7 && d >= 6.5 ? -hd * 0.12 : NaN; // (lofts: their stair runs down the middle)
+  const lastPx = partition ? px : 0;
   for (let f = 0; f < floors; f++) {
     const y = f * H + E + 0.05, wh = H - 0.05;
     const door: Opening = { u0: w / 2 - 0.6, u1: w / 2 + 0.6, v0: 0, v1: 2.3 };
@@ -166,21 +184,14 @@ export function house(rng: Rng, w: number, d: number, floors: number, st: Style)
     b.wall(0, -hw, hw, hd, y, wh, WALL_T, st.wall, backOps, st.wallColor, 1, st.trim);
     b.wall(1, -hd + WALL_T / 2, hd - WALL_T / 2, -hw, y, wh, WALL_T, st.wall, windows(d, 3.4, 1.2, 0.95, 2.25), st.wallColor, -1, st.trim);
     b.wall(1, -hd + WALL_T / 2, hd - WALL_T / 2, hw, y, wh, WALL_T, st.wall, windows(d, 3.4, 1.2, 0.95, 2.25), st.wallColor, 1, st.trim);
-    // interior partition across the depth with a doorway
-    // interior partition: never right behind the front door (x = 0) or the back door (x = -hw + 0.3w)
-    let px = rng.range(-hw * 0.3, hw * 0.3);
-    const bdx = -hw + w * 0.72;
-    for (let k = 0; k < 6 && (Math.abs(px) < 1.3 || Math.abs(px - bdx) < 1.3); k++) px = rng.range(-hw * 0.45, hw * 0.45);
-    if (Math.abs(px) < 1.3 || Math.abs(px - bdx) < 1.3) px = hw * 0.4;
-    if (f === 0) lastPx = px;
-    if (w > 7) b.wall(1, -hd + WALL_T, hd - WALL_T, px, y, wh, 0.14, Mat.Plaster, [{ u0: d * 0.5 - 0.5, u1: d * 0.5 + 0.5, v0: 0, v1: 2.2 }], 0xd8d0c0);
-    b.light((-hw + px) / 2, y + wh - 0.02, 0); b.light((hw + px) / 2, y + wh - 0.02, 0);
+    // interior partition across the depth with a doorway (same line on every floor)
+    if (!isNaN(crossZ)) b.wall(0, -hw + WALL_T / 2, hw - WALL_T / 2, crossZ, y, wh, 0.14, Mat.Plaster, [{ u0: hw - 0.55, u1: hw + 0.55, v0: 0, v1: 2.2 }], 0xd8d0c0);
+    if (partition) b.wall(1, -hd + WALL_T, hd - WALL_T, px, y, wh, 0.14, Mat.Plaster, [{ u0: d * 0.5 - 0.5, u1: d * 0.5 + 0.5, v0: 0, v1: 2.2 }], 0xd8d0c0);
+    b.light((-hw + lastPx) / 2, y + wh - 0.02, 0); b.light((hw + lastPx) / 2, y + wh - 0.02, 0);
     b.addLoot(-hw + 1.2, y, -hd + 1.2); b.addLoot(hw - 1.2, y, hd - 1.2);
-    if (rng.chance(0.5)) b.addLoot(px + 1, y, 0);
+    if (partition && rng.chance(0.5)) b.addLoot(px + (px < 0 ? 1 : -1), y, -hd / 2);
   }
   // upper floor slabs with a stairwell hole along the back-left wall
-  const sw = 1.1, run = 4.2;
-  const sx0 = -hw + WALL_T / 2 + 0.05, sz1 = hd - WALL_T / 2 - 0.05;
   for (let f = 1; f < floors; f++) {
     const y = f * H + E + 0.05;
     b.slab(-hw, -hd, hw, hd, y, 0.25, Mat.Concrete, [[sx0, sz1 - sw, sx0 + run + 0.3, sz1]]);
@@ -190,11 +201,8 @@ export function house(rng: Rng, w: number, d: number, floors: number, st: Style)
   const top = floors * H + E + 0.05;
   // single-storey cottages: a loft under the ridge, reached by one straight stair (2020 atlas: "upstairs loft",
   // "check its attic"); the stair runs along the ridge line where there's headroom, on the side away from the partition
-  const loft = floors === 1 && w >= 8;
   // lofts get a steeper roof: ~2.9-3.4 m under the ridge so you can stand and walk the middle of the attic
   const ridge = loft ? Math.min(3.4, Math.max(2.9, d * 0.42)) : Math.min(2.6, d * 0.28);
-  const srun = w >= 10 ? 5.4 : 4.6;
-  const side = lastPx < 0 ? 1 : -1, sxLo = side * (hw - 0.4), sxHi = side * (hw - 0.4 - srun);
   if (loft) {
     b.ramp(Math.min(sxLo, sxHi), E + 0.05, -0.55, Math.max(sxLo, sxHi), top, 0.55, 0, side > 0 ? -1 : 1, Mat.Wood);
     b.slab(-hw - 0.3, -hd - 0.3, hw + 0.3, hd + 0.3, top, 0.25, st.roof, [[Math.min(sxLo, sxHi) - 0.1, -0.65, Math.max(sxLo, sxHi) + 0.1, 0.65]]);
@@ -304,7 +312,7 @@ export function apartment(rng: Rng, w: number, d: number, floors: number, st: St
   const nClutter = Math.floor(w / 10) + 1;
   for (let i = 0; i < nClutter; i++) {
     const cx = rng.range(-hw + 2, hw - 2), cz = rng.range(-hd + 1.5, hd - 1.5);
-    if (Math.abs(cx) < coreW && cz > cz0) continue;
+    if (Math.abs(cx) < coreW + 1.6 && cz > cz0 - 2.8) continue; // the stair hut and the space in front of its door
     const k = rng.next();
     if (k < 0.45) b.block(cx, cz, 1.8, 1.2, top, top + 1.2, Mat.Metal, { color: 0xa0a6aa });
     else if (k < 0.7) b.block(cx, cz, 0.6, 0.6, top, top + 0.9, Mat.Metal, { color: 0x8a9096 });

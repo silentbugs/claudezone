@@ -3,6 +3,7 @@ import assert from 'node:assert';
 import { loadMasksNode } from './util';
 import { generateWorld } from '../src/world/mapgen';
 import { Sim } from '../src/sim/sim';
+import { Mat } from '../src/world/collision';
 
 const world = generateWorld(loadMasksNode(), 1);
 
@@ -187,7 +188,10 @@ test('Military base: tent compound (through a wall gap into a tent, up to the up
   assert.ok(typeof r2 === 'number' && Math.abs(r2 - 2.65) < 0.4, 'on the container walkway');
   const hs = world.col.structures.filter((q) => q.kind === 'hangar' && q.ramps.length === 2);
   assert.ok(hs.length >= 2, 'grass hangars placed');
-  const h = { x: hs[0].x, z: hs[0].z, y: hs[0].y, a: hs[0].angle };
+  // a hangar whose grass ramp starts at ground level (placement on slopes varies with the map)
+  const lvlOf = (q: any) => { const c = Math.cos(q.angle), sn = Math.sin(q.angle), x = q.x - 29 * c, z = q.z + 29 * sn; return Math.abs(world.col.groundAt(x, z, q.y + 3) - q.y); };
+  const hh = [...hs].sort((u, v) => lvlOf(u) - lvlOf(v))[0];
+  const h = { x: hh.x, z: hh.z, y: hh.y, a: hh.angle };
   const r3 = walkRoute(sim, h, [-29, 0], [[-26.3, 0], [-22, 0], [-2, 0]]);
   console.log('grass slope -> hangar roof', r3);
   assert.ok(typeof r3 === 'number' && Math.abs(r3 - 12.93) < 0.4, 'up the arched grass roof');
@@ -268,4 +272,26 @@ test('Killhouse: corner door into the maze; watchtower ladders to the top deck',
   const h2 = climb(f.a, 7.2); // face local -z (the hatch ladder)
   console.log('top deck', h2.toFixed(2));
   assert.ok(Math.abs(h2 - 7.2) < 0.4, 'on the top deck');
+});
+
+test('two-storey house (2020 layout): front door -> through the room wall -> up the stair to the upper floor', () => {
+  const sim = newSim();
+  // houses with an inside stair and the front/back cross wall, standing on level ground
+  const cands = world.col.structures.filter((q) => q.kind === 'house' && q.ramps.some((r) => r.mat !== Mat.Roof && r.y0 < 1 && r.y1 - r.y0 > 2.5));
+  let ok = 0, tried = 0;
+  for (const s of cands) {
+    const r = s.ramps.find((q) => q.mat !== Mat.Roof && q.y0 < 1)!, hd = r.z1 + 0.2;
+    const cross = s.parts.find((p) => p.mat === Mat.Plaster && p.y0 < 1.5 && p.z1 - p.z0 < 0.2 && Math.abs((p.z0 + p.z1) / 2 + hd * 0.12) < 0.1);
+    if (!cross) continue;
+    const f = { x: s.x, z: s.z, y: s.y, a: s.angle };
+    const c = Math.cos(f.a), sn = Math.sin(f.a), gx = f.x + 0 * c + (-hd - 2.5) * sn, gz = f.z - 0 * sn + (-hd - 2.5) * c;
+    if (Math.abs(world.col.groundAt(gx, gz, f.y + 2) - f.y) > 0.3) continue;
+    if (tried >= 4) break; tried++;
+    const zc = -hd * 0.12, zs = (r.z0 + r.z1) / 2;
+    const res = walkRoute(sim, f, [0, -hd - 2.5], [[0, -hd + 0.8], [0, zc + 1.2], [r.x0 + 0.5, r.z0 - 0.6], [r.x0 + 0.4, zs], [r.x1 - 0.4, zs], [r.x1 + 0.9, zs]]);
+    console.log('house stair walk', res);
+    if (typeof res === 'number' && Math.abs(res - r.y1) < 0.4) ok++;
+  }
+  assert.ok(tried >= 2, 'found level two-storey houses');
+  assert.equal(ok, tried, 'walked in and up the stair in every house tried');
 });

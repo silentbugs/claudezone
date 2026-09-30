@@ -50,8 +50,9 @@ export function block2020(rng: Rng, w: number, d: number, st: Style, o: BlockOpt
   // per-floor flat-door states for the open section: [left, right]
   const flatOpen: [boolean, boolean][] = [];
   for (let f = 0; f < F; f++) {
-    if (o.kind === 'walkup') flatOpen.push([rng.chance(0.55), rng.chance(0.55)]);
-    else { const any = f % 2 === 0 || (o.kind === 'tower' && f < 3); const side = rng.chance(0.5); flatOpen.push([any && side, any && !side]); }
+    // most flats open (their doors are the only doors on the landing - a door that never opens isn't built)
+    if (o.kind === 'walkup') flatOpen.push([rng.chance(0.85), rng.chance(0.85)]);
+    else { const any = o.kind !== 'tower' || f % 2 === 0 || f < 3; const side = rng.chance(0.5); flatOpen.push([any && (side || rng.chance(0.5)), any && (!side || rng.chance(0.5))]); }
   }
   // --- facade walls, floor by floor
   for (let f = 0; f < F; f++) {
@@ -252,7 +253,8 @@ export function tenement2020(rng: Rng, w: number, d: number, st: Style): Builder
   for (const c of cores) steps(c - 0.2, c + 1.8, -hd, -1);
   steps(cw + 2.3, cw + 4.7, hd, 1); steps(ce - 4.7, ce - 2.3, hd, 1);
   // 1F furnishings: washing machines (laundry), mailbox wall (mail room)
-  for (let i = 0; i < 3; i++) b.box(cw + 1.9 + i * 1.1, E, hd - 1.1, cw + 2.8 + i * 1.1, E + 0.9, hd - 0.4, Mat.Metal, { color: 0xe6e6e0 });
+  // (along the kink wall, clear of the rear double doors they used to block)
+  for (let i = 0; i < 3; i++) b.box(cw + 4.65, E, 0.3 + i * 1.05, cw + 5.35, E + 0.9, 1.2 + i * 1.05, Mat.Metal, { color: 0xe6e6e0 });
   b.box(ce - 5.3, E, 2.5, ce - 5.1, E + 1.8, 5, Mat.Metal, { color: 0x6a7a6a });
   b.addLoot(cw + 3.5, E, 3.5); b.addLoot(ce - 3.5, E, 3.5); b.addLoot(0, E, 0); b.addLoot(0, lvl(1), 0); b.addLoot(0, lvl(2), 0); b.addLoot(cw + 3.5, lvl(2), cz0 + 1);
   // roof: parapet, emergency exit huts over the stairwells (door onto the roof), ladders on both ends
