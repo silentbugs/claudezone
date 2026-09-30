@@ -79,7 +79,7 @@ export class VehicleMeshes {
         o = { root };
         if (v.type === 'heli') {
           o.rotor = new THREE.Mesh(new THREE.BoxGeometry(11, 0.06, 0.35), new THREE.MeshStandardMaterial({ color: 0x1a1a1a })); o.rotor.position.set(0, 2.9, 0); root.add(o.rotor);
-          const r2 = o.rotor.clone(); r2.rotation.y = Math.PI / 2; o.rotor.add(r2);
+          const r2 = o.rotor.clone(); r2.position.set(0, 0, 0); r2.rotation.y = Math.PI / 2; o.rotor.add(r2); // child of the first blade: no second offset
           o.tail = new THREE.Mesh(new THREE.BoxGeometry(0.05, 1.8, 0.2), new THREE.MeshStandardMaterial({ color: 0x1a1a1a })); o.tail.position.set(0.2, 2.1, 5.6); root.add(o.tail);
         }
         this.objs.set(v.id, o); this.group.add(root);

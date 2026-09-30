@@ -156,31 +156,49 @@ function heli(sim: Sim, v: Vehicle, d: VehicleDef, driver: Player | null, dt: nu
   v.rotor = clamp(v.rotor + (driver ? dt * 0.8 : -dt * 0.3), 0, 1);
   const lift = it ? ((it.jump || (it as any).up ? 1 : 0) - (it.crouch || (it as any).down ? 1 : 0)) : -0.3;
   // keep altitude input held (jump/crouch are one-shots for infantry; the client sets up/down for helis)
-  const tvy = v.rotor > 0.6 ? lift * 12 : -9;
-  v.vy += (tvy - v.vy) * Math.min(1, dt * 2);
+  if (driver) (v as any).lastDriver = driver.id;
+  // latched once the pilot bails out in the air, until it hits something
+  if (!driver && agl > 3 && (v as any).lastDriver !== undefined) (v as any).falling = true;
+  if (driver) (v as any).falling = false;
+  const abandoned = !!(v as any).falling;
+  if (abandoned) {
+    // bailed out mid-air: the helicopter drops like a stone, nose down, carrying its momentum - aim it at someone
+    v.vy = Math.max(-60, v.vy - 14 * dt); v.rotor = Math.max(0, v.rotor - dt * 0.6);
+    v.pitch += (0.45 - v.pitch) * Math.min(1, dt * 1.5);
+  } else {
+    const tvy = v.rotor > 0.6 ? lift * 12 : -9;
+    v.vy += (tvy - v.vy) * Math.min(1, dt * 2);
+  }
   if (agl > 320 && v.vy > 0) v.vy = 0;
   // yaw from mouse (driver faces where they look), tilt from WASD
   if (driver && v.rotor > 0.6) v.yaw += wrapAngle(driver.yaw - v.yaw) * Math.min(1, dt * d.turn);
   const fwd = it ? it.mz : 0, side = it ? it.mx : 0;
   const c = Math.cos(v.yaw), s = Math.sin(v.yaw);
   const tx = (-s * fwd + c * side) * d.maxSpeed * (agl > 2 ? 1 : 0), tz = (-c * fwd - s * side) * d.maxSpeed * (agl > 2 ? 1 : 0);
-  v.vx += (tx - v.vx) * Math.min(1, dt * 0.9); v.vz += (tz - v.vz) * Math.min(1, dt * 0.9);
-  v.pitch += (-fwd * 0.25 - v.pitch) * Math.min(1, dt * 3); v.roll += (-side * 0.3 - v.roll) * Math.min(1, dt * 3);
+  if (!abandoned) { v.vx += (tx - v.vx) * Math.min(1, dt * 0.9); v.vz += (tz - v.vz) * Math.min(1, dt * 0.9); } else { v.vx *= Math.exp(-dt * 0.15); v.vz *= Math.exp(-dt * 0.15); }
+  if (!abandoned) v.pitch += (-fwd * 0.25 - v.pitch) * Math.min(1, dt * 3); v.roll += (-side * 0.3 - v.roll) * Math.min(1, dt * 3);
   v.x += v.vx * dt; v.y += v.vy * dt; v.z += v.vz * dt;
   v.speed = Math.hypot(v.vx, v.vz);
   const g2 = col.groundAt(v.x, v.z, v.y + 2, 2);
-  if (v.y < g2) { if (v.vy < -10 || v.speed > 20) v.health -= (Math.abs(v.vy) + v.speed) * 30; v.y = g2; v.vy = 0; v.vx *= 0.5; v.vz *= 0.5; }
+  if (v.y < g2) {
+    if (abandoned && v.vy < -8) v.health = 0; // crashes and blows up on whatever it hits (ground, roof, vehicle)
+    else if (v.vy < -10 || v.speed > 20) v.health -= (Math.abs(v.vy) + v.speed) * 30;
+    v.y = g2; v.vy = 0; v.vx *= 0.5; v.vz *= 0.5;
+    if (!driver && v.health > 0) { (v as any).lastDriver = undefined; (v as any).falling = false; } // (a crash keeps the pilot for the kill credit)
+  }
   // rotor strikes on structures
   // rotor / body strikes on buildings: pushed clear, damage only from a real impact (not brushing a tree or landing by a wall)
   col.pushOut(v.x, v.y + 0.3, v.z, d.hgt - 0.3, 3.2, 0.2, push);
-  if (push.hit) { if (v.speed > 6) v.health -= v.speed * 25 * dt; v.x = push.x; v.z = push.z; v.vx *= 0.5; v.vz *= 0.5; }
+  if (push.hit) { if (abandoned && Math.hypot(v.speed, v.vy) > 12) v.health = 0; else if (v.speed > 6) v.health -= v.speed * 25 * dt; v.x = push.x; v.z = push.z; v.vx *= 0.5; v.vz *= 0.5; }
 }
 
 function destroy(sim: Sim, v: Vehicle) {
   v.alive = false; v.burnT = 30;
   for (const id of v.seats) if (id >= 0) { const p = sim.players[id]; (p as any).vehicle = undefined; sim.damage(p, 400, -1, 'vehicle', false, true); }
   v.seats = v.seats.map(() => -1);
-  sim.explode(v.x, v.y + 1, v.z, 9, 200, -1, 'vehicle');
+  // a crashing helicopter is a bomb: bigger blast, and the kills go to whoever flew it last
+  const heli = VEHICLES[v.type].air;
+  sim.explode(v.x, v.y + 1, v.z, heli ? 12 : 9, heli ? 300 : 200, (v as any).lastDriver ?? -1, 'vehicle');
 }
 
 /** Bullet hit test against a vehicle's oriented box. Returns distance or -1. */

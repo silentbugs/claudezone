@@ -76,3 +76,22 @@ test('heartbeat sensor: held up while the key is down (no firing), battery drain
   assert.ok(p.hbOn, 'sensor up while held'); assert.equal(shots, 0, 'no firing with the sensor up'); assert.ok(p.hbBattery < 39, 'battery drains');
   p.intent.tacHeld = false; s.tick(1 / 60); assert.ok(!p.hbOn, 'lowered on release'); assert.ok(p.tactical, 'still carried');
 });
+
+test('helicopter: bail out mid-air and it drops, crashes and explodes on the players below (kill credited to the pilot)', async () => {
+  const { enterVehicle, exitVehicle } = await import('../src/sim/vehicles');
+  const s = new Sim(world, 1, { humans: 1 }); s.time = 120;
+  const v = s.vehicles.find((q: any) => q.type === 'heli')!;
+  const pilot: any = s.players[0], e: any = s.players.find((q: any) => q.squad !== pilot.squad)!, other: any = s.players.find((q: any) => q.squad !== pilot.squad && q.squad !== e.squad)!;
+  for (const q of [pilot, e, other]) Object.assign(q, { phase: 4, alive: true, bot: false });
+  const gx = s.circle.cx, gz = s.circle.cz, gy = world.col.groundAt(gx, gz, 500);
+  Object.assign(e, { x: gx, z: gz, y: gy, health: 100, armor: 0 }); Object.assign(other, { x: gx + 400, z: gz, y: world.hf.at(gx + 400, gz) });
+  Object.assign(v, { x: gx, z: gz + 6, y: gy + 70, vx: 0, vy: 0, vz: -3, rotor: 1 });
+  Object.assign(pilot, { x: v.x, z: v.z, y: v.y });
+  enterVehicle(s, pilot, v); s.tick(1 / 60); exitVehicle(s, pilot);
+  let exploded = false, credited = false;
+  for (let i = 0; i < 60 * 8 && !exploded; i++) { s.tick(1 / 60); for (const ev of s.events as any[]) { if (ev.t === 'explosion' && ev.kind === 'vehicle' && Math.hypot(ev.x - v.x, ev.z - v.z) < 5) exploded = true; if ((ev.t === 'down' || ev.t === 'kill') && ev.victim === e.id && ev.attacker === pilot.id) credited = true; } s.events.length = 0; }
+  assert.ok(exploded && !v.alive, 'the helicopter crashed and exploded');
+  assert.ok(e.phase === 5 || !e.alive, 'the player below went down');
+  assert.ok(credited, 'the pilot gets the credit');
+  assert.ok(pilot.alive && (pilot.phase === 2 || pilot.phase === 3), 'the pilot is skydiving / parachuting');
+});
