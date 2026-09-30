@@ -44,3 +44,25 @@ test('backpack drops: weapon, ammo stack, plate, cash, equipment; not re-collect
   for (let t = 0; t < 60; t++) { p.intent.mz = 1; sim.tick(1 / 60); sim.events.length = 0; }
   assert.equal(p.cash, 1500, 'cash left for the squad');
 });
+
+test('contracts (2020): objectives inside the circle, scavenger timer extends per box, recon flare + capture, most wanted payout, bounty pays on any kill', () => {
+  const mk = () => { const s = new Sim(world, 1, { humans: 1 }); s.time = 120; const p: any = s.players[0]; Object.assign(p, { phase: 4, alive: true, bot: false }); const c = s.circle; p.x = c.cx + 50; p.z = c.cz; p.y = world.hf.at(p.x, p.z); return { s, p }; };
+  const accept = (s: any, p: any, kind: string) => { const c = s.contracts.find((k: any) => !k.taken); c.kind = kind; (s as any).acceptContract(p, c.id); return s.active.find((a: any) => a.squad === p.squad); };
+  // recon
+  { const { s, p } = mk(); const a = accept(s, p, 'recon'); assert.ok(a, 'recon accepted');
+    assert.ok(Math.hypot(a.zx - s.circle.cx, a.zz - s.circle.cz) < s.circle.r, 'recon zone inside the circle');
+    p.x = a.zx; p.z = a.zz; p.y = a.zy; let flare = false, done = false;
+    for (let i = 0; i < 60 * 30; i++) { s.tick(1 / 60); for (const e of s.events) { if (e.t === 'flare') flare = true; if (e.t === 'contract' && e.msg === 'done') done = true; } s.events.length = 0; p.x = a.zx; p.z = a.zz; if (done) break; }
+    assert.ok(flare && done, 'recon: flare went up and the capture completed'); }
+  // scavenger: opening a box adds time
+  { const { s, p } = mk(); const a = accept(s, p, 'scavenger'); const t0 = a.t; const ch = s.chests.find((c: any) => c.id === a.chest);
+    assert.ok(Math.hypot(ch.x - s.circle.cx, ch.z - s.circle.cz) < s.circle.r, 'box inside the circle');
+    ch.opened = true; s.tick(1 / 60); assert.ok(a.t > t0 + 60, 'timer extended after the first box'); assert.equal(a.step, 1); }
+  // most wanted: survive the timer
+  { const { s, p } = mk(); const a = accept(s, p, 'mostwanted'); const cash = p.cash; a.t = 0.05; for (let i = 0; i < 6; i++) s.tick(1 / 60); assert.ok(p.cash >= cash + 3000, 'most wanted payout'); }
+  // bounty: another squad's kill still pays
+  { const { s, p } = mk(); const e: any = s.players.find((q: any) => q.squad !== p.squad); Object.assign(e, { phase: 4, alive: true, x: p.x + 200, z: p.z, y: world.hf.at(p.x + 200, p.z) });
+    const a = accept(s, p, 'bounty'); assert.ok(a, 'bounty accepted'); const tgt = s.players[a.target]; const cash = p.cash;
+    const other: any = s.players.find((q: any) => q.squad !== p.squad && q.squad !== tgt.squad); (s as any).kill(tgt, other.id, 'm4', false, false);
+    assert.ok(p.cash >= cash + 1000, 'bounty paid when someone else killed the target'); }
+});

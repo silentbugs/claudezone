@@ -110,6 +110,8 @@ export class Effects {
   private badgeTex = new Map<string, THREE.Texture>();
   private badges = new Map<number, { sp: THREE.Sprite; beam: THREE.Mesh; y: number; ph: number }>();
   private badgeT = 0;
+  /** recon flares: shoot up, burn red and drift down (visible map-wide) */
+  private flares: { x: number; y: number; z: number; t: number; y0: number }[] = [];
   /** thrown equipment, drawn in flight / where it lands */
   private thrown = new Map<number, THREE.Object3D>();
   private thrownGeo = new Map<string, THREE.BufferGeometry>();
@@ -216,6 +218,7 @@ export class Effects {
         for (let i = 0; i < 6; i++) this.smoke.spawn(e.x, e.y, e.z, (R() - 0.5), R() * 0.5, (R() - 0.5), 0.6, 0.2, 0.6, 0.85, 0.9, 0.95, 0.3, 2, 0);
         break;
       }
+      case 'flare': this.flares.push({ x: e.x, y: e.y + 1, z: e.z, t: 0, y0: e.y }); break;
       case 'marker': {
         if (e.kind !== 'airstrike' && e.kind !== 'cluster') break;
         if (!this.jetGeo) this.jetGeo = mergeGeometries([colored(new THREE.CylinderGeometry(0.7, 0.45, 15, 10).rotateX(Math.PI / 2), 0x6a7074), colored(new THREE.BoxGeometry(11, 0.25, 4).translate(0, 0, 1.5), 0x5e6468), colored(new THREE.BoxGeometry(4.6, 0.2, 1.8).translate(0, 0, 6.4), 0x5e6468), colored(new THREE.BoxGeometry(0.2, 2.6, 2.2).translate(0, 1.3, 6.4), 0x5e6468), colored(new THREE.ConeGeometry(0.7, 2.4, 10).rotateX(-Math.PI / 2).translate(0, 0, -8.7), 0x4a4f52)])!;
@@ -293,6 +296,15 @@ export class Effects {
     }
     for (const j of this.jets) if (j.t >= 5) this.group.remove(j.m);
     this.jets = this.jets.filter((j) => j.t < 5);
+    for (const f of this.flares) {
+      f.t += dt;
+      f.y = f.t < 2.5 ? f.y0 + 1 + 70 * Math.sin((f.t / 2.5) * Math.PI / 2) : f.y0 + 71 - (f.t - 2.5) * 1.6;
+      const R = Math.random;
+      this.add.spawn(f.x, f.y, f.z, (R() - 0.5) * 0.6, -0.5, (R() - 0.5) * 0.6, 0.25, 1.4, 0.4, 1, 0.18, 0.1, 1, 1, 0);
+      if (R() < dt * 20) this.smoke.spawn(f.x, f.y - 0.5, f.z, (R() - 0.5) * 0.3, 0.2, (R() - 0.5) * 0.3, 6, 0.8, 3, 0.85, 0.3, 0.28, 0.5, 0.3, 0);
+      this.light(f.x, f.y, f.z, 0xff3020, 30);
+    }
+    this.flares = this.flares.filter((f) => f.t < 25);
     this.badgeT += dt;
     for (const c of sim.contracts) {
       const m = this.tablets.get(c.id); if (m) m.visible = !c.taken;

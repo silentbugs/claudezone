@@ -51,11 +51,21 @@ export const PRICES = Object.fromEntries(BUY_ITEMS.map((b) => [b.id, b.price])) 
 
 export const CASH = { stack: [100, 200, 300, 500], chestCash: [100, 800] };
 
+/**
+ * Verdansk 2020 contracts (Activision "Contracts: Tips and Tricks", Jul 2020, plus the in-game cards):
+ * Bounty: eliminate one marked enemy, a few minutes, target area shown as a yellow circle.
+ * Scavenger: three supply boxes revealed one at a time; each box opened extends the timer; the last one holds
+ * rarer loot and an armor satchel. Recon: 4 minutes to reach a zone and hold it (faster with more squadmates);
+ * a flare goes up when you start; completion shows the next safe zone. Most Wanted: your position is shown to
+ * every enemy; survive 3 minutes for a big payout and your fallen squadmates redeploy. Supply Run: 2 minutes to
+ * reach a marked buy station; cash plus one purchase at 80 % off (a Self-Revive or buyback is free).
+ */
 export const CONTRACT = {
-  bounty: { time: 300, reward: 1500 },
-  scavenger: { time: 300, reward: 1000 },
-  recon: { time: 240, reward: 1000, capture: 12 },
-  mostWanted: { time: 180, reward: 2000 },
+  bounty: { time: 150, reward: 1000 },
+  scavenger: { time: 120, stepTime: 90, reward: 1000 },
+  recon: { time: 240, reward: 1000, capture: 25, radius: 9 },
+  mostwanted: { time: 180, reward: 3000 },
+  supply: { time: 120, reward: 1000, discount: 0.2 },
 };
 
 export const LOOT_TIER_WEIGHTS = [50, 28, 14, 6, 2];

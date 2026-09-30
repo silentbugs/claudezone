@@ -27,8 +27,9 @@ import { M_ROAD } from '../world/mapdata';
 import { NavGrid } from './nav';
 
 export interface CircleState { phase: number; closing: boolean; t: number; cx: number; cz: number; r: number; nx: number; nz: number; nr: number; sx: number; sz: number; sr: number; done: boolean }
-export interface Contract { id: number; kind: 'bounty' | 'scavenger' | 'recon'; x: number; y: number; z: number; taken: boolean }
-export interface ActiveContract { kind: Contract['kind']; squad: number; t: number; target?: number; step?: number; chest?: number; zx?: number; zz?: number; zy?: number; progress?: number }
+export type ContractKind = 'bounty' | 'scavenger' | 'recon' | 'mostwanted' | 'supply';
+export interface Contract { id: number; kind: ContractKind; x: number; y: number; z: number; taken: boolean }
+export interface ActiveContract { kind: Contract['kind']; squad: number; t: number; target?: number; step?: number; chest?: number; zx?: number; zz?: number; zy?: number; progress?: number; flare?: boolean }
 export interface GulagFight { arena: number; a: number; b: number; t: number; flagT: number; flagOwner: number; overtime: boolean }
 export interface BuyStation { id: number; x: number; y: number; z: number }
 export interface LoadoutCrate { id: number; squad: number; x: number; y: number; z: number; land: number; taken: Set<number> }
@@ -124,7 +125,7 @@ export class Sim {
       this.train.update(0);
     }
     for (const b of world.buyStations) { const p = this.snapToFree(b.x, b.z); if (p) this.buyStations.push({ id: this.nextId++, ...p }); }
-    for (const c2 of world.contracts) { const p = this.snapToFree(c2.x, c2.z); if (p) this.contracts.push({ id: this.nextId++, kind: this.rng.pick(['bounty', 'scavenger', 'recon'] as const), ...p, taken: false }); }
+    for (const c2 of world.contracts) { const p = this.snapToFree(c2.x, c2.z); if (p) this.contracts.push({ id: this.nextId++, kind: this.rng.pick(['bounty', 'bounty', 'scavenger', 'scavenger', 'recon', 'recon', 'mostwanted', 'supply'] as const), ...p, taken: false }); }
     this.spawnVehicles();
     // circle 0 = whole map; the first "next" circle is revealed immediately
     this.circle = { phase: 0, closing: false, t: CIRCLES[0].wait, cx: 1640, cz: 1780, r: INITIAL_RADIUS, nx: 0, nz: 0, nr: 0, sx: 0, sz: 0, sr: 0, done: false };
@@ -461,7 +462,8 @@ export class Sim {
     if (t.kind === 'revive') { const q = this.players[t.id]; if (q.reviveBy < 0) { q.reviveBy = p.id; q.reviveT = 0; } return; }
     if (!press) return;
     if (this.inWarmup && (t.kind === 'buy' || t.kind === 'contract' || t.kind === 'crate' || t.kind === 'balloon')) return;
-    if (t.kind === 'chest') { const c = this.chests.find((c2) => c2.id === t.id)!; c.opened = true; for (const itm of chestContents(this, c.x, c.y, c.z, c.legendary)) this.addItem(itm); this.emit({ t: 'chest', p: p.id, x: c.x, y: c.y, z: c.z }); }
+    if (t.kind === 'chest') { const c = this.chests.find((c2) => c2.id === t.id)!; c.opened = true; for (const itm of chestContents(this, c.x, c.y, c.z, c.legendary)) this.addItem(itm);
+      if ((c as any).satchel) this.addItem({ id: this.nextId++, kind: ItemKind.Satchel, x: c.x + 0.8, y: c.y + 0.1, z: c.z, alive: true, vy: 3 } as Item); /* last scavenger box: an armor satchel */ this.emit({ t: 'chest', p: p.id, x: c.x, y: c.y, z: c.z }); }
     else if (t.kind === 'item') { const itm = this.itemById.get(t.id); if (itm) tryPickup(this, p, itm, true); }
     else if (t.kind === 'door') this.doors?.interact(t.id, p);
     else if (t.kind === 'ascender') { (p as any).asc = t.id; (p as any).ascHeld = true; (p as any).ladder = -1; p.sprinting = false; p.ads = 0; this.emit({ t: 'ascender', p: p.id, on: true }); }
@@ -677,7 +679,9 @@ export class Sim {
 
   /** Buy-station purchase. Returns an error string or null. */
   buy(p: Player, item: BuyId, arg?: number): string | null {
-    const price = PRICES[item];
+    // Supply Run reward: one purchase at 80 % off, a Self-Revive or a buyback free
+    const sale = !!(p as any).fireSale;
+    const price = sale ? (item === 'selfRevive' || item === 'buyback' ? 0 : Math.round(PRICES[item] * CONTRACT.supply.discount)) : PRICES[item];
     if (this.squadSize === 1 && (item === 'buyback' || item === 'selfRevive')) return 'Not available in Solos';
     if (p.cash < price) return 'Not enough cash';
     switch (item) {
@@ -689,7 +693,7 @@ export class Sim {
       case 'buyback': {
         const mate = this.players.find((q) => q.squad === p.squad && q.id !== p.id && q.phase === Phase.Dead && (arg === undefined || q.id === arg));
         if (!mate) return 'No teammates to buy back';
-        p.cash -= price; this.redeploy(mate); this.emit({ t: 'buy', p: p.id, item }); return null;
+        p.cash -= price; (p as any).fireSale = false; this.redeploy(mate); this.emit({ t: 'buy', p: p.id, item }); return null;
       }
       case 'loadout': {
         const g = this.world.col.groundAt(p.x + 4, p.z, p.y + 3);
@@ -698,7 +702,7 @@ export class Sim {
         break;
       }
     }
-    p.cash -= price;
+    p.cash -= price; (p as any).fireSale = false;
     this.emit({ t: 'buy', p: p.id, item });
     return null;
   }
@@ -825,24 +829,56 @@ export class Sim {
   }
 
   // ------------------------------------------------------------ contracts
+  /**
+   * A contract objective point: 2020 contracts never pull you out of the safe zone. Candidates at minD..maxD
+   * from (x, z) inside the current circle (inner 85 %), preferring the next circle once it is known and, for
+   * later steps, points closer to its centre.
+   */
+  private contractPoint(x: number, z: number, minD: number, maxD: number, toward = 0): { x: number; y: number; z: number } {
+    const c = this.circle, known = c.nr > 0;
+    let best: { x: number; y: number; z: number } | null = null, bs = Infinity;
+    for (let i = 0; i < 40; i++) {
+      const ang = this.rng.range(0, Math.PI * 2), d = this.rng.range(minD, maxD);
+      const px = x + Math.cos(ang) * d, pz = z + Math.sin(ang) * d;
+      const dc = Math.hypot(px - c.cx, pz - c.cz); if (dc > c.r * 0.85 && c.r > 60) continue;
+      if (this.world.hf.at(px, pz) < 1) continue;
+      const q = this.snapToFree(px, pz); if (!q) continue;
+      const dn = known ? Math.hypot(q.x - c.nx, q.z - c.nz) : dc;
+      const score = (known && dn > c.nr * 0.9 ? 400 : 0) + dn * toward + this.rng.next() * 60;
+      if (score < bs) { bs = score; best = q; }
+    }
+    return best ?? this.snapToFree(c.cx, c.cz) ?? { x, y: this.world.hf.at(x, z), z };
+  }
   private acceptContract(p: Player, id: number) {
     if (this.active.some((a) => a.squad === p.squad)) { if (!p.bot) this.emit({ t: 'announce', text: 'Your squad already has an active contract', squad: p.squad }); return; }
-    const c = this.contracts.find((k) => k.id === id)!; c.taken = true;
+    const c = this.contracts.find((k) => k.id === id)!;
     const a: ActiveContract = { kind: c.kind, squad: p.squad, t: CONTRACT[c.kind].time };
     if (c.kind === 'bounty') {
-      let best: Player | null = null, bd = Infinity;
-      for (const q of this.players) if (q.alive && q.squad !== p.squad && q.phase === Phase.Alive) { const d = Math.hypot(q.x - p.x, q.z - p.z); if (d > 80 && d < bd) { bd = d; best = q; } }
-      if (!best) { c.taken = false; return; }
+      // the target: one of the nearest enemies (outside 80 m, inside 600 m), not in the Gulag
+      const cands = this.players.filter((q) => q.alive && q.squad !== p.squad && q.phase === Phase.Alive).map((q) => [Math.hypot(q.x - p.x, q.z - p.z), q] as [number, Player]).filter(([d]) => d > 80 && d < 600).sort((u, v) => u[0] - v[0]);
+      if (!cands.length) { if (!p.bot) this.emit({ t: 'announce', text: 'No bounty targets nearby', squad: p.squad }); return; }
+      const best = cands[this.rng.int(0, Math.min(2, cands.length - 1))][1];
       a.target = best.id; best.bountyOn = this.time + a.t;
       this.emit({ t: 'announce', text: 'A bounty has been placed on you', squad: best.squad });
     } else if (c.kind === 'scavenger') { a.step = 0; this.spawnScavChest(a, p.x, p.z); }
-    else { const s = this.snapToFree(p.x + this.rng.range(-220, 220), p.z + this.rng.range(-220, 220)) ?? { x: p.x + 100, y: p.y, z: p.z }; a.zx = s.x; a.zz = s.z; a.zy = s.y; a.progress = 0; }
+    else if (c.kind === 'recon') { const s2 = this.contractPoint(p.x, p.z, 150, 320); a.zx = s2.x; a.zz = s2.z; a.zy = s2.y; a.progress = 0; }
+    else if (c.kind === 'mostwanted') { a.target = p.id; this.emit({ t: 'announce', text: 'An enemy is Most Wanted: their position is marked', squad: -1 }); }
+    else {
+      // supply run: the nearest buy station at least 120 m away, inside the circle
+      const circ = this.circle;
+      const st = this.buyStations.filter((b) => Math.hypot(b.x - circ.cx, b.z - circ.cz) < circ.r * 0.9).map((b) => [Math.hypot(b.x - p.x, b.z - p.z), b] as const).filter(([d]) => d > 120).sort((u, v) => u[0] - v[0])[0];
+      if (!st) { if (!p.bot) this.emit({ t: 'announce', text: 'No buy station in range', squad: p.squad }); return; }
+      a.zx = st[1].x; a.zz = st[1].z; a.zy = st[1].y;
+    }
+    c.taken = true;
     this.active.push(a);
     this.emit({ t: 'contract', p: p.id, kind: c.kind, msg: 'start' });
   }
   private spawnScavChest(a: ActiveContract, x: number, z: number) {
-    const s = this.snapToFree(x + this.rng.range(-160, 160), z + this.rng.range(-160, 160)) ?? { x: x + 60, y: this.world.hf.at(x + 60, z), z };
+    // each box within ~100-220 m, inside the circle, the later ones drawn toward the next safe zone
+    const s = this.contractPoint(x, z, 90, 220, (a.step ?? 0) * 0.8);
     const ch: Chest = { id: this.nextId++, x: s.x, y: s.y, z: s.z, opened: false, legendary: a.step === 2 };
+    (ch as any).satchel = a.step === 2;
     this.chests.push(ch); a.chest = ch.id;
   }
   private updateContracts(dt: number) {
@@ -855,27 +891,42 @@ export class Sim {
         if (ch?.opened) {
           a.step!++;
           if (a.step! >= 3) { this.reward(a, CONTRACT.scavenger.reward); a.t = -2; }
-          else { this.spawnScavChest(a, ch.x, ch.z); this.emit({ t: 'contract', p: squad[0].id, kind: 'scavenger', msg: 'progress' }); }
+          else { a.t += CONTRACT.scavenger.stepTime; this.spawnScavChest(a, ch.x, ch.z); this.emit({ t: 'contract', p: squad[0].id, kind: 'scavenger', msg: 'progress' }); }
         }
       } else if (a.kind === 'recon') {
-        const inside = squad.some((q) => q.phase === Phase.Alive && Math.hypot(q.x - a.zx!, q.z - a.zz!) < 8);
-        if (inside) { a.progress! += dt; if (a.progress! >= CONTRACT.recon.capture) { this.reward(a, CONTRACT.recon.reward); this.squadReveal.add(a.squad); a.t = -2; } }
+        const n = squad.filter((q) => q.phase === Phase.Alive && Math.hypot(q.x - a.zx!, q.z - a.zz!) < CONTRACT.recon.radius && Math.abs(q.y - a.zy!) < 4).length;
+        if (n > 0) {
+          if (!a.flare) { a.flare = true; this.emit({ t: 'flare', x: a.zx!, y: a.zy!, z: a.zz!, squad: a.squad }); }
+          a.progress! += dt * (1 + 0.5 * (n - 1)); // more squadmates capture faster
+          if (a.progress! >= CONTRACT.recon.capture) { this.reward(a, CONTRACT.recon.reward); this.squadReveal.add(a.squad); this.spawnChestAt(a.zx! + 2, a.zz!); a.t = -2; }
+        }
       } else if (a.kind === 'bounty') {
         const tgt = this.players[a.target!];
         if (!tgt.alive || tgt.phase === Phase.GulagWait) { a.t = Math.min(a.t, -1); }
+      } else if (a.kind === 'mostwanted') {
+        const me = this.players[a.target!];
+        if (!me.alive || me.phase === Phase.Downed || me.phase === Phase.GulagWait || me.phase === Phase.Gulag) a.t = -1;
+        else if (a.t <= 0) {
+          this.reward(a, CONTRACT.mostwanted.reward); a.t = -2;
+          for (const q of squad) if (q.phase === Phase.Dead || q.phase === Phase.Spectate) this.redeploy(q); // fallen squadmates come back
+        }
+      } else if (a.kind === 'supply') {
+        if (squad.some((q) => q.phase === Phase.Alive && Math.hypot(q.x - a.zx!, q.z - a.zz!) < 5)) {
+          this.reward(a, CONTRACT.supply.reward); a.t = -2;
+          for (const q of squad) if (q.alive) (q as any).fireSale = true;
+          this.emit({ t: 'announce', text: 'Fire sale: one item at 80% off (Self-Revive or buyback free)', squad: a.squad });
+        }
       }
-      if (a.t <= 0 && a.t > -2) this.emit({ t: 'contract', p: squad[0].id, kind: a.kind, msg: a.t === -2 ? 'done' : 'fail' });
+      if (a.t <= 0 && a.t > -2) this.emit({ t: 'contract', p: squad[0].id, kind: a.kind, msg: 'fail' });
+      if (a.t === -2) this.emit({ t: 'contract', p: squad[0].id, kind: a.kind, msg: 'done' });
     }
     this.active = this.active.filter((a) => a.t > 0);
   }
+  private spawnChestAt(x: number, z: number) { const s = this.snapToFree(x, z); if (s) this.chests.push({ id: this.nextId++, x: s.x, y: s.y, z: s.z, opened: false, legendary: false }); }
   /** 2020: a bounty pays out whenever its target dies, whoever made the kill (another squad, the gas, a fall) */
   private checkBounty(v: Player, attacker: number) {
     void attacker;
-    for (const a of this.active) if (a.kind === 'bounty' && a.target === v.id && a.t > 0) {
-      this.reward(a, CONTRACT.bounty.reward); a.t = -2;
-      const q = this.players.find((p) => p.squad === a.squad) ?? v;
-      this.emit({ t: 'contract', p: q.id, kind: 'bounty', msg: 'done' });
-    }
+    for (const a of this.active) if (a.kind === 'bounty' && a.target === v.id && a.t > 0) { this.reward(a, CONTRACT.bounty.reward); a.t = -2; }
   }
   private reward(a: ActiveContract, cash: number) {
     for (const q of this.players) if (q.squad === a.squad && q.alive) q.cash += cash;

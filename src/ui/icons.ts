@@ -62,7 +62,7 @@ export const STREAK_ICON: Record<string, string> = { uav: 'uav', cuav: 'cuav', c
 /** Contract badge (canvas, 128 px) for the floating world marker and the maps: coloured disc + glyph per type. */
 const badgeCache = new Map<string, HTMLCanvasElement>();
 // 2020: every contract is yellow; the glyph tells them apart
-export const CONTRACT_COLOR: Record<string, string> = { bounty: '#f6c343', scavenger: '#f6c343', recon: '#f6c343' };
+export const CONTRACT_COLOR: Record<string, string> = { bounty: '#f6c343', scavenger: '#f6c343', recon: '#f6c343', mostwanted: '#f6c343', supply: '#f6c343' };
 export function contractBadge(kind: string): HTMLCanvasElement {
   let c = badgeCache.get(kind); if (c) return c;
   c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d')!;
@@ -79,6 +79,12 @@ export function contractBadge(kind: string): HTMLCanvasElement {
   } else if (kind === 'scavenger') { // magnifier over a supply box
     g.fillRect(-26, 4, 30, 22); g.fillStyle = 'rgba(12,14,16,0.9)'; g.fillRect(-24, 13, 26, 3); g.fillStyle = col;
     g.lineWidth = 6; g.beginPath(); g.arc(8, -10, 14, 0, Math.PI * 2); g.stroke(); g.lineWidth = 8; g.beginPath(); g.moveTo(18, 0); g.lineTo(30, 12); g.stroke();
+  } else if (kind === 'mostwanted') { // a star over a person
+    g.beginPath(); for (let k = 0; k < 10; k++) { const r = k % 2 ? 11 : 24, a = -Math.PI / 2 + k * Math.PI / 5; g.lineTo(Math.cos(a) * r, Math.sin(a) * r - 6); } g.closePath(); g.fill();
+    g.fillRect(-16, 22, 32, 8);
+  } else if (kind === 'supply') { // shopping cart
+    g.lineWidth = 6; g.beginPath(); g.moveTo(-30, -22); g.lineTo(-20, -22); g.lineTo(-12, 12); g.lineTo(22, 12); g.lineTo(28, -12); g.lineTo(-16, -12); g.stroke();
+    g.beginPath(); g.arc(-8, 24, 6, 0, 7); g.arc(18, 24, 6, 0, 7); g.fill();
   } else { // recon: flag on a pole
     g.lineWidth = 6; g.beginPath(); g.moveTo(-18, -30); g.lineTo(-18, 32); g.stroke();
     g.beginPath(); g.moveTo(-15, -30); g.lineTo(26, -30); g.lineTo(16, -17); g.lineTo(26, -4); g.lineTo(-15, -4); g.closePath(); g.fill();

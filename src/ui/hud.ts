@@ -85,6 +85,20 @@ export class Hud {
   private fmTiles = new Map<number, HTMLCanvasElement>(); private camYawV = 0;
   private fmView() { const span = MAP_SIZE / this.fmZoom; const x0 = Math.max(-span * 0.25, Math.min(MAP_SIZE - span * 0.75, this.fmCx - span / 2)), z0 = Math.max(-span * 0.25, Math.min(MAP_SIZE - span * 0.75, this.fmCz - span / 2)); this.fmCx = x0 + span / 2; this.fmCz = z0 + span / 2; return { x0, z0, span }; }
   /** The squad's active contract objective (2020: made unmissable on the maps, the compass and in the world). */
+  /** Active contract card (2020, under the circle timer): name, objective, time left, step / capture progress */
+  private contractHud() {
+    const sim = this.sim, me = sim.players[this.localId], ac = sim.active.find((a) => a.squad === me.squad);
+    let h = '';
+    if (ac) {
+      const name = { bounty: 'Bounty', scavenger: 'Scavenger', recon: 'Recon', mostwanted: 'Most Wanted', supply: 'Supply Run' }[ac.kind];
+      const obj = { bounty: 'Eliminate the target', scavenger: `Open the supply box (${(ac.step ?? 0) + 1}/3)`, recon: ac.flare ? 'Hold the zone' : 'Secure the intel', mostwanted: 'Survive', supply: 'Reach the Buy Station' }[ac.kind];
+      const t = Math.max(0, Math.ceil(ac.t)), tt = `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`;
+      const prog = ac.kind === 'recon' ? Math.min(1, (ac.progress ?? 0) / 25) : ac.kind === 'scavenger' ? (ac.step ?? 0) / 3 : -1;
+      let img = this.objImg.get(ac.kind); if (!img) { img = contractBadge(ac.kind).toDataURL(); this.objImg.set(ac.kind, img); }
+      h = `<img src="${img}"><div><b>${name.toUpperCase()}</b><span class="t${t <= 30 ? ' low' : ''}">${tt}</span><div class="o">${obj}</div>${prog >= 0 ? `<i><u style="width:${(prog * 100).toFixed(0)}%"></u></i>` : ''}</div>`;
+    }
+    this.set('ctr', this.ctr, h); this.ctr.style.display = h ? 'flex' : 'none';
+  }
   /** Gulag (2020): balcony wait with your match countdown / queue place, then a big countdown before the fight */
   private gulagHud() {
     const sim = this.sim, me: any = sim.players[this.localId];
@@ -103,7 +117,9 @@ export class Hud {
     const sim = this.sim, me = sim.players[this.localId], ac = sim.active.find((a) => a.squad === me.squad);
     if (!ac) return null;
     if (ac.kind === 'recon') return { x: ac.zx!, y: ac.zy!, z: ac.zz!, kind: 'recon', label: 'RECON' };
-    if (ac.kind === 'scavenger') { const ch = sim.chests.find((q) => q.id === ac.chest); return ch ? { x: ch.x, y: ch.y, z: ch.z, kind: 'scavenger', label: 'SUPPLY BOX' } : null; }
+    if (ac.kind === 'scavenger') { const ch = sim.chests.find((q) => q.id === ac.chest); return ch ? { x: ch.x, y: ch.y, z: ch.z, kind: 'scavenger', label: `SUPPLY BOX ${(ac.step ?? 0) + 1}/3` } : null; }
+    if (ac.kind === 'supply') return { x: ac.zx!, y: ac.zy!, z: ac.zz!, kind: 'supply', label: 'BUY STATION' };
+    if (ac.kind === 'mostwanted') return null;
     const t = sim.players[ac.target!];
     if (!t) return null;
     // bounty: the target's area, refreshed every 10 s like the 2020 marker (a circle, not the exact spot)
@@ -115,6 +131,7 @@ export class Hud {
   private objImg = new Map<string, string>();
   private eqhm = el('div', 'eqhm'); private eqT = 0; private eqKind = '';
   private gstat = el('div', 'gstat'); private gcount = el('div', 'gcount');
+  private ctr = el('div', 'ctr');
   private uavSnapT = -99; private uavDots: [number, number][] = [];
   private dmgArcs: { a: number; t: number; e: HTMLElement }[] = [];
   private last: Record<string, string> = {};
@@ -152,7 +169,7 @@ export class Hud {
       if (me.ping && Math.hypot(me.ping.x - x, me.ping.z - z) < 14 * v.span / this.fmCanvas.width * 2) { this.pings = []; me.ping = undefined; return; }
       this.pings = [{ x, z, t: 999 }]; me.ping = { x, z };
     });
-    this.root.append(this.eqhm, this.gstat, this.gcount, this.low, this.hurtEl, this.breakEl, this.vig, this.scope, mmw, this.circ, this.compass, this.cpings, this.heading, this.loc, this.counters, this.feed, this.squad, this.inv, this.fu, this.weap, this.xh, this.hm, this.tags, this.lcard, this.hold, this.prog, this.ctx, this.alt, this.banner, this.note, this.dmg, this.flash, this.dot, this.fullmap);
+    this.root.append(this.ctr, this.eqhm, this.gstat, this.gcount, this.low, this.hurtEl, this.breakEl, this.vig, this.scope, mmw, this.circ, this.compass, this.cpings, this.heading, this.loc, this.counters, this.feed, this.squad, this.inv, this.fu, this.weap, this.xh, this.hm, this.tags, this.lcard, this.hold, this.prog, this.ctx, this.alt, this.banner, this.note, this.dmg, this.flash, this.dot, this.fullmap);
     this.buildCompass();
   }
 
@@ -210,8 +227,8 @@ export class Hud {
         } else if (e.msg === 'closed') this.showNote('The Gulag is closed');
         break;
       case 'redeploy': if (this.sim.players[e.p].squad === me.squad) this.feedLine(`${name(e.p)} <span style="opacity:.7">redeployed</span>`); break;
-      case 'announce': if ((e.squad === undefined || e.squad === me.squad) && !e.text.startsWith('__')) this.showNote(e.text); break;
-      case 'contract': if (this.sim.players[e.p].squad === me.squad) this.showBanner(`${e.kind} contract`, e.msg === 'start' ? 'Contract accepted' : e.msg === 'done' ? 'Contract complete' : e.msg === 'fail' ? 'Contract failed' : 'Next target marked'); break;
+      case 'announce': if ((e.squad === undefined || e.squad === -1 || e.squad === me.squad) && !e.text.startsWith('__')) this.showNote(e.text); break;
+      case 'contract': if (this.sim.players[e.p].squad === me.squad) this.showBanner(`${({ bounty: 'Bounty', scavenger: 'Scavenger', recon: 'Recon', mostwanted: 'Most Wanted', supply: 'Supply Run' } as Record<string, string>)[e.kind] ?? e.kind} contract`, e.msg === 'start' ? 'Contract accepted' : e.msg === 'done' ? 'Contract complete' : e.msg === 'fail' ? 'Contract failed' : 'Next target marked'); break;
       case 'uav': this.showNote(e.squad === me.squad ? 'UAV online' : 'Enemy UAV overhead'); break;
       case 'cuav': this.showNote(e.squad === me.squad ? 'Counter UAV online' : 'Enemy Counter UAV deployed'); break;
       case 'pickup': if (e.p === this.localId) this.showNote(e.label); break;
@@ -227,7 +244,7 @@ export class Hud {
   update(dt: number, camYaw: number, _camPitch: number, project: (x: number, y: number, z: number) => [number, number, boolean], opts: { ads: number; scope: boolean; optic?: boolean; spectating: Player | null; mapOpen: boolean }) {
     this.camYawV = camYaw;
     this.eqT = Math.max(0, this.eqT - dt / 0.9); this.eqhm.style.opacity = this.eqT > 0 ? String(Math.min(1, this.eqT * 2)) : '0'; this.eqhm.style.transform = `translate(-50%, -50%) scale(${1 + (1 - this.eqT) * 0.15 + (this.eqT > 0.85 ? (this.eqT - 0.85) * 2 : 0)})`;
-    this.gulagHud();
+    this.gulagHud(); this.contractHud();
     const sim = this.sim, me = sim.players[this.localId], view = opts.spectating ?? me;
     const c = sim.circle;
     const inGas = sim.inGas(view);
@@ -554,6 +571,7 @@ export class Hud {
     // unsuppressed gunfire: a red dot for ~3 s within 250 m (suppressors hide it)
     for (const p of sim.players) { const age = sim.time - ((p as any).lastLoudShot ?? -99); if (p.alive && p.squad !== me.squad && age < 3 && Math.hypot(p.x - me.x, p.z - me.z) < 250) icon(p.x, p.z, `rgba(255,60,40,${(0.95 * Math.min(1, (3 - age) / 1)).toFixed(2)})`, 'dot', 3.5); }
     const ac = sim.active.find((a) => a.squad === me.squad);
+    for (const a of sim.active) if (a.kind === 'mostwanted' && a.squad !== me.squad) { const t = sim.players[a.target!]; if (t?.alive) { const r = (mini ? 12 : 15) * px; g.drawImage(contractBadge('mostwanted'), t.x - r, t.z - r, r * 2, r * 2); g.strokeStyle = '#ff3a2a'; g.lineWidth = 2.5 * px; g.beginPath(); g.arc(t.x, t.z, r * 1.2, 0, Math.PI * 2); g.stroke(); } }
     const ob = this.objective();
     if (ob) {
       // active contract: yellow area + big static badge; on the minimap it sits on the rim when out of range

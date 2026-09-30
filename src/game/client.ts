@@ -285,6 +285,7 @@ export class Match {
       }
       case 'stim': if (e.p === this.viewId()) this.vm.useItem('stim'); else this.soldiers.oneShot(e.p, 'Consume', 0.9); break;
       case 'melee': if (e.p === 0) audio.play('melee', { vol: 0.6 }); break;
+      case 'flare': if (d(e.x, e.y, e.z) < 500) audio.play('flag', { x: e.x, y: e.y, z: e.z, range: 120, vol: 0.9, rate: 1.4 }); if (e.squad !== me.squad) this.hud.showNote('Enemy Recon flare spotted'); break;
       case 'callin': if (e.p === this.viewId()) audio.play('callin', { ui: true, vol: 0.6 }); break;
       case 'marker': if (e.kind === 'airstrike' || e.kind === 'cluster') { const pass = e.kind === 'cluster' ? 3.1 : 3.9, gy = sim.world.hf.at(e.x, e.z); setTimeout(() => audio.play('jet', { x: e.x, y: gy + 100, z: e.z, range: 600, vol: 1.2 }), Math.max(0, (pass - 1.6) * 1000)); }
         if (e.squad === me.squad) audio.say(e.kind === 'loadout' ? 'Loadout drop inbound.' : e.kind === 'cluster' ? 'Cluster strike inbound.' : 'Precision airstrike inbound.'); break;

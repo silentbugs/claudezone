@@ -273,3 +273,12 @@
 /* equipment hit marker: the item's icon beside the crosshair (2020) */
 .hud .eqhm { position: absolute; left: calc(50% + var(--u) * 3.2); top: calc(50% - var(--u) * 2.4); width: calc(var(--u) * 2.6); height: calc(var(--u) * 2.6); opacity: 0; pointer-events: none; filter: drop-shadow(0 0 4px rgba(0,0,0,0.9)); }
 .hud .eqhm svg { width: 100%; height: 100%; }
+/* active contract card (2020): under the circle timer */
+.hud .ctr { position: absolute; left: calc(var(--px) * 100); top: calc(var(--px) * 350); display: none; gap: calc(var(--px) * 8); align-items: flex-start; color: #fff; text-shadow: 0 1px 2px #000; }
+.hud .ctr img { width: calc(var(--px) * 38); height: calc(var(--px) * 38); }
+.hud .ctr b { color: #f6c343; font-size: calc(var(--px) * 22); letter-spacing: 0.04em; }
+.hud .ctr .t { margin-left: calc(var(--px) * 14); font-size: calc(var(--px) * 22); font-weight: 700; }
+.hud .ctr .t.low { color: #ff5a4a; }
+.hud .ctr .o { font-size: calc(var(--px) * 18); color: #e8e8e0; }
+.hud .ctr i { display: block; width: calc(var(--px) * 220); height: calc(var(--px) * 5); margin-top: calc(var(--px) * 5); background: rgba(255,255,255,0.2); }
+.hud .ctr i u { display: block; height: 100%; background: #f6c343; }
