@@ -45,7 +45,26 @@ function itemModel(kind: string): THREE.BufferGeometry {
     case 'killstreak': return mergeGeometries([colored(B(0.24, 0.025, 0.17, 0, 0.012, 0), 0x2a2c2e), colored(B(0.2, 0.004, 0.13, 0, 0.027, 0), 0xe04a3a, 1.2)])!; // tablet with glowing screen
     case 'selfRevive': return mergeGeometries([colored(B(0.24, 0.09, 0.14, 0, 0.045, 0), 0x6a7058), colored(B(0.06, 0.002, 0.06, 0, 0.091, 0), 0xeeeeee), colored(B(0.1, 0.02, 0.03, 0, 0.1, 0), 0x3a3a3a)])!;
     case 'gasMask': return mergeGeometries([colored(new THREE.SphereGeometry(0.1, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2).scale(1, 0.55, 1.2), 0x2c2e30), colored(new THREE.CylinderGeometry(0.035, 0.035, 0.05, 10).rotateX(Math.PI / 2).translate(0, 0.03, 0.12), 0x4a4e52), colored(new THREE.CylinderGeometry(0.025, 0.025, 0.01, 10).translate(-0.04, 0.055, -0.03), 0x7a9aaa), colored(new THREE.CylinderGeometry(0.025, 0.025, 0.01, 10).translate(0.04, 0.055, -0.03), 0x7a9aaa)])!;
-    case 'satchel': return mergeGeometries([colored(B(0.3, 0.14, 0.24, 0, 0.07, 0), 0x6e7274), colored(B(0.22, 0.1, 0.03, 0, 0.07, 0.13), 0x5a5e60), colored(B(0.04, 0.01, 0.28, -0.1, 0.145, 0), 0x3a3a3a), colored(B(0.04, 0.01, 0.28, 0.1, 0.145, 0), 0x3a3a3a)])!;
+    case 'satchel': { // 2020 ground model: a dark plate carrier floating upright, a plate edge showing, the duffel strapped on its front
+      const v = new THREE.Shape(); // vest outline seen face-on (x across, y up to the shoulder straps)
+      v.moveTo(-0.22, 0); v.lineTo(0.22, 0); v.lineTo(0.22, 0.36); v.quadraticCurveTo(0.15, 0.4, 0.15, 0.46); v.lineTo(0.14, 0.53); v.lineTo(0.08, 0.53); v.quadraticCurveTo(0, 0.43, -0.08, 0.53);
+      v.lineTo(-0.14, 0.53); v.lineTo(-0.15, 0.46); v.quadraticCurveTo(-0.15, 0.4, -0.22, 0.36); v.closePath();
+      const vest = new THREE.ExtrudeGeometry(v, { depth: 0.05, bevelEnabled: true, bevelSize: 0.012, bevelThickness: 0.012, bevelSegments: 2 }).translate(0, 0, -0.025);
+      // front plate peeking over the bag
+      const pl = new THREE.Shape(); pl.moveTo(-0.14, 0.12); pl.lineTo(0.14, 0.12); pl.lineTo(0.14, 0.38); pl.lineTo(0.1, 0.42); pl.lineTo(-0.1, 0.42); pl.lineTo(-0.14, 0.38); pl.closePath();
+      const plate = new THREE.ExtrudeGeometry(pl, { depth: 0.02, bevelEnabled: false }).translate(0, 0, 0.04);
+      // duffel: a rounded-top canvas bag across the lower front
+      const bag = new THREE.CylinderGeometry(0.12, 0.12, 0.4, 16, 1, false, -Math.PI / 2, Math.PI).rotateZ(Math.PI / 2).scale(1, 1, 0.75).translate(0, 0.12, 0.07);
+      const base = B(0.4, 0.12, 0.18, 0, 0.06, 0.07);
+      return mergeGeometries([
+        colored(vest, 0x303234),
+        colored(plate, 0x55585b),
+        colored(bag, 0x8e9295), colored(base, 0x7d8184),
+        ...[-0.11, -0.04, 0.04, 0.11].map((x) => colored(B(0.022, 0.24, 0.02, x, 0.12, 0.165), 0x3a3c3e)), // webbing
+        colored(B(0.4, 0.02, 0.02, 0, 0.07, 0.165), 0x3a3c3e), // strap round the bag
+        colored(new THREE.TorusGeometry(0.06, 0.01, 6, 12, Math.PI).translate(0, 0.22, 0.07), 0x3a3c3e), // carry handle
+      ])!;
+    }
   }
   return colored(B(0.2, 0.1, 0.2, 0, 0.05, 0), 0x888888);
 }
