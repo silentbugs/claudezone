@@ -376,6 +376,13 @@ export function warehouse(rng: Rng, w: number, d: number, h: number, st: Style, 
     for (const z of [lz0 - run * 0.5, lz0 + 0.1, lz1 - 0.1]) b.box(hw + 1.45, 0.1, z - 0.06, hw + 1.57, my - 0.2, z + 0.06, Mat.Metal, steel);
     b.addLoot(hw - 2, my, hd - 2); b.addLoot(-hw + 2, my, hd - 2);
   }
+  // entrance steps outside every ground-level door (the plinth can stand up to ~1 m proud of sloping ground)
+  const step = (x0: number, x1: number, z0: number, z1: number, axisZ: boolean, sign: number) => {
+    for (let k = 0; k < 2; k++) { const o = 0.05 + k * 0.45, y = k === 0 ? 0.1 : -0.4; if (axisZ) b.box(x0, -1.5, z0 + sign * o, x1, y, z0 + sign * (o + 0.5), Mat.Concrete, { color: 0x8a8884 }); else b.box(x0 + sign * o, -1.5, z0, x0 + sign * (o + 0.5), y, z1, Mat.Concrete, { color: 0x8a8884 }); }
+  };
+  step(-hw + w * 0.25 - 0.8, -hw + w * 0.25 + 0.8, hd + 0.1, 0, true, 1); // rear personnel door
+  step(-hw - 0.1, 0, -hd + 0.15 + 1.4, -hd + 0.15 + 2.8, false, -1); // west side door
+  step(hw + 0.1, 0, -hd + 0.15 + 1.4, -hd + 0.15 + 2.8, false, 1); // east side door
   // crates inside for cover, clear of the doors, stairs and the space under the mezzanine
   const n = Math.floor((w * d) / 140), zMax = mezz ? hd - 11 : hd - 3;
   for (let i = 0; i < n && zMax > -hd + 4.5; i++) {

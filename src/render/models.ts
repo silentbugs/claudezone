@@ -118,7 +118,8 @@ class Models {
         o.scale.setScalar(1.3); // a touch larger than the pack's so the sight picture reads
         sight = top.y + (holo ? 0.034 : 0.03) * 1.3; optic = true; opticZ = top.z + (holo ? 0.042 : 0.035) * 1.3;
         // illuminated reticle projected "at infinity": drawn on top, only switched on by the first-person view
-        const r = new THREE.Mesh(new THREE.PlaneGeometry(holo ? 0.026 : 0.0065, holo ? 0.026 : 0.0065), new THREE.MeshBasicMaterial({ map: reticleTex(holo), transparent: true, depthTest: false, depthWrite: false, blending: THREE.AdditiveBlending }));
+        const r = new THREE.Mesh(new THREE.PlaneGeometry(0.0065, 0.0065), new THREE.MeshBasicMaterial({ map: reticleTex(false), // every optic shows a plain red dot
+ transparent: true, depthTest: false, depthWrite: false, blending: THREE.AdditiveBlending }));
         r.position.set(0, sight, top.z - 0.01); r.renderOrder = 20; r.visible = false; r.userData.reticle = true; r.userData.noBake = true;
         root.add(r);
         // lens mask: a depth-only window drawn before the gun, so nothing of the gun beyond the lens (front

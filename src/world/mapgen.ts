@@ -225,6 +225,7 @@ export function generateWorld(masks: MapMasks, seed = 1): WorldData {
     const bb = makeBuilding(rng, dist, w, d, x, z);
     if (!bb) continue;
     ctx.place(bb.b, bb.kind, x, z, ang, { poi: poi?.id, style: bb.style, lodColor: bb.lod });
+    if (bb.kind === 'house' && (dist === 'suburb' || dist === 'rural') && rng.chance(0.6)) addYard(ctx, x, z, ang, w, d);
     placed++;
   }
 
@@ -310,6 +311,43 @@ function sizeOptions(d: District, rng: Rng): [number, number][] {
     case 'airport': return [[r(36, 50), r(22, 30)], [r(20, 28), r(12, 18)], [r(10, 14), r(8, 11)]];
     default: return [[r(10, 13), r(8, 11)], [r(8, 10), r(7, 9)], [r(6, 8), r(5, 7)]];
   }
+}
+
+/**
+ * 2020 village / suburban plot: a low fence (wooden picket, fieldstone or chain-link) about 3 m round the house
+ * with a gap for the front gate, each side only where the ground is free; sometimes a garden shed at the back.
+ * Low enough (≤1.1 m) to vault.
+ */
+function addYard(ctx: GenContext, x: number, z: number, ang: number, w: number, d: number) {
+  const { rng, occ } = ctx, m = 3, hw = w / 2 + m, hd = d / 2 + m, c = Math.cos(ang), s = Math.sin(ang);
+  const W = (lx: number, lz: number): [number, number] => [x + lx * c + lz * s, z - lx * s + lz * c];
+  const style = rng.pick(['picket', 'picket', 'stone', 'chain']);
+  const col = style === 'picket' ? rng.pick([0x8a6a48, 0x6e5a44, 0xa89a80, 0x5a6a4a]) : style === 'stone' ? 0x8a8478 : 0x8a8f94;
+  const hgt = style === 'stone' ? 0.9 : style === 'chain' ? 1.1 : 1.0;
+  const b = new Builder(), y0 = ctx.hf.at(x, z);
+  const run = (x0: number, z0: number, x1: number, z1: number) => {
+    // one side, split around blocked cells and the gate; boards/wall plus posts
+    const len = Math.hypot(x1 - x0, z1 - z0), n = Math.max(1, Math.round(len / 2));
+    for (let i = 0; i < n; i++) {
+      const a0 = i / n, a1 = (i + 1) / n, sx0 = x0 + (x1 - x0) * a0, sz0 = z0 + (z1 - z0) * a0, sx1 = x0 + (x1 - x0) * a1, sz1 = z0 + (z1 - z0) * a1;
+      const mx = (sx0 + sx1) / 2, mz = (sz0 + sz1) / 2;
+      if (Math.abs(mx) < 1.6 && mz < -hd + 0.5) continue; // front gate
+      const [wx, wz] = W(mx, mz); if (occ.at(wx, wz) !== 0 || ctx.hf.at(wx, wz) < 1) continue;
+      const t = style === 'stone' ? 0.35 : 0.08, g = ctx.hf.at(wx, wz) - y0; // each segment sits on the ground under it
+      if (Math.abs(sx1 - sx0) > Math.abs(sz1 - sz0)) b.box(Math.min(sx0, sx1), g - 0.3, mz - t / 2, Math.max(sx0, sx1), g + hgt, mz + t / 2, style === 'stone' ? Mat.Rock : style === 'chain' ? Mat.Metal : Mat.Wood, { color: col });
+      else b.box(mx - t / 2, g - 0.3, Math.min(sz0, sz1), mx + t / 2, g + hgt, Math.max(sz0, sz1), style === 'stone' ? Mat.Rock : style === 'chain' ? Mat.Metal : Mat.Wood, { color: col });
+      if (style !== 'stone') b.box(sx0 - 0.06, g - 0.3, sz0 - 0.06, sx0 + 0.06, g + hgt + 0.15, sz0 + 0.06, Mat.Wood, { color: 0x5a4a38 });
+    }
+  };
+  run(-hw, -hd, hw, -hd); run(-hw, hd, hw, hd); run(-hw, -hd, -hw, hd); run(hw, -hd, hw, hd);
+  // garden shed in a back corner
+  if (rng.chance(0.4)) {
+    const sx = rng.chance(0.5) ? -hw + 1.6 : hw - 1.6, sz = hd - 1.4, [wx, wz] = W(sx, sz);
+    if (occ.at(wx, wz) === 0) { const g = ctx.hf.at(wx, wz) - y0; b.box(sx - 1.1, g - 0.3, sz - 0.9, sx + 1.1, g + 2.1, sz + 0.9, Mat.Wood, { color: rng.pick([0x6e5a44, 0x7a4a3a, 0x5a6a4a]) }); b.box(sx - 1.3, g + 2.1, sz - 1.1, sx + 1.3, g + 2.25, sz + 1.1, Mat.Roof, { color: 0x4a4f55 }); }
+  }
+  if (!b.parts.length) return;
+  ctx.place(b, 'fence', x, z, ang, { y: y0, flatten: false, mark: false, lodColor: col });
+  for (const [lx, lz, ww, dd] of [[0, -hd, 2 * hw, 0.6], [0, hd, 2 * hw, 0.6], [-hw, 0, 0.6, 2 * hd], [hw, 0, 0.6, 2 * hd]] as const) { const [wx, wz] = W(lx, lz); occ.mark(wx, wz, ang, ww, dd, 0, 4); }
 }
 
 function makeBuilding(rng: Rng, d: District, w: number, dd: number, x: number, z: number): { b: Builder; kind: string; style: number; lod: number } | null {

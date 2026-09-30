@@ -79,7 +79,7 @@ INDOOR.map.clone = (() => INDOOR.map) as any;
 /** Rasterise roof heights (half-float, 1.5 m cells) from building parts: wide parts only, inset from their edges. */
 export function buildIndoorMap(structs: { kind: string; x: number; y: number; z: number; cos: number; sin: number; parts: { x0: number; y0: number; z0: number; x1: number; y1: number; z1: number; noCollide?: boolean; shape?: string }[] }[], size: number) {
   const CELL = 1.5, n = Math.ceil(size / CELL), roof = new Float32Array(n * n).fill(-1000);
-  const skip = new Set(['door', 'tree', 'lamp', 'pole', 'prop', 'train', 'lattice', 'crane', 'ferris', 'comms']);
+  const skip = new Set(['door', 'tree', 'fence', 'lamp', 'pole', 'prop', 'train', 'lattice', 'crane', 'ferris', 'comms']);
   for (const s of structs) {
     if (skip.has(s.kind)) continue;
     for (const p of s.parts) {
