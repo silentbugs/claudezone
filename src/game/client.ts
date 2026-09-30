@@ -118,7 +118,7 @@ export class Match {
 
   /** 2020 variable zoom: scoped weapons toggle between two magnifications while aiming */
   scopeLevel = 0;
-  private humT = 0; private pauseTime = 0;
+  private humT = 0; private reconT = 0; private pauseTime = 0;
   private hbT = 0; private hbBlips: [number, number][] = []; private hbWorld: [number, number][] = [];
   private tugT = 0; private lastAirPhase = -1; private chuteRoll = 0;
   /** current ADS magnification, eased so a zoom toggle or optic swap doesn't snap */
@@ -285,7 +285,7 @@ export class Match {
       }
       case 'stim': if (e.p === this.viewId()) this.vm.useItem('stim'); else this.soldiers.oneShot(e.p, 'Consume', 0.9); break;
       case 'melee': if (e.p === 0) audio.play('melee', { vol: 0.6 }); break;
-      case 'flare': if (d(e.x, e.y, e.z) < 500) audio.play('flag', { x: e.x, y: e.y, z: e.z, range: 120, vol: 0.9, rate: 1.4 }); if (e.squad !== me.squad) this.hud.showNote('Enemy Recon flare spotted'); break;
+      case 'flare': if (d(e.x, e.y, e.z) < 700) audio.play('flareLaunch', { x: e.x, y: e.y + 20, z: e.z, range: 180, vol: 1 }); if (e.squad !== me.squad) this.hud.showNote('Enemy Recon flare spotted'); break;
       case 'callin': if (e.p === this.viewId()) audio.play('callin', { ui: true, vol: 0.6 }); break;
       case 'marker': if (e.kind === 'airstrike' || e.kind === 'cluster') { const pass = e.kind === 'cluster' ? 3.1 : 3.9, gy = sim.world.hf.at(e.x, e.z); setTimeout(() => audio.play('jet', { x: e.x, y: gy + 100, z: e.z, range: 600, vol: 1.2 }), Math.max(0, (pass - 1.6) * 1000)); }
         if (e.squad === me.squad) audio.say(e.kind === 'loadout' ? 'Loadout drop inbound.' : e.kind === 'cluster' ? 'Cluster strike inbound.' : 'Precision airstrike inbound.'); break;
@@ -465,6 +465,9 @@ export class Match {
     if ((phase === Phase.Freefall || phase === Phase.Chute) && this.tpBlend < 0.35 && !this.debugCam) this.vm.render(this.sm.renderer);
     if (fp && this.spectate < 0 && !this.debugCam) {
       this.vm.simTime = sim.time;
+      // recon capture: the upload chirp repeats while your squad holds the zone, quicker as it nears completion
+      { const ac = sim.active.find((q) => q.squad === me.squad && q.kind === 'recon'); const inside = ac && ac.flare && sim.players.some((q) => q.squad === me.squad && q.phase === Phase.Alive && Math.hypot(q.x - ac.zx!, q.z - ac.zz!) < 9);
+        if (inside) { this.reconT -= dt; if (this.reconT <= 0) { const k = Math.min(1, (ac!.progress ?? 0) / 25); this.reconT = 0.9 - 0.55 * k; audio.play('reconTick', { ui: true, vol: 0.5, rate: 1 + 0.25 * k }); } } else this.reconT = 0; }
       // unopened supply boxes hum; louder as you get close, from the box's position
       this.humT -= dt;
       if (this.humT <= 0) {
