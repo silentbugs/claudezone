@@ -393,6 +393,14 @@ function placeProps(ctx: GenContext, roadField: (x: number, z: number) => number
   return n;
 }
 
+/** Value noise in [0, 1] with smooth interpolation between hashed lattice points `cell` metres apart. */
+function smoothNoise(x: number, z: number, cell: number, seed: number) {
+  const fx = x / cell, fz = z / cell, ix = Math.floor(fx), iz = Math.floor(fz), tx = fx - ix, tz = fz - iz;
+  const sx = tx * tx * (3 - 2 * tx), sz = tz * tz * (3 - 2 * tz);
+  const a = hash2(ix, iz, seed), b = hash2(ix + 1, iz, seed), c = hash2(ix, iz + 1, seed), d = hash2(ix + 1, iz + 1, seed);
+  return a + (b - a) * sx + (c - a) * sz + (a - b - c + d) * sx * sz;
+}
+
 function placeTrees(ctx: GenContext): Tree[] {
   const { rng, hf, occ, extra, masks } = ctx;
   const trees: Tree[] = [];
@@ -406,7 +414,9 @@ function placeTrees(ctx: GenContext): Tree[] {
     const k = Math.round(z / hf.step) * hf.res + Math.round(x / hf.step);
     if (extra.road[k] > 0.1 || extra.river[k]) continue;
     // forest density: clumps via noise; denser in the hills and on the rim
-    const n = hash2(Math.floor(x / 60), Math.floor(z / 60), 3) * 0.6 + hash2(Math.floor(x / 23), Math.floor(z / 23), 5) * 0.4;
+    // smooth, domain-warped noise (the old per-cell hash made square forest patches)
+    const wx = x + (smoothNoise(x, z, 140, 11) - 0.5) * 90, wz = z + (smoothNoise(x, z, 140, 13) - 0.5) * 90;
+    const n = clamp((smoothNoise(wx, wz, 75, 3) * 0.6 + smoothNoise(wx, wz, 26, 5) * 0.3 + smoothNoise(x, z, 9, 7) * 0.1 - 0.5) * 1.9 + 0.5, 0, 1); // stretched back to the old spread
     const { d } = districtAt(x, z);
     const base = d === 'rural' ? 0.55 : d === 'suburb' ? 0.5 : d === 'downtown' ? 0.12 : 0.3;
     const nearMountain = clamp((y - 60) / 120, 0, 1);

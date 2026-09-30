@@ -16,7 +16,7 @@ export type SoundName =
   | 'hit' | 'hitArmor' | 'armorBreak' | 'headshot' | 'kill' | 'down' | 'selfArmorBreak' | 'bodyHit'
   | 'plate' | 'magOut' | 'magIn' | 'bolt' | 'swap' | 'dry' | 'melee' | 'throw' | 'pin'
   | 'step_dirt' | 'step_concrete' | 'step_metal' | 'step_wood' | 'land' | 'jump' | 'slide' | 'gear'
-  | 'jet' | 'callin' | 'contractStart' | 'contractDone' | 'contractStep' | 'pickup' | 'cash' | 'chute' | 'chuteCut' | 'explosion' | 'explosionFar' | 'whiz' | 'impact' | 'impactMetal' | 'impactWood' | 'impactGlass' | 'impactWater'
+  | 'chestHum' | 'jet' | 'callin' | 'contractStart' | 'contractDone' | 'contractStep' | 'pickup' | 'cash' | 'chute' | 'chuteCut' | 'explosion' | 'explosionFar' | 'whiz' | 'impact' | 'impactMetal' | 'impactWood' | 'impactGlass' | 'impactWater'
   | 'musicInfil' | 'musicVictory' | 'musicDefeat'
   | 'uiOpen' | 'uiHover' | 'uiBuy' | 'uiDeny' | 'downed' | 'cough' | 'heartbeat' | 'breath' | 'doorOpen' | 'doorClose' | 'doorSlam' | 'beep' | 'revive' | 'crate' | 'stinger' | 'flag' | 'rock';
 
@@ -411,6 +411,8 @@ export class Audio {
     // contract cues: a rising three-note radio chime on accept, a brighter fanfare on completion, a blip per step
     const notes = (fs: number[], gap: number, dec: number) => (t: number) => fs.reduce((a, f, k) => a + (t > k * gap ? (Math.sin(2 * Math.PI * f * t) + 0.35 * Math.sin(4 * Math.PI * f * t)) * Math.exp(-(t - k * gap) * dec) : 0), 0) * 0.55;
     // jet flyover: a roar that swells and fades with a falling whine (Doppler-ish)
+    // supply box: a soft shimmering hum with a faint chime on top (you can follow it to the box)
+    this.add('chestHum', tone(1.4, (t) => { const env = Math.sin(Math.PI * Math.min(1, t / 1.4)); return (Math.sin(2 * Math.PI * 196 * t) * 0.35 + Math.sin(2 * Math.PI * 294 * t + Math.sin(t * 9) * 0.6) * 0.25 + Math.sin(2 * Math.PI * 1175 * t) * 0.08 * Math.exp(-t * 3)) * env * 0.7; }));
     this.add('jet', N(4, 4321).filter('lp', 900).env((t) => Math.exp(-Math.pow((t - 1.6) / 0.7, 2)) * 1.3).mix(tone(4, (t) => Math.sin(2 * Math.PI * (1500 - t * 260) * t) * 0.06 * Math.exp(-Math.pow((t - 1.5) / 0.6, 2))), 1));
     this.add('callin', tone(0.5, (t) => (Math.sin(2 * Math.PI * 1760 * t) * (t < 0.08 ? 1 : 0) + Math.sin(2 * Math.PI * 1320 * t) * (t > 0.12 && t < 0.2 ? 1 : 0)) * 0.3).mix(N(0.3, 77).filter('bp', 2500, 0.5).env((t) => Math.exp(-t * 20) * 0.15), 1));
     this.add('contractStart', tone(0.9, notes([587, 784, 1175], 0.11, 5)));

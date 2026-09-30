@@ -42,20 +42,29 @@ export class TerrainMesh {
         .replace('#include <common>', '#include <common>\nattribute vec4 aSplat;\nvarying vec4 vSplat;\nvarying vec3 vWPos;\nvarying vec3 vWNormal;')
         .replace('#include <worldpos_vertex>', '#include <worldpos_vertex>\nvSplat = aSplat;\nvWPos = (modelMatrix * vec4(transformed,1.0)).xyz;\nvWNormal = normal;');
       sh.fragmentShader = sh.fragmentShader
-        .replace('#include <common>', '#include <common>\nuniform highp sampler2DArray tLayers;\nuniform highp sampler2DArray tTN;\nvarying vec4 vSplat;\nvarying vec3 vWPos;\nvarying vec3 vWNormal;\n' + SHADER_NOISE + PERTURB_GLSL)
+        .replace('#include <common>', '#include <common>\nuniform highp sampler2DArray tLayers;\nuniform highp sampler2DArray tTN;\nvarying vec4 vSplat;\nvarying vec3 vWPos;\nvarying vec3 vWNormal;\n' + SHADER_NOISE + PERTURB_GLSL + `
+// anti-tiling: blend the layer with a rotated, rescaled copy of itself under a slow noise mask, so grass / dirt
+// never shows a regular repeat
+vec3 untile(float layer, vec2 uv, vec2 wp) {
+  vec2 uv2 = mat2(0.4536, -0.8912, 0.8912, 0.4536) * uv * 0.73 + vec2(0.37, 0.61);
+  float w = smoothstep(0.25, 0.75, vn(wp * 0.043) * 0.7 + vn(wp * 0.17) * 0.3);
+  return mix(texture(tLayers, vec3(uv, layer)).rgb, texture(tLayers, vec3(uv2, layer)).rgb, w);
+}
+`)
         .replace('#include <map_fragment>', /* glsl */ `
           vec2 uv = vWPos.xz / 7.0;
-          float macro = fbm3(vWPos.xz / 90.0);
-          float macro2 = fbm3(vWPos.xz / 23.0 + 7.0);
+          vec2 warp = vec2(fbm3(vWPos.xz / 61.0 + 3.0), fbm3(vWPos.xz / 61.0 + 11.0)) * 38.0;
+          float macro = fbm3((vWPos.xz + warp) / 90.0);
+          float macro2 = fbm3((vWPos.xz - warp * 0.6) / 23.0 + 7.0) * 0.8 + vn(vWPos.xz * 0.11) * 0.2;
           float slope = 1.0 - clamp(vWNormal.y, 0.0, 1.0);
-          vec3 grass = texture(tLayers, vec3(uv, 0.0)).rgb * vec3(0.96, 1.14, 0.64); // sunlit yellow-green meadow grass (2020)
-          vec3 dry = texture(tLayers, vec3(uv * 1.1, 1.0)).rgb * vec3(1.14, 1.06, 0.88); // dusty beige
-          vec3 dirt = texture(tLayers, vec3(uv, 2.0)).rgb;
+          vec3 grass = untile(0.0, uv, vWPos.xz) * vec3(0.96, 1.14, 0.64); // sunlit yellow-green meadow grass (2020)
+          vec3 dry = untile(1.0, uv * 1.1, vWPos.xz + 31.0) * vec3(1.14, 1.06, 0.88); // dusty beige
+          vec3 dirt = untile(2.0, uv, vWPos.xz + 57.0);
           vec3 bw = pow(abs(normalize(vWNormal)), vec3(4.0)); bw /= (bw.x + bw.y + bw.z);
           vec3 rock = texture(tLayers, vec3(vWPos.xz / 14.0, 3.0)).rgb * bw.y + texture(tLayers, vec3(vWPos.xy / 14.0, 3.0)).rgb * bw.z + texture(tLayers, vec3(vWPos.zy / 14.0, 3.0)).rgb * bw.x;
           vec3 snow = texture(tLayers, vec3(uv * 0.7, 4.0)).rgb;
           vec3 asph = texture(tLayers, vec3(uv * 0.8, 5.0)).rgb;
-          vec3 sand = texture(tLayers, vec3(uv, 6.0)).rgb;
+          vec3 sand = untile(6.0, uv, vWPos.xz + 83.0);
           vec3 ice = texture(tLayers, vec3(uv * 0.3, 7.0)).rgb * vec3(0.6, 0.68, 0.76); // grey-blue river ice, not blown-out white
           vec3 pave = texture(tLayers, vec3(vWPos.xz / 6.0, 8.0)).rgb;
           float fDry = smoothstep(0.45, 0.8, macro) * 0.8, fDirt = smoothstep(0.62, 0.8, macro2) * 0.8;

@@ -119,8 +119,8 @@ export class LootMeshes {
       if (key.startsWith('w:')) {
         const [, id, r] = key.split(':');
         const g = models.bakedGun(id, +r, true)?.clone() ?? gunGeometry(describeGun(WEAPON[id], +r));
-        g.rotateZ(Math.PI / 2); // lying on its side
-        g.computeBoundingBox(); g.translate(0, -g.boundingBox!.min.y, 0);
+        // floats upright, side-on, turning slowly (2020 ground loot)
+        g.computeBoundingBox(); const bb = g.boundingBox!; g.translate(0, -(bb.min.y + bb.max.y) / 2, -(bb.min.z + bb.max.z) / 2);
         geo = withEmit(g);
       } else geo = itemModel(key);
       im = new THREE.InstancedMesh(geo, this.mat, 128);
@@ -134,7 +134,13 @@ export class LootMeshes {
     this.timer -= dt;
     const pulse = 0.75 + 0.25 * Math.sin(time * 3);
     (this.glow.material as THREE.MeshBasicMaterial).opacity = pulse;
+    this.now = time;
     if (this.timer <= 0) { this.timer = 0.2; this.rebuild(cam); }
+    else if (this.shown.length) {
+      // animate the float every frame
+      for (const e of this.shown) { this.pose(e.it); e.im.setMatrixAt(e.i, this.m); }
+      for (const im of this.pools.values()) if (im.count) im.instanceMatrix.needsUpdate = true;
+    }
     // outline on the focused item (inverted hull)
     const it = focusItem >= 0 ? this.sim.itemById.get(focusItem) : undefined;
     if (it && it.alive) {
@@ -146,21 +152,27 @@ export class LootMeshes {
     } else this.outline.visible = false;
   }
 
+  /** 2020 loot floats about knee height, bobbing gently and turning slowly */
+  private now = 0;
   private pose(it: Item) {
-    this.e.set(0, (it.id * 1.7) % 6.28, 0); this.q.setFromEuler(this.e);
-    this.p.set(it.x, it.y - 0.04, it.z);
+    const ph = (it.id * 1.7) % 6.28, t = this.now;
+    this.e.set(0, ph + t * 0.6, 0); this.q.setFromEuler(this.e);
+    this.p.set(it.x, it.y + (it.kind === ItemKind.Weapon ? 0.55 : 0.4) + Math.sin(t * 1.6 + ph) * 0.05, it.z);
     this.m.compose(this.p, this.q, this.s);
   }
+  private shown: { im: THREE.InstancedMesh; i: number; it: Item }[] = [];
 
   private rebuild(cam: THREE.Vector3) {
     const sim = this.sim;
     for (const im of this.pools.values()) im.count = 0;
+    this.shown.length = 0;
     let ng = 0;
     for (const it of sim.itemsNear(cam.x, cam.z, 70)) {
       if (it.vy !== undefined) continue;
       const im = this.pool(KIND_KEY(it));
       if (im.count >= 128) continue;
       this.pose(it);
+      this.shown.push({ im, i: im.count, it });
       im.setMatrixAt(im.count++, this.m);
       if (it.kind === ItemKind.Weapon && ng < 800) {
         const r = it.rarity ?? 0;

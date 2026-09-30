@@ -142,7 +142,7 @@ function fire(sim: Sim, p: Player, w: { id: string; rarity: number; mag: number 
   // spread: hip vs ads, movement, jumping, bloom
   const moving = Math.hypot(p.vx, p.vz);
   let spread = (def.spreadHip + (def.spreadAds - def.spreadHip) * p.ads) * mods.spread;
-  spread *= 1 + moving * (p.ads > 0.5 ? 0.03 : 0.12) + (p.onGround ? 0 : 1.5) + p.bloom * (p.ads > 0.5 ? 0.3 : 1);
+  spread *= 1 + moving * (p.ads > 0.5 ? 0.015 : 0.12) + (p.onGround ? 0 : 1.5) + p.bloom * (p.ads > 0.5 ? 0.3 : 1);
   if (p.stance === Stance.Crouch) spread *= 0.85; else if (p.stance === Stance.Prone) spread *= 0.7;
   if (p.bot) spread *= 1; // bots add aim error elsewhere
   const pellets = def.pellets ?? 1;

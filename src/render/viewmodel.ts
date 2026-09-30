@@ -319,11 +319,11 @@ export class ViewModel {
     this.lastCur = p.cur; this.lastId = w!.id;
     const ads = p.ads;
     // sway lags the mouse; less when aiming
-    const sw = 1 - ads * 0.8;
+    const sw = 1 - ads * 0.92; // aimed: the sight picture barely sways (MW)
     this.swayX += (-mouseDX * 0.0006 * sw - this.swayX) * Math.min(1, dt * 10);
     this.swayY += (mouseDY * 0.0006 * sw - this.swayY) * Math.min(1, dt * 10);
     this.bobT += dt * (speed > 0.5 ? 2 + speed * 1.1 : 0.8);
-    const bobA = (speed > 0.5 ? 0.012 + speed * 0.0022 : 0.003) * (1 - ads * 0.9);
+    const bobA = (speed > 0.5 ? 0.012 + speed * 0.0022 : 0.003) * (1 - ads * 0.96); // walking while aimed: the sights stay steady
     const bx = Math.sin(this.bobT) * bobA, by = -Math.abs(Math.cos(this.bobT)) * bobA;
     for (let i = 0, h = Math.min(dt, 1 / 20) / 2; i < 2; i++) {
       const K = 420, C = 2 * Math.sqrt(K) * 0.72;
@@ -432,9 +432,9 @@ export class ViewModel {
     if (this.slideK > 0.001) { rz += 0.18 * this.slideK; pos.x -= 0.02 * this.slideK; }
     // melee swing
     if (p.meleeCd > 0.35) { const t = (0.7 - p.meleeCd) / 0.35; pos.x -= Math.sin(t * Math.PI) * 0.12; pos.z -= Math.sin(t * Math.PI) * 0.12; ry += Math.sin(t * Math.PI) * 0.9; }
-    pos.z += this.kick * (0.024 + (1 - ads) * 0.014); pos.y += this.kickRot * 0.004;
+    pos.z += this.kick * (0.02 + (1 - ads) * 0.018); pos.y += this.kickRot * 0.004 * (1 - 0.6 * ads);
     this.root.position.set(pos.x + bx + this.swayX, pos.y + by + this.swayY, pos.z);
-    this.root.rotation.set(rx + this.kickRot * 0.06 + this.swayY * 2, ry + this.swayX * 3, rz + this.swayX * 1.5, 'YXZ');
+    this.root.rotation.set(rx + this.kickRot * 0.06 * (1 - 0.55 * ads) + this.swayY * 2, ry + this.swayX * 3, rz + this.swayX * 1.5, 'YXZ');
     if (this.mantleHand > 0.01) {
       // the planted hand lives in view space: reach up-left, grab the ledge, then sink as we pull up over it
       const u = this.mantleU, reach = Math.min(1, u / 0.3), push = Math.max(0, (u - 0.35) / 0.65);

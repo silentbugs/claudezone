@@ -118,6 +118,7 @@ export class Match {
 
   /** 2020 variable zoom: scoped weapons toggle between two magnifications while aiming */
   scopeLevel = 0;
+  private humT = 0;
   private hbT = 0; private hbBlips: [number, number][] = [];
   private tugT = 0; private lastAirPhase = -1; private chuteRoll = 0;
   /** current ADS magnification, eased so a zoom toggle or optic swap doesn't snap */
@@ -446,6 +447,13 @@ export class Match {
     if ((phase === Phase.Freefall || phase === Phase.Chute) && this.tpBlend < 0.35 && !this.debugCam) this.vm.render(this.sm.renderer);
     if (fp && this.spectate < 0 && !this.debugCam) {
       this.vm.simTime = sim.time;
+      // unopened supply boxes hum; louder as you get close, from the box's position
+      this.humT -= dt;
+      if (this.humT <= 0) {
+        this.humT = 1.3; let best = null as null | { x: number; y: number; z: number }, bd = 30;
+        for (const c of sim.chests) if (!c.opened) { const dd = Math.hypot(c.x - me.x, c.y - me.y, c.z - me.z); if (dd < bd) { bd = dd; best = c; } }
+        if (best) audio.play('chestHum', { x: best.x, y: best.y + 0.4, z: best.z, range: 12, vol: 0.12 + 0.5 * (1 - bd / 30) ** 2 });
+      }
       // heartbeat sensor: enemies in front within 40 m, refreshed every half second (2020)
       if (((me as any).heartbeatUntil ?? 0) > sim.time) {
         this.hbT -= dt;
