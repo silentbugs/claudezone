@@ -46,6 +46,9 @@ export class Input {
       if (this.capture) { const c = this.capture; this.capture = null; c(code); return; }
       if (this.locked) { this.pressed.add(code); }
     }, { passive: true });
+    // closing / reloading the tab mid-match asks first (the browser's own "Leave site?" dialog); in fullscreen with
+    // keyboard lock Ctrl+W never gets this far, it goes to the game
+    addEventListener('beforeunload', (e) => { if (this.inGame) { e.preventDefault(); e.returnValue = ''; } });
     addEventListener('contextmenu', (e) => e.preventDefault());
     // leaving the window releases everything (no stuck keys after alt-tab)
     addEventListener('blur', () => { for (const c of this.held) this.released.add(c); this.held.clear(); });

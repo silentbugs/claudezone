@@ -136,12 +136,17 @@ export class Sim {
 
   get inWarmup() { return this.time < this.warmup; }
   /** Warm-up: drop straight onto Verdansk with a random gun; respawn on death. */
+  /** the warmup's one location: everyone drops in around it (2020 pre-game) */
+  private warmupPoi: (typeof POIS)[number] | null = null;
   private warmupSpawn(p: Player) {
-    let x = 0, z = 0;
-    for (let i = 0; i < 50; i++) { const q = POIS[this.rng.int(0, POIS.length - 1)]; x = q.x + this.rng.range(-q.r, q.r); z = q.z + this.rng.range(-q.r, q.r); if (this.world.hf.at(x, z) > 1 && inPlayable(x, z)) break; }
-    const s = this.snapToFree(x, z) ?? { x, y: this.world.hf.at(x, z), z };
-    p.x = p.px = s.x; p.z = p.pz = s.z; p.y = p.py = s.y + 0.1; p.vx = p.vy = p.vz = 0; p.fallStartY = p.y;
-    p.phase = Phase.Alive; p.alive = true; p.health = 100; p.armor = 150; p.onGround = true; p.stance = Stance.Stand;
+    if (!this.warmupPoi) { const major = POIS.filter((q) => q.tier === 'major' && inPlayable(q.x, q.z) && this.world.hf.at(q.x, q.z) > 2); this.warmupPoi = major[this.rng.int(0, major.length - 1)] ?? POIS[0]; }
+    const q = this.warmupPoi;
+    let x = q.x, z = q.z;
+    for (let i = 0; i < 50; i++) { const a = this.rng.range(0, Math.PI * 2), d = Math.sqrt(this.rng.next()) * q.r * 1.3; x = q.x + Math.cos(a) * d; z = q.z + Math.sin(a) * d; if (this.world.hf.at(x, z) > 1 && inPlayable(x, z)) break; }
+    // falling out of the sky: skydive and open the chute wherever you like
+    p.x = p.px = x; p.z = p.pz = z; p.y = p.py = this.world.hf.at(x, z) + this.rng.range(180, 260); p.vx = p.vz = 0; p.vy = -20; p.fallStartY = p.y;
+    p.phase = Phase.Freefall; p.alive = true; p.health = 100; p.armor = 150; p.onGround = false; p.stance = Stance.Stand;
+    const br = this.brains[p.id]; if (br) { br.dropX = x + this.rng.range(-80, 80); br.dropZ = z + this.rng.range(-80, 80); }
     const gun = this.rng.pick(['m4', 'kilo', 'grau', 'mp5', 'mp7', 'm13', 'aug', 'ram7']);
     p.weapons = [{ id: gun, rarity: 1, mag: magSize(gun, 1) }, { id: 'm1911', rarity: 0, mag: 8 }]; p.cur = 0;
     p.ammo = { heavy: 240, light: 240, sniper: 20, shotgun: 20, rocket: 0 };
