@@ -46,8 +46,6 @@ export class Input {
       if (this.capture) { const c = this.capture; this.capture = null; c(code); return; }
       if (this.locked) { this.pressed.add(code); }
     }, { passive: true });
-    // closing / reloading the tab mid-match asks first (the browser's own "Leave site?" dialog; needs a prior click, which starting a match is)
-    addEventListener('beforeunload', (e) => { if (this.inGame) { e.preventDefault(); e.returnValue = ''; } });
     addEventListener('contextmenu', (e) => e.preventDefault());
     // leaving the window releases everything (no stuck keys after alt-tab)
     addEventListener('blur', () => { for (const c of this.held) this.released.add(c); this.held.clear(); });
@@ -77,11 +75,19 @@ export class Input {
    * Ctrl+T, Ctrl+N, Ctrl+Tab (Chrome/Edge; Esc still works, hold it to leave fullscreen). Must run from a
    * user gesture (a click).
    */
+  /**
+   * Fullscreen + Keyboard Lock: the only way a page can receive Ctrl+W / Ctrl+T / Ctrl+N (Chrome / Edge, on
+   * localhost or https). Re-locks every time the game re-enters fullscreen.
+   */
   async lockKeyboard() {
+    if (!this.fsHooked) { this.fsHooked = true; document.addEventListener('fullscreenchange', () => { if (document.fullscreenElement && this.inGame) (navigator as any).keyboard?.lock?.().catch?.(() => {}); }); }
     try {
       if (!document.fullscreenElement) await document.documentElement.requestFullscreen({ navigationUI: 'hide' } as FullscreenOptions);
       await (navigator as any).keyboard?.lock?.();
     } catch { /* not supported / denied: preventDefault still covers most shortcuts */ }
   }
+  private fsHooked = false;
+  /** true when the browser can hand Ctrl+W etc. to the game (Keyboard Lock available and active in fullscreen) */
+  get keyboardLockable() { return !!(navigator as any).keyboard?.lock && window.isSecureContext; }
   unlockKeyboard() { try { (navigator as any).keyboard?.unlock?.(); } catch { /* */ } }
 }

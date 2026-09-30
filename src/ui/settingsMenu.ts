@@ -52,7 +52,7 @@ export class SettingsMenu {
         this.row('Foliage density', this.range('foliage', 0, 1.5, 0.05, (v) => Math.round(v * 100) + '%'), 'grass and bushes near you') +
         this.row('Brightness', this.range('brightness', 0.6, 1.6, 0.01, (v) => Math.round(v * 100) + '%')) +
         this.row('Show FPS counter', this.check('showFps')) +
-        this.row('Fullscreen + keyboard lock', this.check('fullscreen'), 'captures Ctrl+W, Ctrl+T and other browser shortcuts during a match (Chrome / Edge); hold Esc to leave fullscreen') +
+        this.row('Fullscreen + keyboard lock', this.check('fullscreen'), 'captures Ctrl+W, Ctrl+T and other browser shortcuts during a match (Chrome / Edge); hold Esc to leave fullscreen' + (this.input.keyboardLockable ? '' : ' — NOT AVAILABLE on this address: open the game via http://localhost:5173 (or https) so the browser allows it')) +
         '<div class="sgroup">Interface</div>' +
         this.row('Minimap shape', this.select('minimapShape', [['circle', 'Circle'], ['square', 'Square']])) +
         this.row('Compass', this.check('showCompass')) +
