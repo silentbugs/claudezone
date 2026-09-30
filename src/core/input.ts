@@ -37,7 +37,9 @@ export class Input {
       if (this.locked || e.target === el) this.down(code);
     };
     addEventListener('mousedown', mouseDown);
-    addEventListener('mouseup', (e) => this.up('Mouse' + e.button));
+    addEventListener('mouseup', (e) => { if (this.inGame && (e.button === 3 || e.button === 4)) e.preventDefault(); this.up('Mouse' + e.button); });
+    // the side buttons are game binds in a match, never browser back / forward
+    addEventListener('auxclick', (e) => { if (this.inGame && (e.button === 3 || e.button === 4)) e.preventDefault(); });
     addEventListener('mousemove', (e) => { if (this.locked) { this.dx += e.movementX; this.dy += e.movementY; } });
     addEventListener('wheel', (e) => {
       const code = e.deltaY < 0 ? 'WheelUp' : 'WheelDown';

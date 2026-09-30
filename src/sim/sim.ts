@@ -9,6 +9,8 @@ import type { WorldData } from '../world/mapgen';
 import { inPlayable } from '../world/mapgen';
 import { MAP_SIZE, POIS } from '../world/mapdata';
 import { GULAG_POS, GULAG_SPAWNS, GULAG_BALCONY_Z, GULAG_ARENAS, gulagArena } from '../world/landmarks';
+/** seconds both Gulag fighters are held in place with a countdown before the fight starts */
+const GULAG_COUNTDOWN = 5;
 import { WEAPON, AMMO_MAX, AMMO_PICKUP, AmmoType } from '../data/weapons';
 import { Train } from './train';
 import { Doors } from './doors';
@@ -148,7 +150,7 @@ export class Sim {
     this.bullets.length = 0; this.throwables.length = 0; this.fires.length = 0; this.smokes.length = 0; this.pending.length = 0;
     for (const p of this.players) {
       if ((p as any).vehicle !== undefined) exitVehicle(this, p);
-      Object.assign(p, { phase: Phase.Plane, alive: true, health: 100, armor: 0, plates: 0, kills: 0, damage: 0, cash: 0, lethal: null, tactical: null, killstreak: null, fieldUpgrade: null, selfRevive: false, hasMask: false, gasMask: 0, gulagUsed: false, stance: Stance.Stand, reloadT: 0, plateT: 0, swapT: 0, ads: 0, downT: 0, reviveBy: -1, killedBy: -1 });
+      Object.assign(p, { phase: Phase.Plane, alive: true, health: 100, armor: 100, plates: 0, kills: 0, damage: 0, cash: 0, lethal: null, tactical: null, killstreak: null, fieldUpgrade: null, selfRevive: false, hasMask: false, gasMask: 0, gulagUsed: false, stance: Stance.Stand, reloadT: 0, plateT: 0, swapT: 0, ads: 0, downT: 0, reviveBy: -1, killedBy: -1 });
       p.weapons = [{ id: 'x16', rarity: 0, mag: 13 }, null]; p.cur = 0; p.ammo = { heavy: 0, light: 30, sniper: 0, shotgun: 0, rocket: 0 };
       this.brains[p.id].target = -1; this.brains[p.id].goal = 'drop'; this.brains[p.id].dropX = 0;
     }
@@ -192,7 +194,7 @@ export class Sim {
       phase: Phase.Plane, onGround: false, groundY: 0, fallStartY: 0,
       stance: Stance.Stand, sprinting: false, tacSprint: 0, tacCooldown: 0, slideT: 0, slideCd: 0, slideDx: 0, slideDz: 0,
       swimming: false, mantleT: 0, mantleY: 0,
-      health: 100, armor: 0, plates: 0, maxPlates: HEALTH.carry,
+      health: 100, armor: 100, plates: 0, maxPlates: HEALTH.carry,
       weapons: [{ id: 'x16', rarity: 0, mag: 13 }, null], cur: 0,
       ammo: { heavy: 0, light: 30, sniper: 0, shotgun: 0, rocket: 0 },
       lethal: null, tactical: null, killstreak: null, fieldUpgrade: null, turret: -1, stash: null, selfRevive: false, gasMask: 0, hasMask: false,
@@ -335,6 +337,7 @@ export class Sim {
     for (const p of this.players) {
       p.px = p.x; p.py = p.y; p.pz = p.z; p.pyaw = p.yaw;
       if (p.phase === Phase.Dead || p.phase === Phase.Spectate) continue;
+      if (((p as any).frozenUntil ?? 0) > this.time) { const it = p.intent; it.mx = 0; it.mz = 0; it.fire = false; it.ads = false; it.jump = false; (it as any).melee = false; it.lethal = false; it.tactical = false; }
       const veh = (p as any).vehicle !== undefined ? vehicleOf(this, p) : null;
       if (veh) { p.yaw = p.intent.yaw; p.pitch = clamp(p.intent.pitch, -1.5, 1.5); } else movePlayer(this, p, dt);
       if ((p.phase === Phase.Alive || p.phase === Phase.Gulag) && (!veh || (p as any).seat > 0)) weaponTick(this, p, dt);
@@ -584,6 +587,7 @@ export class Sim {
       v.gulagUsed = true;
       v.phase = Phase.GulagWait;
       this.gulag.queue.push(v.id);
+      (v as any).gulagReadyAt = this.time + 15; // 2020: you wait on the balcony, watching fights, before your match is called
       this.placeOnBalcony(v);
       this.emit({ t: 'gulag', p: v.id, msg: 'enter' });
     } else {
@@ -752,11 +756,13 @@ export class Sim {
     const g = this.gulag;
     g.queue = g.queue.filter((id) => this.players[id].phase === Phase.GulagWait);
     // start fights in free arenas
-    while (g.queue.length >= 2 && g.fights.length < GULAG_ARENAS) {
+    const ready = () => g.queue.filter((id) => ((this.players[id] as any).gulagReadyAt ?? 0) <= this.time);
+    for (let r = ready(); r.length >= 2 && g.fights.length < GULAG_ARENAS; r = ready()) {
       const used = new Set(g.fights.map((f) => f.arena)); let arena = 0; while (used.has(arena)) arena++;
-      this.startGulagFight(arena, g.queue.shift()!, g.queue.shift()!);
+      const [a, b2] = r; g.queue = g.queue.filter((id) => id !== a && id !== b2);
+      this.startGulagFight(arena, a, b2);
     }
-    if (g.queue.length === 1) { g.idle += dt; if (g.idle > 25 || g.closed) { const id = g.queue.shift()!; g.idle = 0; this.emit({ t: 'gulag', p: id, msg: 'win' }); this.redeploy(this.players[id]); } }
+    if (g.queue.length === 1 && ready().length === 1) { g.idle += dt; if (g.idle > 25 || g.closed) { const id = g.queue.shift()!; g.idle = 0; this.emit({ t: 'gulag', p: id, msg: 'win' }); this.redeploy(this.players[id]); } }
     else g.idle = 0;
     for (const f of [...g.fights]) {
       f.t += dt;
@@ -775,7 +781,7 @@ export class Sim {
     }
   }
   private startGulagFight(arena: number, a: number, b: number) {
-    const f: GulagFight = { arena, a, b, t: 0, flagT: 0, flagOwner: -1, overtime: false };
+    const f: GulagFight = { arena, a, b, t: -GULAG_COUNTDOWN, flagT: 0, flagOwner: -1, overtime: false };
     this.gulag.fights.push(f);
     const kit = this.rng.pick(GULAG_KITS), c = gulagArena(arena);
     [a, b].forEach((id, i) => {
@@ -787,6 +793,7 @@ export class Sim {
       p.weapons = [{ id: kit.gun, rarity: 0, mag: magSize(kit.gun, 0) }, null]; p.cur = 0;
       p.ammo[WEAPON[kit.gun].ammo] = magSize(kit.gun, 0) * 4;
       p.lethal = { type: kit.lethal, n: 1 }; p.tactical = { type: kit.tactical, n: 1 };
+      (p as any).frozenUntil = this.time + GULAG_COUNTDOWN;
       this.emit({ t: 'gulag', p: id, msg: 'fight' });
     });
   }

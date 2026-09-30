@@ -110,6 +110,11 @@ export class Effects {
   private badgeTex = new Map<string, THREE.Texture>();
   private badges = new Map<number, { sp: THREE.Sprite; beam: THREE.Mesh; y: number; ph: number }>();
   private badgeT = 0;
+  /** thrown equipment, drawn in flight / where it lands */
+  private thrown = new Map<number, THREE.Object3D>();
+  private thrownGeo = new Map<string, THREE.BufferGeometry>();
+  private thrownMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.6, metalness: 0.2 });
+  private blinkMat = new THREE.MeshBasicMaterial({ color: 0xff2a1a });
   /** strike jets: fly over the target line just before the bombs land */
   private jets: { m: THREE.Object3D; x: number; z: number; dx: number; dz: number; y: number; t: number }[] = [];
   private jetGeo: THREE.BufferGeometry | null = null;
@@ -151,6 +156,36 @@ export class Effects {
       beam.position.set(c.x, c.y, c.z);
       this.badges.set(c.id, { sp, beam, y: c.y, ph: (c.id * 1.7) % 6.28 }); this.group.add(sp, beam);
     }
+  }
+
+  private thrownGeometry(type: string): THREE.BufferGeometry {
+    let g = this.thrownGeo.get(type); if (g) return g;
+    const parts: THREE.BufferGeometry[] = [];
+    if (type === 'frag') parts.push(colored(new THREE.SphereGeometry(0.045, 10, 8).scale(1, 1.2, 1), 0x3d4a2e), colored(new THREE.BoxGeometry(0.02, 0.05, 0.03).translate(0.02, 0.06, 0), 0x8a8a80));
+    else if (type === 'semtex') parts.push(colored(new THREE.BoxGeometry(0.09, 0.04, 0.06), 0xc8b89a), colored(new THREE.BoxGeometry(0.03, 0.02, 0.03).translate(0, 0.03, 0), 0x2a2a2a));
+    else if (type === 'molotov') parts.push(colored(new THREE.CylinderGeometry(0.035, 0.035, 0.14, 8), 0x3a6a3a), colored(new THREE.CylinderGeometry(0.012, 0.02, 0.07, 6).translate(0, 0.1, 0), 0x3a6a3a), colored(new THREE.BoxGeometry(0.02, 0.05, 0.02).translate(0, 0.15, 0), 0xd8d0b0));
+    else if (type === 'c4') parts.push(colored(new THREE.BoxGeometry(0.16, 0.05, 0.1), 0x8a8a6a), colored(new THREE.BoxGeometry(0.06, 0.02, 0.05).translate(0, 0.035, 0), 0x2a2a2a));
+    else if (type === 'knife') parts.push(colored(new THREE.BoxGeometry(0.02, 0.01, 0.16).translate(0, 0, -0.08), 0xb8bcc0), colored(new THREE.BoxGeometry(0.025, 0.02, 0.1).translate(0, 0, 0.05), 0x2a2a2a));
+    else if (type === 'rock') parts.push(colored(new THREE.IcosahedronGeometry(0.05, 0), 0x8a8478));
+    else parts.push(colored(new THREE.CylinderGeometry(0.03, 0.03, 0.12, 10), type === 'smoke' ? 0x6a7a6a : type === 'flash' ? 0x3a3e44 : 0x4a4a3a), colored(new THREE.BoxGeometry(0.02, 0.04, 0.03).translate(0.02, 0.07, 0), 0x8a8a80));
+    g = mergeGeometries(parts.map((q) => q.index ? q.toNonIndexed() : q))!; this.thrownGeo.set(type, g); return g;
+  }
+  private updateThrown(dt: number) {
+    const live = new Set<number>();
+    for (const t of this.sim.throwables) {
+      if (!t.alive) continue; live.add(t.id);
+      let m = this.thrown.get(t.id);
+      if (!m) {
+        m = new THREE.Mesh(this.thrownGeometry(t.type), this.thrownMat); (m as THREE.Mesh).castShadow = true;
+        if (t.type === 'semtex' || t.type === 'c4') { const led = new THREE.Mesh(new THREE.SphereGeometry(0.012, 6, 4), this.blinkMat); led.position.set(0, 0.05, 0); led.name = 'led'; m.add(led); }
+        m.rotation.set(Math.random() * 3, Math.random() * 3, 0);
+        this.thrown.set(t.id, m); this.group.add(m);
+      }
+      m.position.set(t.x, t.y, t.z);
+      if (!t.stuck) { m.rotation.x += dt * (t.type === 'knife' ? 14 : 7); m.rotation.z += dt * 3; }
+      const led = m.getObjectByName('led'); if (led) led.visible = Math.floor(performance.now() / (t.fuse < 1 ? 90 : 350)) % 2 === 0;
+    }
+    for (const [id, m] of this.thrown) if (!live.has(id)) { this.group.remove(m); this.thrown.delete(id); }
   }
 
   /** React to sim events with visuals. */
@@ -238,6 +273,7 @@ export class Effects {
     }
     this.tracers.geometry.setDrawRange(0, n * 2);
     (this.tracers.geometry.attributes.position as THREE.BufferAttribute).needsUpdate = true;
+    this.updateThrown(dt);
     // smokes & fires
     for (const s of sim.smokes) if (Math.random() < dt * 25) this.smoke.spawn(s.x + (Math.random() - 0.5) * 6, s.y + Math.random() * 2, s.z + (Math.random() - 0.5) * 6, (Math.random() - 0.5) * 1.2, 0.4 + Math.random() * 0.6, (Math.random() - 0.5) * 1.2, 5, 5, 7, 0.82, 0.83, 0.84, 0.85, 0.2);
     for (const f of sim.fires) if (Math.random() < dt * 30) { this.add.spawn(f.x + (Math.random() - 0.5) * f.r * 1.4, f.y + 0.1, f.z + (Math.random() - 0.5) * f.r * 1.4, 0, 1.5 + Math.random(), 0, 0.6, 0.6, 0.4, 1, 0.45, 0.1, 0.9); }

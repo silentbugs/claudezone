@@ -69,7 +69,8 @@ export const DEFAULT_SETTINGS: Settings = {
     sprint: ['ShiftLeft', ''], jump: ['Space', ''], crouch: ['KeyC', ''], prone: ['ControlLeft', 'KeyZ'],
     fire: ['Mouse0', ''], ads: ['Mouse2', ''], reload: ['KeyR', ''], interact: ['KeyF', ''], plate: ['Digit4', ''],
     weapon1: ['Digit1', ''], weapon2: ['Digit2', ''], swap: ['WheelDown', 'WheelUp'],
-    lethal: ['KeyG', 'Mouse4'], tactical: ['KeyQ', 'Mouse3'], fieldUpgrade: ['KeyX', ''], killstreak: ['Digit5', ''],
+    // mouse back button throws the lethal, forward the tactical
+    lethal: ['KeyG', 'Mouse3'], tactical: ['KeyQ', 'Mouse4'], fieldUpgrade: ['KeyX', ''], killstreak: ['Digit5', ''],
     ping: ['Mouse1', 'AltLeft'], melee: ['KeyV', 'KeyE'], map: ['KeyM', ''], scoreboard: ['Tab', ''], thirdPerson: ['KeyQ', ''], scopeZoom: ['KeyB', ''],
   },
   crouchMode: 'toggle', proneMode: 'toggle', adsMode: 'hold', sprintMode: 'hold', tacSprint: 'doubleTap', plateMode: 'hold', slideMode: 'tap',
@@ -88,6 +89,8 @@ export function loadSettings(): Settings {
   try { saved = JSON.parse(localStorage.getItem(KEY) ?? '{}'); } catch { /* private mode etc. */ }
   const s = { ...structuredClone(DEFAULT_SETTINGS), ...saved } as Settings;
   s.binds = { ...structuredClone(DEFAULT_SETTINGS.binds), ...(saved.binds ?? {}) };
+  // migrate the old default (lethal on Mouse 5, tactical on Mouse 4) to the new one
+  if (s.binds.lethal?.[1] === 'Mouse4' && s.binds.tactical?.[1] === 'Mouse3') { s.binds.lethal = ['KeyG', 'Mouse3']; s.binds.tactical = ['KeyQ', 'Mouse4']; }
   return s;
 }
 export function saveSettings(s: Settings) { try { localStorage.setItem(KEY, JSON.stringify(s)); } catch { /* ignore */ } }

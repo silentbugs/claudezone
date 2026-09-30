@@ -266,3 +266,7 @@
 .hud .tag.obj b { display: block; font-size: calc(var(--u) * 1.05); letter-spacing: 0.08em; }
 .hud .tag.obj .d { color: #fff; }
 .hud .tag.obj.edge { transform: translate(-50%, -50%); opacity: 0.95; }
+/* Gulag: balcony status and pre-fight countdown */
+.hud .gstat { position: absolute; left: 50%; top: 15%; transform: translateX(-50%); text-align: center; color: #d8d8d0; letter-spacing: 0.2em; font-weight: 700; font-size: calc(var(--u) * 1.1); text-shadow: 0 1px 3px #000; display: none; }
+.hud .gstat b { display: block; letter-spacing: 0.04em; color: #fff; font-size: calc(var(--u) * 1.6); margin-top: calc(var(--u) * 0.3); }
+.hud .gcount { position: absolute; left: 50%; top: 38%; transform: translate(-50%, -50%); color: #fff; font-weight: 800; font-size: calc(var(--u) * 6); text-shadow: 0 2px 8px #000; display: none; }

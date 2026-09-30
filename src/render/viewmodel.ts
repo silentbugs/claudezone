@@ -100,6 +100,7 @@ export class ViewModel {
     fm.side = THREE.DoubleSide;
     this.root.add(this.gun, this.arms, this.plate, this.flash, this.flashLight, this.armL);
     this.scene.add(this.tablet); this.tablet.visible = false;
+    this.scene.add(this.hand); this.hand.visible = false;
     this.armL.add(this.mag); this.mag.position.set(0, -0.07, 0); this.mag.visible = false; this.armL.visible = false;
     this.plate.visible = false;
     this.root.scale.setScalar(0.7);
@@ -126,6 +127,57 @@ export class ViewModel {
   /** recoil is a damped spring: each shot is an impulse, so automatic fire stacks and settles like MW's */
   fire() { this.kickVel += 26; this.kickRotVel += 22; this.flashT = 0.05; this.flash.rotation.z = Math.random() * 3; }
   private kickVel = 0; private kickRotVel = 0;
+  /** left hand for equipment: throws (lethal / tactical), the stim jab, the heartbeat sensor held up */
+  private hand = new THREE.Group();
+  private handItem: THREE.Object3D | null = null;
+  private handKind = ''; private handT = 0; private handDur = 0;
+  simTime = 0;
+  private hbCanvas = document.createElement('canvas'); private hbTex: THREE.CanvasTexture | null = null; private hbDevice: THREE.Group | null = null;
+  private buildHand() {
+    if (this.hand.children.length) return;
+    const glove = new THREE.Mesh(new RoundedBoxGeometry(0.055, 0.05, 0.085, 2, 0.018), new THREE.MeshStandardMaterial({ color: 0x2e2d2a, roughness: 0.85 }));
+    const sleeve = new THREE.Mesh(new THREE.CylinderGeometry(0.034, 0.038, 0.32, 8).rotateX(Math.PI / 2).translate(0, -0.02, 0.2), new THREE.MeshStandardMaterial({ color: 0x4d5140, roughness: 0.85 }));
+    this.hand.add(glove, sleeve);
+  }
+  private holdItem(kind: string) {
+    this.buildHand();
+    if (this.handItem) { this.hand.remove(this.handItem); this.handItem = null; }
+    const m = (g: THREE.BufferGeometry, c: number) => new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: c, roughness: 0.6, metalness: 0.2 }));
+    let o: THREE.Object3D;
+    if (kind === 'stim') { const g = new THREE.Group(); g.add(m(new THREE.CylinderGeometry(0.012, 0.012, 0.12, 8), 0xd8dde0), m(new THREE.CylinderGeometry(0.003, 0.003, 0.05, 4).translate(0, -0.085, 0), 0xc0c4c8), m(new THREE.CylinderGeometry(0.016, 0.016, 0.02, 8).translate(0, 0.065, 0), 0x2a8a3a)); g.rotation.x = Math.PI / 2; o = g; }
+    else if (kind === 'heartbeat') { o = this.heartbeatDevice(); }
+    else if (kind === 'frag') o = m(new THREE.SphereGeometry(0.035, 10, 8).scale(1, 1.2, 1), 0x3d4a2e);
+    else if (kind === 'molotov') o = m(new THREE.CylinderGeometry(0.028, 0.028, 0.12, 8), 0x3a6a3a);
+    else if (kind === 'semtex' || kind === 'c4') o = m(new THREE.BoxGeometry(0.08, 0.035, 0.06), 0xc8b89a);
+    else if (kind === 'knife') o = m(new THREE.BoxGeometry(0.018, 0.01, 0.14), 0xb8bcc0);
+    else o = m(new THREE.CylinderGeometry(0.026, 0.026, 0.1, 10), kind === 'smoke' ? 0x6a7a6a : 0x3a3e44);
+    o.position.set(0, 0.03, -0.03); this.handItem = o; this.hand.add(o);
+  }
+  private heartbeatDevice() {
+    if (this.hbDevice) return this.hbDevice;
+    const g = new THREE.Group();
+    g.add(new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.03, 0.12), new THREE.MeshStandardMaterial({ color: 0x3a3e42, roughness: 0.7 })));
+    this.hbCanvas.width = this.hbCanvas.height = 128;
+    this.hbTex = new THREE.CanvasTexture(this.hbCanvas); this.hbTex.colorSpace = THREE.SRGBColorSpace;
+    const scr = new THREE.Mesh(new THREE.PlaneGeometry(0.06, 0.06), new THREE.MeshBasicMaterial({ map: this.hbTex })); scr.rotation.x = -Math.PI / 2; scr.position.set(0, 0.016, -0.02);
+    g.add(scr); this.hbDevice = g; return g;
+  }
+  /** heartbeat sensor screen: enemies ahead within 40 m as blips on a scan sweep (dx: right, dz: ahead, metres) */
+  setHeartbeat(blips: [number, number][], sweep: number) {
+    if (!this.hbTex) return;
+    const g = this.hbCanvas.getContext('2d')!;
+    g.fillStyle = '#08200f'; g.fillRect(0, 0, 128, 128);
+    g.strokeStyle = 'rgba(90,255,130,0.35)'; g.lineWidth = 1.5;
+    for (const r of [40, 80, 120]) { g.beginPath(); g.arc(64, 124, r, Math.PI, 2 * Math.PI); g.stroke(); }
+    g.strokeStyle = 'rgba(120,255,150,0.8)'; g.lineWidth = 2; g.beginPath(); g.arc(64, 124, sweep * 120, Math.PI * 1.2, Math.PI * 1.8); g.stroke();
+    g.fillStyle = '#ff3a2a';
+    for (const [dx, dz] of blips) { g.beginPath(); g.arc(64 + dx * 3, 124 - dz * 3, 5, 0, Math.PI * 2); g.fill(); }
+    this.hbTex.needsUpdate = true;
+  }
+  /** play the throw (lethal / tactical) or stim animation with the left hand */
+  useItem(kind: string) {
+    this.holdItem(kind); this.handKind = kind; this.handT = 0; this.handDur = kind === 'stim' ? 0.9 : 0.62;
+  }
   /** killstreak tablet (call-in): a rugged tablet raised in both hands with a glowing map screen */
   private tablet = (() => {
     const g = new THREE.Group();
@@ -235,7 +287,7 @@ export class ViewModel {
     const w = dropping ? p.weapons[P.swapFrom] : p.weapons[p.cur];
     const hidden = !w || p.phase === Phase.Downed || p.phase === Phase.Freefall || p.phase === Phase.Chute || p.phase === Phase.Plane || p.phase === Phase.Dead || p.phase === Phase.GulagWait || p.swimming;
     this.root.visible = !hidden;
-    if (hidden) { this.tablet.visible = false; return; }
+    if (hidden) { this.tablet.visible = false; this.hand.visible = false; return; }
     const k = `${w!.id}:${w!.rarity}`;
     if (k !== this.key) {
       this.key = k;
@@ -330,6 +382,34 @@ export class ViewModel {
       if (dropping) e = this.swap * this.swap;
       else { const r = 1 - this.swap, c1 = 1.9, c3 = c1 + 1; e = 1 - (1 + c3 * Math.pow(r - 1, 3) + c1 * Math.pow(r - 1, 2)); }
       pos.y -= e * 0.28; pos.x += e * 0.05; rx -= e * 0.8; rz += e * 0.35; ry -= e * 0.15;
+    }
+    // equipment hand: throw arc, stim jab, heartbeat sensor held up
+    {
+      const hbOn = ((p as any).heartbeatUntil ?? 0) > this.simTime;
+      if (this.handKind && this.handT < this.handDur) {
+        this.handT += dt; const u = Math.min(1, this.handT / this.handDur);
+        this.hand.visible = true;
+        if (this.handKind === 'stim') {
+          // bring the syringe in, jab it into the left forearm, pull away
+          const inn = smooth(u / 0.3), jab = smooth((u - 0.35) / 0.15) * (1 - smooth((u - 0.7) / 0.2)), out = smooth((u - 0.8) / 0.2);
+          this.hand.position.set(-0.2 + 0.08 * inn - 0.1 * out, -0.3 + 0.12 * inn - 0.04 * jab - 0.15 * out, -0.38);
+          this.hand.rotation.set(0.4 + 0.5 * jab, 0.6, -0.3);
+          pos.y -= 0.08 * inn * (1 - out); rz -= 0.2 * inn * (1 - out);
+        } else {
+          // wind up behind the shoulder, whip forward and release, recover (the gun dips and rolls away)
+          const k = [[0, -0.18, -0.34, -0.3], [0.3, -0.26, -0.02, -0.12], [0.5, -0.06, 0.02, -0.62], [0.65, -0.05, -0.12, -0.7], [1, -0.22, -0.4, -0.35]];
+          let i = 1; while (i < k.length - 1 && u > k[i][0]) i++;
+          const [t0, x0, y0, z0] = k[i - 1], [t1, x1, y1, z1] = k[i], e = smooth((u - t0) / Math.max(1e-3, t1 - t0));
+          this.hand.position.set(x0 + (x1 - x0) * e, y0 + (y1 - y0) * e, z0 + (z1 - z0) * e);
+          this.hand.rotation.set(u < 0.45 ? 0.6 : -0.4, 0.3, 0);
+          if (this.handItem) this.handItem.visible = u < 0.52; // released
+          const dip = Math.sin(Math.min(1, u) * Math.PI); pos.y -= 0.12 * dip; rz -= 0.35 * dip; rx -= 0.2 * dip;
+        }
+      } else if (hbOn) {
+        if (this.handKind !== 'heartbeat') { this.holdItem('heartbeat'); this.handKind = 'heartbeat'; this.handT = this.handDur = 0; }
+        this.hand.visible = true; if (this.handItem) this.handItem.visible = true;
+        this.hand.position.set(-0.13, -0.19, -0.33); this.hand.rotation.set(0.9, 0.15, 0);
+      } else { this.hand.visible = false; if (this.handKind === 'heartbeat') this.handKind = ''; }
     }
     // killstreak call-in: weapon dropped out of view, tablet raised, tapped, lowered
     const callT = (p as any).callT ?? 0;

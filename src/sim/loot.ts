@@ -50,8 +50,8 @@ export function randomItem(sim: Sim, x: number, y: number, z: number, bonus = 0)
   if (r < 0.89) return { ...base, kind: ItemKind.Lethal, lethal: rng.pick(LETHALS), n: 1 };
   if (r < 0.95) return { ...base, kind: ItemKind.Tactical, tactical: rng.pick(TACTICALS), n: 1 };
   if (r < 0.975) return { ...base, kind: ItemKind.Killstreak, killstreak: rng.pick(['uav', 'uav', 'cluster', 'airstrike'] as KillstreakType[]) };
-  if (r < 0.99) return { ...base, kind: ItemKind.GasMask };
-  if (r < 0.996) return { ...base, kind: ItemKind.SelfRevive };
+  if (r < 0.978) return { ...base, kind: ItemKind.GasMask };
+  if (r < 0.985) return { ...base, kind: ItemKind.SelfRevive };
   return { ...base, kind: ItemKind.Satchel };
 }
 
@@ -71,7 +71,8 @@ export function chestContents(sim: Sim, x: number, y: number, z: number, legenda
       const r = rng.next();
       if (r < 0.35) out.push({ ...base, kind: ItemKind.Lethal, lethal: rng.pick(LETHALS), n: 1 });
       else if (r < 0.65) out.push({ ...base, kind: ItemKind.Tactical, tactical: rng.pick(TACTICALS), n: 1 });
-      else if (r < 0.8) out.push({ ...base, kind: ItemKind.Plate, n: 1 });
+      else if (r < 0.68) out.push({ ...base, kind: ItemKind.Plate, n: 1 });
+      else if (r < 0.8) out.push({ ...base, kind: ItemKind.Satchel }); // armor satchels mostly come from supply boxes
       else if (r < 0.92) out.push({ ...base, kind: ItemKind.Killstreak, killstreak: rng.pick(['uav', 'cluster', 'airstrike'] as KillstreakType[]) });
       else out.push({ ...base, kind: rng.chance(0.5) ? ItemKind.SelfRevive : ItemKind.GasMask });
     }

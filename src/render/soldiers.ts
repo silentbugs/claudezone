@@ -35,6 +35,9 @@ export class Soldiers {
   private byPid = new Map<number, Slot>();
   hidden = -1;
   private corpses: { s: Slot; t0: number }[] = [];
+  private oneShots = new Map<number, { name: string; until: number }>();
+  /** play a short action clip on a player (e.g. 'Throw', 'Consume') */
+  oneShot(pid: number, name: string, dur: number) { this.oneShots.set(pid, { name, until: this.now + dur }); }
   private now = 0;
 
   /** A body that plays the death clip where a player fell (the player itself has already moved on to the Gulag / spectating). */
@@ -167,6 +170,9 @@ export class Soldiers {
       else if (fwdV < 0) clip = 'Swat_Run_Back';
       else clip = speed < 2.6 ? 'Walk' : 'Jog';
     }
+    // one-shot upper-body actions (throwing equipment, using a stim) while standing / walking
+    const os = this.oneShots.get(p.id);
+    if (os && os.until > this.now && !inVeh && !prone) clip = os.name; else if (os) this.oneShots.delete(p.id);
     const stanceChange = /Crouch/.test(clip) !== /Crouch/.test(s.cur);
     this.play(s, clip, stanceChange ? 0.3 : 0.18);
     const a = s.actions.get(s.cur);

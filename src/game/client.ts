@@ -64,7 +64,7 @@ export class Match {
   constructor(public sm: SceneMgr, private world: WorldData, private input: Input, tac: HTMLCanvasElement, private ui: HTMLElement, public settings: Settings, seed: number, squadSize = 3) {
     this.sim = new Sim(world, seed, { humans: 1, warmup: 45, squadSize });
     this.controls = new Controls(input, settings);
-    input.onUnlock = () => { if (!this.menuOpen && !this.hud.panel && !this.done) this.togglePause(); };
+    input.onUnlock = () => { if (!this.menuOpen && !this.hud.panel && !this.mapOpen && !this.done) this.togglePause(); };
     this.fpsEl.className = 'fps'; ui.appendChild(this.fpsEl);
     this.hud = new Hud(this.sim, tac, 0, settings);
     ui.appendChild(this.hud.root);
@@ -99,7 +99,7 @@ export class Match {
     this.controls.apply(this.me, this.camYaw, this.camPitch, blocked);
     if (bp) { const it = this.me.intent; it.fire = it.ads = it.jump = it.interact = it.plate = false; }
     (this.me as any).prefs = { autoChute: this.settings.chuteAutoDeploy, emptySwitch: this.settings.depletedAmmoSwitch };
-    if (this.mapOpen) { this.me.intent.fire = false; this.me.intent.ads = false; }
+    if (this.mapOpen) { const it = this.me.intent; it.fire = false; it.ads = false; it.swap = false; } // the wheel zooms the map
   }
 
   private look() {
@@ -118,6 +118,7 @@ export class Match {
 
   /** 2020 variable zoom: scoped weapons toggle between two magnifications while aiming */
   scopeLevel = 0;
+  private hbT = 0; private hbBlips: [number, number][] = [];
   private tugT = 0; private lastAirPhase = -1; private chuteRoll = 0;
   /** current ADS magnification, eased so a zoom toggle or optic swap doesn't snap */
   zoomNow = 1;
@@ -127,6 +128,14 @@ export class Match {
     if (rarityMods(w.rarity).scope && !def.scope) z *= 1.3; // red dot / holo magnify a little over irons
     if (def.scope && this.scopeLevel) z *= 2;
     return z;
+  }
+
+  /** Tac map: the cursor is freed (wheel zooms, drag pans, click marks) and you keep moving; closing it re-locks the mouse. */
+  private setMap(open: boolean) {
+    if (open === this.mapOpen) return;
+    this.mapOpen = open;
+    if (open) document.exitPointerLock?.();
+    else if (!this.hud.panel) (document.getElementById('game') as HTMLElement)?.requestPointerLock?.();
   }
 
   frame(dt: number, time: number) {
@@ -150,13 +159,13 @@ export class Match {
       }
       if (this.hud.backpackOpen) this.hud.refreshBackpack();
     }
-    if (inp.wasPressed('Escape')) { if (this.settingsEl) this.closeSettings(); else if (this.hud.panel) this.hud.closePanel(); else if (this.mapOpen) this.mapOpen = false; else this.togglePause(); }
+    if (inp.wasPressed('Escape')) { if (this.settingsEl) this.closeSettings(); else if (this.hud.panel) this.hud.closePanel(); else if (this.mapOpen) this.setMap(false); else this.togglePause(); }
     this.paused = this.menuOpen && this.settings.pauseOnMenu;
     this.look();
     if (!this.menuOpen && !this.hud.panel) {
       this.controls.poll(this.me, time);
       const ui = this.controls.takeUi();
-      if (ui.map) this.mapOpen = !this.mapOpen;
+      if (ui.map) this.setMap(!this.mapOpen);
       if (ui.ping) {
         const q = this.sim.pingTarget(this.me);
         if (q) this.sim.pingEnemy(this.me, q);
@@ -266,7 +275,14 @@ export class Match {
       case 'glass': this.sm.structures?.breakPane(e.s, e.i); if (d(e.x, e.y, e.z) < 60) { audio.play('impactGlass', { x: e.x, y: e.y, z: e.z, range: 22, vol: 1, rate: 0.7 }); audio.play('impactGlass', { x: e.x, y: e.y, z: e.z, range: 22, vol: 0.8, rate: 1.15 }); } break;
       case 'cuav': audio.say(e.squad === me.squad ? 'Counter UAV online.' : 'Enemy Counter UAV deployed.'); break;
       case 'gas': if (e.p === 0 && Math.random() < 0.35) audio.play('cough', { vol: 0.55, throttle: 1.2 }); break;
-      case 'throw': if (e.p === 0) { audio.play('pin', { vol: 0.4 }); audio.play('throw', { vol: 0.5 }); } break;
+      case 'throw': {
+        const eq = ['frag', 'semtex', 'molotov', 'c4', 'knife', 'flash', 'stun', 'smoke', 'rock'].includes(e.type as string);
+        if (e.p === 0) { audio.play('pin', { vol: 0.4 }); audio.play('throw', { vol: 0.5 }); }
+        if (eq && e.p === this.viewId()) this.vm.useItem(e.type as string);
+        else if (eq) this.soldiers.oneShot(e.p, 'Throw', 0.8);
+        break;
+      }
+      case 'stim': if (e.p === this.viewId()) this.vm.useItem('stim'); else this.soldiers.oneShot(e.p, 'Consume', 0.9); break;
       case 'melee': if (e.p === 0) audio.play('melee', { vol: 0.6 }); break;
       case 'callin': if (e.p === this.viewId()) audio.play('callin', { ui: true, vol: 0.6 }); break;
       case 'marker': if (e.kind === 'airstrike' || e.kind === 'cluster') { const pass = e.kind === 'cluster' ? 3.1 : 3.9, gy = sim.world.hf.at(e.x, e.z); setTimeout(() => audio.play('jet', { x: e.x, y: gy + 100, z: e.z, range: 600, vol: 1.2 }), Math.max(0, (pass - 1.6) * 1000)); }
@@ -429,6 +445,17 @@ export class Match {
     this.vm.updateAir(this.spectate < 0 ? me : null, dt, this.tpBlend < 0.35 && !this.debugCam);
     if ((phase === Phase.Freefall || phase === Phase.Chute) && this.tpBlend < 0.35 && !this.debugCam) this.vm.render(this.sm.renderer);
     if (fp && this.spectate < 0 && !this.debugCam) {
+      this.vm.simTime = sim.time;
+      // heartbeat sensor: enemies in front within 40 m, refreshed every half second (2020)
+      if (((me as any).heartbeatUntil ?? 0) > sim.time) {
+        this.hbT -= dt;
+        if (this.hbT <= 0) {
+          this.hbT = 0.5; const fx = -Math.sin(this.camYaw), fz = -Math.cos(this.camYaw), rx = Math.cos(this.camYaw), rz = -Math.sin(this.camYaw);
+          this.hbBlips = [];
+          for (const q of sim.players) if (q.alive && q.squad !== me.squad && (q.phase === Phase.Alive || q.phase === Phase.Downed)) { const dx = q.x - me.x, dz = q.z - me.z, ahead = dx * fx + dz * fz, side = dx * rx + dz * rz; if (ahead > 0 && Math.hypot(ahead, side) < 40) this.hbBlips.push([side, ahead]); }
+        }
+        this.vm.setHeartbeat(this.hbBlips, 1 - this.hbT / 0.5);
+      }
       this.vm.update(meR, dt, this.lastMouse.dx, this.lastMouse.dy, Math.hypot(me.vx, me.vz), me.sprinting);
       this.vm.render(this.sm.renderer);
     }

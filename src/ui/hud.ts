@@ -85,6 +85,20 @@ export class Hud {
   private fmTiles = new Map<number, HTMLCanvasElement>(); private camYawV = 0;
   private fmView() { const span = MAP_SIZE / this.fmZoom; const x0 = Math.max(-span * 0.25, Math.min(MAP_SIZE - span * 0.75, this.fmCx - span / 2)), z0 = Math.max(-span * 0.25, Math.min(MAP_SIZE - span * 0.75, this.fmCz - span / 2)); this.fmCx = x0 + span / 2; this.fmCz = z0 + span / 2; return { x0, z0, span }; }
   /** The squad's active contract objective (2020: made unmissable on the maps, the compass and in the world). */
+  /** Gulag (2020): balcony wait with your match countdown / queue place, then a big countdown before the fight */
+  private gulagHud() {
+    const sim = this.sim, me: any = sim.players[this.localId];
+    let st = '', cd = '';
+    if (me.phase === Phase.GulagWait) {
+      const left = Math.ceil((me.gulagReadyAt ?? 0) - sim.time), q = sim.gulag.queue.indexOf(me.id);
+      st = left > 0 ? `GULAG<b>Your match begins in ${left}s</b>` : `GULAG<b>Waiting for an opponent${q > 0 ? ` — ${q} ahead of you` : ''}</b>`;
+    } else if (me.phase === Phase.Gulag) {
+      const left = (me.frozenUntil ?? 0) - sim.time;
+      if (left > 0) cd = String(Math.ceil(left)); else if (left > -0.8) cd = 'FIGHT';
+    }
+    this.set('gstat', this.gstat, st); this.gstat.style.display = st ? 'block' : 'none';
+    this.set('gcount', this.gcount, cd); this.gcount.style.display = cd ? 'block' : 'none';
+  }
   private objective(): { x: number; y: number; z: number; kind: string; label: string; area?: number } | null {
     const sim = this.sim, me = sim.players[this.localId], ac = sim.active.find((a) => a.squad === me.squad);
     if (!ac) return null;
@@ -99,6 +113,7 @@ export class Hud {
   }
   private bountyK = -1; private bountyAt: [number, number, number] | null = null;
   private objImg = new Map<string, string>();
+  private gstat = el('div', 'gstat'); private gcount = el('div', 'gcount');
   private uavSnapT = -99; private uavDots: [number, number][] = [];
   private dmgArcs: { a: number; t: number; e: HTMLElement }[] = [];
   private last: Record<string, string> = {};
@@ -136,7 +151,7 @@ export class Hud {
       if (me.ping && Math.hypot(me.ping.x - x, me.ping.z - z) < 14 * v.span / this.fmCanvas.width * 2) { this.pings = []; me.ping = undefined; return; }
       this.pings = [{ x, z, t: 999 }]; me.ping = { x, z };
     });
-    this.root.append(this.low, this.hurtEl, this.breakEl, this.vig, this.scope, mmw, this.circ, this.compass, this.cpings, this.heading, this.loc, this.counters, this.feed, this.squad, this.inv, this.fu, this.weap, this.xh, this.hm, this.tags, this.lcard, this.hold, this.prog, this.ctx, this.alt, this.banner, this.note, this.dmg, this.flash, this.dot, this.fullmap);
+    this.root.append(this.gstat, this.gcount, this.low, this.hurtEl, this.breakEl, this.vig, this.scope, mmw, this.circ, this.compass, this.cpings, this.heading, this.loc, this.counters, this.feed, this.squad, this.inv, this.fu, this.weap, this.xh, this.hm, this.tags, this.lcard, this.hold, this.prog, this.ctx, this.alt, this.banner, this.note, this.dmg, this.flash, this.dot, this.fullmap);
     this.buildCompass();
   }
 
@@ -182,7 +197,7 @@ export class Hud {
       case 'circle': this.showBanner(e.closing ? 'Gas closing' : 'Safe zone updated', e.closing ? 'Move to the safe zone' : `Circle ${e.phase + 1}`); break;
       case 'gulag':
         if (e.p === this.localId) {
-          const m: Record<string, [string, string]> = { enter: ['Welcome to the Gulag', 'Win your 1v1 to get back into Verdansk'], fight: ['Fight!', 'The winner redeploys'], overtime: ['Overtime', 'Capture the flag in the centre'], win: ['Gulag won', 'Redeploying...'], lose: ['Eliminated', 'Your squad can buy you back'], closed: ['', ''] };
+          const m: Record<string, [string, string]> = { enter: ['Welcome to the Gulag', 'Win your 1v1 to get back into Verdansk'], fight: ['Gulag match', 'Get ready — the winner redeploys'], overtime: ['Overtime', 'Capture the flag in the centre'], win: ['Gulag won', 'Redeploying...'], lose: ['Eliminated', 'Your squad can buy you back'], closed: ['', ''] };
           this.showBanner(...m[e.msg]);
         } else if (e.msg === 'closed') this.showNote('The Gulag is closed');
         break;
@@ -203,6 +218,7 @@ export class Hud {
   // ---------------------------------------------------------------- per frame
   update(dt: number, camYaw: number, _camPitch: number, project: (x: number, y: number, z: number) => [number, number, boolean], opts: { ads: number; scope: boolean; optic?: boolean; spectating: Player | null; mapOpen: boolean }) {
     this.camYawV = camYaw;
+    this.gulagHud();
     const sim = this.sim, me = sim.players[this.localId], view = opts.spectating ?? me;
     const c = sim.circle;
     const inGas = sim.inGas(view);
@@ -490,8 +506,8 @@ export class Hud {
       else { g.strokeStyle = color; g.lineWidth = 1.6 * px; g.beginPath(); g.moveTo(x - size * px, z - size * px); g.lineTo(x - size * 0.6 * px, z + size * 0.4 * px); g.lineTo(x + size * px, z + size * 0.4 * px); g.lineTo(x + size * 1.1 * px, z - size * 0.5 * px); g.stroke(); g.beginPath(); g.arc(x - size * 0.4 * px, z + size * px, size * 0.3 * px, 0, 7); g.arc(x + size * 0.7 * px, z + size * px, size * 0.3 * px, 0, 7); g.fill(); }
     };
     for (const b of sim.buyStations) icon(b.x, b.z, '#f39a2a', 'cart', 6);
-    // contracts: large badges with a pulse so they stand out on both maps
-    for (const k of sim.contracts) if (!k.taken) { const pu = 1 + 0.1 * Math.sin(sim.time * 4 + k.id), r = (mini ? 13 : 16) * px * pu; g.drawImage(contractBadge(k.kind), k.x - r, k.z - r, r * 2, r * 2); }
+    // contracts: large static yellow badges (2020)
+    for (const k of sim.contracts) if (!k.taken) { const r = (mini ? 13 : 16) * px; g.drawImage(contractBadge(k.kind), k.x - r, k.z - r, r * 2, r * 2); }
     // vehicles (2020): everyone sees every vehicle on both maps; the icon is tinted by who is inside, so riders show up too
     for (const v of sim.vehicles) {
       if (!v.alive || (mini && Math.hypot(v.x - me.x, v.z - me.z) > 450)) continue;
@@ -531,13 +547,11 @@ export class Hud {
     const ac = sim.active.find((a) => a.squad === me.squad);
     const ob = this.objective();
     if (ob) {
-      // active contract: yellow area / pulsing ring + big badge; on the minimap it sits on the rim when out of range
+      // active contract: yellow area + big static badge; on the minimap it sits on the rim when out of range
       let ox = ob.x, oz = ob.z;
       if (mini) { const R = (this.mm.width / 2) * px * 0.8, d = Math.hypot(ox - me.x, oz - me.z); if (d > R) { ox = me.x + ((ox - me.x) / d) * R; oz = me.z + ((oz - me.z) / d) * R; } }
       else { g.setLineDash([10 * px, 8 * px]); g.strokeStyle = 'rgba(246,195,67,0.8)'; g.lineWidth = 2.5 * px; g.beginPath(); g.moveTo(me.x, me.z); g.lineTo(ob.x, ob.z); g.stroke(); g.setLineDash([]); }
       if (ob.area) { g.fillStyle = 'rgba(246,195,67,0.18)'; g.strokeStyle = 'rgba(246,195,67,0.9)'; g.lineWidth = 2.5 * px; g.beginPath(); g.arc(ob.x, ob.z, ob.area, 0, Math.PI * 2); g.fill(); g.stroke(); }
-      const pu = (sim.time * 1.2) % 1;
-      g.strokeStyle = `rgba(246,195,67,${1 - pu})`; g.lineWidth = 3 * px; g.beginPath(); g.arc(ox, oz, (14 + pu * 26) * px, 0, Math.PI * 2); g.stroke();
       const r = (mini ? 15 : 20) * px; g.drawImage(contractBadge(ob.kind), ox - r, oz - r, r * 2, r * 2);
     }
     const mates = sim.players.filter((p) => p.squad === me.squad && p.id !== me.id);
@@ -583,12 +597,10 @@ export class Hud {
       const tw = g.measureText(p.name).width; g.fillStyle = 'rgba(0,0,0,0.55)'; g.fillRect(X(p.x) - tw / 2 - 5, Z(p.z) - 12, tw + 10, 20); g.fillStyle = p.tier === 'major' ? '#fff' : '#d8dcdc'; g.fillText(p.name, X(p.x), Z(p.z) + 3);
     }
     g.textAlign = 'left'; g.fillStyle = 'rgba(255,255,255,0.7)'; g.font = '600 14px Rajdhani, sans-serif'; g.fillText(`ZOOM x${this.fmZoom.toFixed(1)}  (wheel to zoom, drag to pan)`, 10, W - 10);
-    // you (2020 tac map): big yellow arrow with a dark outline, a view cone and a pulsing ring; it turns with your view
+    // you (2020 tac map): big yellow arrow with a dark outline and a view cone; it turns with your view
     {
       const yaw = this.sim.players[this.localId] === me ? this.camYawV : me.yaw;
-      const t = performance.now() / 1000, pul = (t * 0.9) % 1;
       g.save(); g.translate(X(me.x), Z(me.z));
-      g.strokeStyle = `rgba(246,195,67,${(1 - pul) * 0.9})`; g.lineWidth = 3; g.beginPath(); g.arc(0, 0, 14 + pul * 34, 0, Math.PI * 2); g.stroke();
       g.rotate(-yaw);
       const cone = g.createRadialGradient(0, 0, 4, 0, 0, 90); cone.addColorStop(0, 'rgba(246,195,67,0.45)'); cone.addColorStop(1, 'rgba(246,195,67,0)');
       g.fillStyle = cone; g.beginPath(); g.moveTo(0, 0); g.arc(0, 0, 90, -Math.PI / 2 - 0.55, -Math.PI / 2 + 0.55); g.closePath(); g.fill();
