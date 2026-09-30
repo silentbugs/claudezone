@@ -27,6 +27,12 @@ interface Slot {
 const v1 = new THREE.Vector3(), v2 = new THREE.Vector3(), v3 = new THREE.Vector3(), v4 = new THREE.Vector3();
 const q1 = new THREE.Quaternion(), q2 = new THREE.Quaternion();
 
+/**
+ * Where a body stops: the CC0 Death clip's final keyframe snaps back to the standing pose (the clip loops), so a
+ * clamped clip made dead players get back up. Hold the pose just before it.
+ */
+const deathHold = (a: THREE.AnimationAction) => a.getClip().duration - 0.1;
+
 export class Soldiers {
   group = new THREE.Group();
   /** ids rendered here this frame (characters.ts skips them) */
@@ -53,7 +59,7 @@ export class Soldiers {
     s.root.position.set(x, y, z); s.root.rotation.set(0, yaw, 0); s.root.visible = true;
     this.play(s, 'Death', 0);
     // already on the ground (downed / prone): start at the end of the fall so the body never gets back up
-    if (lying) { const a = s.actions.get('Death'); if (a) { a.time = a.getClip().duration; s.mixer.update(0); } }
+    if (lying) { const a = s.actions.get('Death'); if (a) { a.time = deathHold(a); s.mixer.update(0); a.paused = true; } }
     this.corpses.push({ s, t0: now });
   }
 
@@ -97,7 +103,8 @@ export class Soldiers {
     this.now = now;
     for (const c of this.corpses) {
       const age = now - c.t0;
-      if (age < 4) c.s.mixer.update(dt);
+      const a = c.s.actions.get('Death');
+      if (a && !a.paused) { c.s.mixer.update(dt); if (a.time >= deathHold(a)) { a.time = deathHold(a); c.s.mixer.update(0); a.paused = true; } }
       if (age > 145) c.s.root.position.y -= dt * 0.25;
     }
     while (this.corpses.length && now - this.corpses[0].t0 > 150) { const c = this.corpses.shift()!; this.group.remove(c.s.root); }

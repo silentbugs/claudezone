@@ -90,7 +90,12 @@ function moveToward(sim: Sim, b: BotBrain, p: Player, x: number, z: number, run:
   const nav = sim.nav;
   if (dTot > 12 && (Math.hypot(b.pathGX - x, b.pathGZ - z) > 15 || b.replan)) {
     b.replan = false; b.pathGX = x; b.pathGZ = z; b.path = null; b.pathI = 0;
-    if (!nav.los(p.x, p.z, x, z) && sim.time >= b.pathCd) { b.path = nav.find(p.x, p.z, x, z); b.pathCd = sim.time + 1.5; }
+    if (!nav.los(p.x, p.z, x, z) && sim.time >= b.pathCd) {
+      // a few searches per tick across all bots: when gunfire makes a crowd re-target at once, the rest wait a tick
+      // (walking straight meanwhile) instead of stacking dozens of A* runs into one frame
+      if (sim.pathBudget > 0) { sim.pathBudget--; b.path = nav.find(p.x, p.z, x, z, 14000); b.pathCd = sim.time + 1.5; }
+      else b.replan = true;
+    }
   }
   let wx = x, wz = z;
   if (b.path && b.pathI < b.path.length) {

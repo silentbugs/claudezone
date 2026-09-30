@@ -261,7 +261,7 @@ export class Hud {
       case 'redeploy': if (this.sim.players[e.p].squad === me.squad) this.feedLine(`${name(e.p)} <span style="opacity:.7">redeployed</span>`); break;
       case 'announce': if ((e.squad === undefined || e.squad === -1 || e.squad === me.squad) && !e.text.startsWith('__')) this.showNote(e.text); break;
       case 'reveal': if (e.squad === me.squad) this.showBanner('Recon complete', `Future safe zone revealed (${this.sim.revealedCircles(me.squad).length} ahead)`); break;
-      case 'contract': if (this.sim.players[e.p].squad === me.squad) this.showBanner(`${({ bounty: 'Bounty', scavenger: 'Scavenger', recon: 'Recon', mostwanted: 'Most Wanted', supply: 'Supply Run' } as Record<string, string>)[e.kind] ?? e.kind} contract`, e.msg === 'start' ? 'Contract accepted' : e.msg === 'done' ? 'Contract complete' : e.msg === 'fail' ? 'Contract failed' : 'Next target marked'); break;
+      case 'contract': if (this.sim.players[e.p].squad === me.squad) this.showBanner(`${({ bounty: 'Bounty', scavenger: 'Scavenger', recon: 'Recon', mostwanted: 'Most Wanted', supply: 'Supply Run' } as Record<string, string>)[e.kind] ?? e.kind} contract`, e.msg === 'start' ? 'Contract accepted' : e.msg === 'done' ? 'Contract complete' : e.msg === 'fail' ? 'Contract failed' : e.kind === 'mostwanted' ? 'Supply box opened: -15 s' : 'Next target marked'); break;
       case 'uav': this.showNote(e.squad === me.squad ? 'UAV online' : 'Enemy UAV overhead'); break;
       case 'cuav': this.showNote(e.squad === me.squad ? 'Counter UAV online' : 'Enemy Counter UAV deployed'); break;
       case 'pickup': if (e.p === this.localId) this.showNote(e.label); break;

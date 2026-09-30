@@ -135,7 +135,12 @@ export function dropBag(sim: Sim, p: Player) {
   items.push({ kind: ItemKind.Plate, n: 1 }); items.push({ kind: ItemKind.Plate, n: 1 });
   for (let i = 0; i < Math.min(3, p.plates); i++) items.push({ kind: ItemKind.Plate, n: 1 });
   if (p.cash > 0) items.push({ kind: ItemKind.Cash, n: p.cash });
-  for (const [k, v] of Object.entries(p.ammo)) if (v > 0) items.push({ kind: ItemKind.Ammo, ammo: k as AmmoType, n: Math.min(v, AMMO_PICKUP[k as AmmoType] * 2) });
+  // ammo (2020): some of what they carried, and always at least a box for each gun they had, so a kill restocks you
+  const carried = new Set(p.weapons.filter((w) => w).map((w) => WEAPON[w!.id].ammo as AmmoType));
+  for (const [k, v] of Object.entries(p.ammo) as [AmmoType, number][]) {
+    const n = Math.min(v, AMMO_PICKUP[k] * 2), min = carried.has(k) ? AMMO_PICKUP[k] : 0;
+    if (Math.max(n, min) > 0) items.push({ kind: ItemKind.Ammo, ammo: k, n: Math.max(n, min) });
+  }
   if (p.lethal) items.push({ kind: ItemKind.Lethal, lethal: p.lethal.type, n: p.lethal.n });
   if (p.tactical) items.push({ kind: ItemKind.Tactical, tactical: p.tactical.type, n: p.tactical.n });
   if (p.killstreak) items.push({ kind: ItemKind.Killstreak, killstreak: p.killstreak });

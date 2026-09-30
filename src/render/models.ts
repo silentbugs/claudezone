@@ -144,6 +144,13 @@ class Models {
    * shaded by how square-on they are so rails, magazines and stocks read like the 2020 icons.
    */
   private iconCache = new Map<string, string>(); private iconPending = new Set<string>();
+  private worker: Worker | null = null;
+  private iconWorker(): Worker {
+    if (this.worker) return this.worker;
+    const w = new Worker(new URL('./iconWorker.ts', import.meta.url), { type: 'module' });
+    w.onmessage = (e: MessageEvent<{ key: string; blob: Blob }>) => { this.iconCache.set(e.data.key, URL.createObjectURL(e.data.blob)); this.iconPending.delete(e.data.key); };
+    return (this.worker = w);
+  }
   /** returns the icon URL once it is ready (encoded off the main thread); null meanwhile, so callers draw a fallback */
   icon(id: string, rarity: number): string | null {
     const ck = `${id}:${Math.min(rarity, 4)}`;
@@ -151,30 +158,11 @@ class Models {
     if (this.iconPending.has(ck)) return null;
     this.iconPending.add(ck);
     if (!this.inIdle) { this.iconWant.unshift([id, rarity]); this.pumpIcons(); return null; } // built in idle time, never mid-frame
-    const geo = this.bakedGun(id, rarity); if (!geo) return null;
-    const pos = geo.attributes.position as THREE.BufferAttribute, n = pos.count;
-    let z0 = Infinity, z1 = -Infinity, y0 = Infinity, y1 = -Infinity;
-    for (let i = 0; i < n; i++) { const z = pos.getZ(i), y = pos.getY(i); if (z < z0) z0 = z; if (z > z1) z1 = z; if (y < y0) y0 = y; if (y > y1) y1 = y; }
-    const W = 256, pad = 3, s = (W - pad * 2) / (z1 - z0), H = Math.ceil((y1 - y0) * s + pad * 2); // 256 px: plenty for the HUD, 4x cheaper to encode
-    const c = document.createElement('canvas'); c.width = W; c.height = H; const g = c.getContext('2d')!;
-    // triangles far side first so the near face wins
-    const tris: { d: number; k: number; p: number[] }[] = [];
-    const a = new THREE.Vector3(), b = new THREE.Vector3(), d = new THREE.Vector3(), nrm = new THREE.Vector3();
-    for (let i = 0; i + 2 < n; i += 3) {
-      a.fromBufferAttribute(pos, i); b.fromBufferAttribute(pos, i + 1); d.fromBufferAttribute(pos, i + 2);
-      nrm.subVectors(b, a).cross(d.clone().sub(a)); const len = nrm.length(); if (len < 1e-12) continue; nrm.divideScalar(len);
-      tris.push({ d: (a.x + b.x + d.x) / 3, k: Math.abs(nrm.x), p: [a.z, a.y, b.z, b.y, d.z, d.y] });
-    }
-    tris.sort((u, v) => u.d - v.d);
-    for (const t of tris) {
-      const lv = Math.round(150 + 105 * Math.pow(t.k, 0.6));
-      g.fillStyle = g.strokeStyle = `rgb(${lv},${lv},${lv})`; g.lineWidth = 0.4;
-      g.beginPath();
-      for (let j = 0; j < 3; j++) { const X = pad + (t.p[j * 2] - z0) * s, Y = pad + (y1 - t.p[j * 2 + 1]) * s; if (j) g.lineTo(X, Y); else g.moveTo(X, Y); }
-      g.closePath(); g.fill(); g.stroke();
-    }
-    // PNG encoding happens off the main thread (toDataURL here used to freeze the game for up to seconds)
-    c.toBlob((blob) => { if (blob) this.iconCache.set(ck, URL.createObjectURL(blob)); this.iconPending.delete(ck); });
+    const geo = this.bakedGun(id, rarity); if (!geo) { this.iconPending.delete(ck); return null; }
+    // drawn in a worker (thousands of canvas triangles per gun used to cost 100+ ms each on the main thread)
+    const src = geo.attributes.position as THREE.BufferAttribute, pos = new Float32Array(src.count * 3);
+    for (let v = 0; v < src.count; v++) { pos[v * 3] = src.getX(v); pos[v * 3 + 1] = src.getY(v); pos[v * 3 + 2] = src.getZ(v); }
+    this.iconWorker().postMessage({ key: ck, pos }, [pos.buffer]);
     return null;
   }
 

@@ -66,7 +66,7 @@ export const CONTRACT = {
   bounty: { time: 150, reward: 1000 },
   scavenger: { time: 120, stepTime: 90, reward: 1000 },
   recon: { time: 240, reward: 1000, capture: 25, radius: 9 },
-  mostwanted: { time: 180, reward: 3000 },
+  mostwanted: { time: 180, reward: 3000, /** seconds cut from the countdown per supply box opened */ chestCut: 15 },
   supply: { time: 120, reward: 1000, discount: 0.2 },
 };
 

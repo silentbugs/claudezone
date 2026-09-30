@@ -88,6 +88,8 @@ export class Sim {
   enemyPings: { squad: number; by: number; target: number; x: number; y: number; z: number; until: number }[] = [];
   /** recon (2020): each completed recon shows the squad one more future circle, up to this circle index */
   revealTo = new Map<number, number>();
+  /** bot path searches left this tick (see moveToward) */
+  pathBudget = 3;
   /** the whole circle sequence, decided up front so recon can show circles ahead (index i = where circle i closes to) */
   private circlePlan: { x: number; z: number; r: number }[] = [];
   private circleRng: Rng;
@@ -331,6 +333,7 @@ export class Sim {
 
   // ------------------------------------------------------------ main tick
   tick(dt: number) {
+    this.pathBudget = 3;
     if (this.over) { this.time += dt; return; }
     const wasWarm = this.inWarmup;
     this.time += dt;
@@ -479,8 +482,7 @@ export class Sim {
     if (t.kind === 'revive') { const q = this.players[t.id]; if (q.reviveBy < 0) { q.reviveBy = p.id; q.reviveT = 0; } return; }
     if (!press) return;
     if (this.inWarmup && (t.kind === 'buy' || t.kind === 'contract' || t.kind === 'crate' || t.kind === 'balloon')) return;
-    if (t.kind === 'chest') { const c = this.chests.find((c2) => c2.id === t.id)!; c.opened = true; for (const itm of chestContents(this, c.x, c.y, c.z, c.legendary)) this.addItem(itm);
-      if ((c as any).satchel) this.addItem({ id: this.nextId++, kind: ItemKind.Satchel, x: c.x + 0.8, y: c.y + 0.1, z: c.z, alive: true, vy: 3 } as Item); /* last scavenger box: an armor satchel */ this.emit({ t: 'chest', p: p.id, x: c.x, y: c.y, z: c.z }); }
+    if (t.kind === 'chest') this.openChest(this.chests.find((c2) => c2.id === t.id)!, p);
     else if (t.kind === 'item') { const itm = this.itemById.get(t.id); if (itm) tryPickup(this, p, itm, true); }
     else if (t.kind === 'door') this.doors?.interact(t.id, p);
     else if (t.kind === 'ascender') { (p as any).asc = t.id; (p as any).ascHeld = true; (p as any).ladder = -1; p.sprinting = false; p.ads = 0; this.emit({ t: 'ascender', p: p.id, on: true }); }
@@ -892,6 +894,9 @@ export class Sim {
     for (const itm of chestContents(this, c.x, c.y, c.z, c.legendary)) this.addItem(itm);
     if ((c as any).satchel) this.addItem({ id: this.nextId++, kind: ItemKind.Satchel, x: c.x + 0.8, y: c.y + 0.1, z: c.z, alive: true, vy: 3 } as Item);
     this.emit({ t: 'chest', p: p.id, x: c.x, y: c.y, z: c.z });
+    // Most Wanted (2020): every supply box the marked squad opens knocks time off the countdown
+    const mw = this.active.find((a) => a.kind === 'mostwanted' && a.squad === p.squad && a.t > 0);
+    if (mw) { mw.t = Math.max(1, mw.t - CONTRACT.mostwanted.chestCut); this.emit({ t: 'contract', p: p.id, kind: 'mostwanted', msg: 'progress' }); }
   }
   private acceptContract(p: Player, id: number) {
     if (this.active.some((a) => a.squad === p.squad)) { if (!p.bot) this.emit({ t: 'announce', text: 'Your squad already has an active contract', squad: p.squad }); return; }
