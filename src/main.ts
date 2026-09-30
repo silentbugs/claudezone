@@ -1,4 +1,5 @@
 import { models } from './render/models';
+import { WEAPON } from './data/weapons';
 import '@fontsource/rajdhani/500.css';
 import '@fontsource/rajdhani/600.css';
 import '@fontsource/rajdhani/700.css';
@@ -27,6 +28,7 @@ async function boot() {
   sm.ao = settings.ao; sm.drawDistance = settings.drawDistance; sm.setQuality(settings.quality); sm.setRenderScale(settings.renderScale); sm.setFoliage(settings.foliage); sm.renderer.toneMappingExposure = settings.brightness;
   const tac = renderTacMap(world);
   sm.prewarm(); // behind the loading screen: every mesh uploaded, every shader compiled
+  models.warmIcons(Object.keys(WEAPON)); // gun icons + loot meshes in idle time (they used to stall the game when first shown)
   loading.remove();
   const input = new Input(canvas);
   let match: Match | null = null;

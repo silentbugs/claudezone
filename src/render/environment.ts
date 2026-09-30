@@ -50,6 +50,9 @@ export const INDOOR = {
   info: new THREE.Vector4(3240, 1, 0, 0), // x: world size, y: strength
 };
 INDOOR.map.minFilter = INDOOR.map.magFilter = THREE.NearestFilter; INDOOR.map.needsUpdate = true;
+// every material gets a copy of the physical shader's uniforms, and copying a texture uniform clones it: each
+// material then uploaded its own 2160² copy (~0.4 s stall each, the mid-game freezes). Share the one texture.
+INDOOR.map.clone = (() => INDOOR.map) as any;
 {
   const L = THREE.ShaderLib.physical;
   L.uniforms.indoorMap = { value: INDOOR.map };

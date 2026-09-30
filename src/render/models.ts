@@ -142,15 +142,19 @@ class Models {
    * HUD icon: the baked gun projected side-on (muzzle to the left) into a white silhouette, with faces
    * shaded by how square-on they are so rails, magazines and stocks read like the 2020 icons.
    */
-  private iconCache = new Map<string, string>();
+  private iconCache = new Map<string, string>(); private iconPending = new Set<string>();
+  /** returns the icon URL once it is ready (encoded off the main thread); null meanwhile, so callers draw a fallback */
   icon(id: string, rarity: number): string | null {
     const ck = `${id}:${Math.min(rarity, 4)}`;
     if (this.iconCache.has(ck)) return this.iconCache.get(ck)!;
+    if (this.iconPending.has(ck)) return null;
+    this.iconPending.add(ck);
+    if (!this.inIdle) { this.iconWant.unshift([id, rarity]); this.pumpIcons(); return null; } // built in idle time, never mid-frame
     const geo = this.bakedGun(id, rarity); if (!geo) return null;
     const pos = geo.attributes.position as THREE.BufferAttribute, n = pos.count;
     let z0 = Infinity, z1 = -Infinity, y0 = Infinity, y1 = -Infinity;
     for (let i = 0; i < n; i++) { const z = pos.getZ(i), y = pos.getY(i); if (z < z0) z0 = z; if (z > z1) z1 = z; if (y < y0) y0 = y; if (y > y1) y1 = y; }
-    const W = 512, pad = 6, s = (W - pad * 2) / (z1 - z0), H = Math.ceil((y1 - y0) * s + pad * 2);
+    const W = 256, pad = 3, s = (W - pad * 2) / (z1 - z0), H = Math.ceil((y1 - y0) * s + pad * 2); // 256 px: plenty for the HUD, 4x cheaper to encode
     const c = document.createElement('canvas'); c.width = W; c.height = H; const g = c.getContext('2d')!;
     // triangles far side first so the near face wins
     const tris: { d: number; k: number; p: number[] }[] = [];
@@ -163,13 +167,40 @@ class Models {
     tris.sort((u, v) => u.d - v.d);
     for (const t of tris) {
       const lv = Math.round(150 + 105 * Math.pow(t.k, 0.6));
-      g.fillStyle = g.strokeStyle = `rgb(${lv},${lv},${lv})`; g.lineWidth = 0.6;
+      g.fillStyle = g.strokeStyle = `rgb(${lv},${lv},${lv})`; g.lineWidth = 0.4;
       g.beginPath();
       for (let j = 0; j < 3; j++) { const X = pad + (t.p[j * 2] - z0) * s, Y = pad + (y1 - t.p[j * 2 + 1]) * s; if (j) g.lineTo(X, Y); else g.moveTo(X, Y); }
       g.closePath(); g.fill(); g.stroke();
     }
-    const url = c.toDataURL('image/png');
-    this.iconCache.set(ck, url); return url;
+    // PNG encoding happens off the main thread (toDataURL here used to freeze the game for up to seconds)
+    c.toBlob((blob) => { if (blob) this.iconCache.set(ck, URL.createObjectURL(blob)); this.iconPending.delete(ck); });
+    return null;
+  }
+
+  /**
+   * Build every gun's HUD icon and baked loot mesh in idle time (a few per idle slot) so a kill-feed line,
+   * loot card or new gun on the ground never stalls the game while it is drawn for the first time.
+   */
+  warmIcons(ids: string[]) {
+    for (const id of ids) if (this.hasGun(id)) for (const r of [0, 1, 3, 4, 2]) this.iconWant.push([id, r]);
+    this.pumpIcons();
+  }
+  private iconWant: [string, number][] = []; private inIdle = false; private pumping = false;
+  private pumpIcons() {
+    if (this.pumping) return; this.pumping = true;
+    const step = (dl?: { timeRemaining(): number }) => {
+      const t0 = performance.now(); this.inIdle = true;
+      try {
+        while (this.iconWant.length && (dl ? dl.timeRemaining() > 4 : performance.now() - t0 < 6)) {
+          const [id, r] = this.iconWant.shift()!, ck = `${id}:${Math.min(r, 4)}`;
+          if (!this.iconCache.has(ck)) { this.iconPending.delete(ck); this.icon(id, r); }
+          this.bakedGun(id, r, true);
+        }
+      } finally { this.inIdle = false; }
+      if (this.iconWant.length) schedule(); else this.pumping = false;
+    };
+    const schedule = () => { const ric = (window as any).requestIdleCallback; if (ric) ric(step, { timeout: 400 }); else setTimeout(() => step(), 30); };
+    schedule();
   }
 
   /** Whole gun (with attachments) merged into one vertex-coloured geometry, for instancing. */
@@ -188,8 +219,9 @@ function pixels(tex: THREE.Texture) {
   if (pixCache.has(img)) return pixCache.get(img)!;
   let out: { w: number; h: number; d: Uint8ClampedArray } | null = null;
   try {
-    const w = img.width, h = img.height, c = document.createElement('canvas'); c.width = w; c.height = h;
-    const x = c.getContext('2d')!; x.drawImage(img, 0, 0); out = { w, h, d: x.getImageData(0, 0, w, h).data };
+    // a 256 px copy is plenty for per-vertex colours (reading full-size textures took ~1 s per gun)
+    const k = Math.min(1, 256 / Math.max(img.width, img.height)), w = Math.max(1, Math.round(img.width * k)), h = Math.max(1, Math.round(img.height * k)), c = document.createElement('canvas'); c.width = w; c.height = h;
+    const x = c.getContext('2d', { willReadFrequently: true })!; x.drawImage(img, 0, 0, w, h); out = { w, h, d: x.getImageData(0, 0, w, h).data };
   } catch { out = null; }
   pixCache.set(img, out); return out;
 }

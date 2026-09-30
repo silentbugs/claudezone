@@ -38,7 +38,7 @@ function sil(id: string, rarity: number, fill = '#fff') {
     // icon rendered from the actual gun model when there is one; procedural outline otherwise
     const url = models.hasGun(id) ? models.icon(id, rarity) : null;
     s = url ? `<img class="gsil" src="${url}" alt="">` : gunSilhouette(describeGun(WEAPON[id], rarity), fill);
-    silCache.set(k, s);
+    if (url || !models.hasGun(id)) silCache.set(k, s); // the model icon may still be encoding: use the outline until it is ready
   }
   return s;
 }

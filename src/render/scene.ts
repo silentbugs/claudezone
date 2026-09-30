@@ -197,7 +197,7 @@ export class SceneMgr {
    * loading screen and at match start. (Skipped under automation: SwiftShader would take minutes.)
    */
   prewarm(extra: THREE.Scene[] = []) {
-    if (navigator.webdriver) return;
+    if (navigator.webdriver && !(window as any).__forcePrewarm) return;
     const r = this.renderer, rt = new THREE.WebGLRenderTarget(64, 64);
     const saved: [THREE.Object3D, boolean, boolean][] = [];
     for (const sc of [this.scene, ...extra]) sc.traverse((o) => { saved.push([o, o.visible, o.frustumCulled]); o.visible = true; o.frustumCulled = false; });
