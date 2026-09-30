@@ -99,10 +99,20 @@ function dam(ctx: GenContext) {
   // crest road parapets
   b.box(-len / 2, crest, -t / 2, len / 2, crest + 1.1, -t / 2 + 0.5, Mat.Concrete, { color: 0xb8b4aa });
   b.box(-len / 2, crest, t / 2 - 0.5, len / 2, crest + 1.1, t / 2, Mat.Concrete, { color: 0xb8b4aa });
-  // intake towers on the reservoir side
-  for (const u of [-len * 0.28, -len * 0.08, len * 0.12]) {
-    b.box(u - 4, 60, -t / 2 - 8, u + 4, crest + 8, -t / 2, Mat.Concrete, { color: 0xb0aca2 });
-    b.box(u - 4.5, crest + 8, -t / 2 - 8.5, u + 4.5, crest + 9, -t / 2 + 0.5, Mat.Roof);
+  // 2020: eight sluice-gate towers along the reservoir side of the road deck (gate houses with a door)
+  for (let k = 0; k < 8; k++) {
+    const u = -len * 0.3 + k * (len * 0.6 / 7);
+    b.box(u - 3, 60, -t / 2 - 5, u + 3, crest, -t / 2, Mat.Concrete, { color: 0xb0aca2 }); // gate pier in the water
+    const gh = new Builder();
+    gh.wall(0, -3, 3, -2.5, 0, 5, 0.3, Mat.Concrete, [], 0xbab6ac); gh.wall(0, -3, 3, 2.5, 0, 5, 0.3, Mat.Concrete, [{ u0: 2.4, u1: 3.6, v0: 0, v1: 2.3 }], 0xbab6ac);
+    gh.wall(1, -2.35, 2.35, -3, 0, 5, 0.3, Mat.Concrete, [{ u0: 1.6, u1: 3.1, v0: 1.4, v1: 2.6, glass: true }], 0xbab6ac); gh.wall(1, -2.35, 2.35, 3, 0, 5, 0.3, Mat.Concrete, [{ u0: 1.6, u1: 3.1, v0: 1.4, v1: 2.6, glass: true }], 0xbab6ac);
+    gh.box(-3.3, 5, -2.8, 3.3, 5.35, 2.8, Mat.Roof, { color: 0x5a5d62 });
+    gh.box(-1.2, 0, -1.6, 1.2, 1.4, -0.4, Mat.Metal, { color: 0x6a7278 }); // gate winch
+    gh.light(0, 4.8, 0); if (k % 2 === 0) gh.addLoot(1.5, 0, 1);
+    for (const p of gh.parts) b.parts.push({ ...p, x0: p.x0 + u, x1: p.x1 + u, y0: p.y0 + crest, y1: p.y1 + crest, z0: p.z0 - t / 2 + 3, z1: p.z1 - t / 2 + 3 });
+    for (const d of gh.doors) b.doors.push({ ...d, x: d.x + u, y: d.y + crest, z: d.z - t / 2 + 3 });
+    for (const l of gh.lights) b.lights.push([l[0] + u, l[1] + crest, l[2] - t / 2 + 3]);
+    for (const l of gh.loot) b.addLoot(l[0] + u, l[1] + crest - 0.05, l[2] - t / 2 + 3);
   }
   // control house on top
   const hb = apartment(ctx.rng, 18, 9, 2, { wall: Mat.Concrete, wallColor: 0xc7c1b3, trim: 0, roof: Mat.Roof, roofColor: 0x555 });
@@ -119,6 +129,73 @@ function dam(ctx: GenContext) {
     ctx.flatten(ex, ez, ang, 30, 18, crest, 40);
   }
   ctx.buyStations.push({ x: cx + 40 * sa, y: 0, z: cz + 40 * ca, a: ang });
+  damBase(ctx, cx, cz, ang, crest, t, len);
+}
+
+/**
+ * Gora Dam base (2020 atlas, Zone 1A): a tailrace yard in the gorge below the spillway with the main generator
+ * hall (turbines, control mezzanine, gantry stair to a roof helipad), three red penstock pipes you can walk
+ * along from the dam face into the hall, a transformer yard and walkways up to the spillway ledge; at the east
+ * end of the crest road a sentry hut, two office sheds and two transformer cylinders with ladders.
+ */
+function damBase(ctx: GenContext, cx: number, cz: number, ang: number, crest: number, t: number, len: number) {
+  const c = Math.cos(ang), s = Math.sin(ang);
+  const Wd = (lx: number, lz: number): [number, number] => [cx + lx * c + lz * s, cz - lx * s + lz * c];
+  const floor = 74;
+  { const [fx, fz] = Wd(0, 62); ctx.flatten(fx, fz, ang, 90, 96, floor, 22); ctx.occ.mark(fx, fz, ang, 96, 100, 0, 1); }
+  const b = new Builder(), steel = 0x6d7378, red = 0xa8342a, wall = 0xb8b2a4;
+  // generator hall: x -15..15, z 53..87 (local to the dam, +z downstream), floor at the yard
+  const X0 = -15, X1 = 15, Z0 = 53, Z1 = 87, H = 12, M = 4.6;
+  b.box(X0 - 0.2, -1.5, Z0 - 0.2, X1 + 0.2, 0.05, Z1 + 0.2, Mat.Concrete, { color: 0x9a968f });
+  const pipeX = [-9, 0, 9];
+  b.wall(0, X0, X1, Z0, 0.05, H, 0.4, Mat.Concrete, pipeX.map((px) => ({ u0: px - X0 - 1.6, u1: px - X0 + 1.6, v0: 4.3, v1: 7.7, open: true })), wall); // pipes come through the back wall
+  b.wall(0, X0, X1, Z1, 0.05, H, 0.4, Mat.Concrete, [{ u0: 12.1, u1: 13.9, v0: 0, v1: 2.3 }, { u0: 16.1, u1: 17.9, v0: 0, v1: 2.3 }, { u0: 2, u1: 10, v0: 6, v1: 10, glass: true }, { u0: 20, u1: 28, v0: 6, v1: 10, glass: true }], wall, 1);
+  b.wall(1, Z0 + 0.2, Z1 - 0.2, X0, 0.05, H, 0.4, Mat.Concrete, [{ u0: 6, u1: 7, v0: 0, v1: 2.3 }, { u0: 10, u1: 28, v0: 7, v1: 10, glass: true }], wall, -1);
+  b.wall(1, Z0 + 0.2, Z1 - 0.2, X1, 0.05, H, 0.4, Mat.Concrete, [{ u0: 26, u1: 27, v0: 0, v1: 2.3 }, { u0: 4, u1: 20, v0: 7, v1: 10, glass: true }], wall, 1);
+  b.slab(X0 - 0.2, Z0 - 0.2, X1 + 0.2, Z1 + 0.2, H, 0.4, Mat.Roof);
+  for (const px of pipeX) { b.box(px - 2.4, 0.05, 60.6, px + 2.4, 4.9, 65.4, Mat.Metal, { color: 0x4f6a7a, shape: 'cyl' }); b.box(px - 1.2, 4.9, 61.8, px + 1.2, 5.6, 64.2, Mat.Metal, { color: 0x3a3e42 }); } // turbines
+  // control room mezzanine along the front with a stair
+  b.box(X0 + 0.2, M - 0.3, 79, X1 - 0.2, M, Z1 - 0.2, Mat.Concrete, { color: 0x9a968f });
+  b.box(X0 + 4.2, M, 78.95, X1 - 0.2, M + 1, 79.05, Mat.Metal, { color: steel });
+  b.ramp(X0 + 0.4, 0.05, 70.5, X0 + 1.9, M, 79, 1, 1, Mat.Metal);
+  b.box(-6, M, 83, 6, M + 1.1, 85.5, Mat.Metal, { color: 0x3a4250 }); // control desks
+  for (let lx = -10; lx <= 10; lx += 10) { b.light(lx, H - 0.6, 64); b.light(lx, M + 2.8, 83); }
+  b.addLoot(-8, 0.05, 72); b.addLoot(8, 0.05, 72); b.addLoot(0, M, 82); b.addLoot(10, M, 84);
+  // gantry stair up the east wall to the roof, helipad on the roof
+  b.ramp(X1 + 0.3, 0.05, 60, X1 + 1.8, H, 84, 1, 1, Mat.Metal);
+  b.box(X1 + 0.3, H - 0.2, 84, X1 + 1.8, H, 87.2, Mat.Metal, { color: steel });
+  b.box(-6, H, 64, 6, H + 0.02, 76, Mat.Trim, { color: 0x3a3e42, noCollide: true }); b.box(-1.2, H + 0.02, 66, 1.2, H + 0.04, 74, Mat.Trim, { color: 0xe8e8e0, noCollide: true }); b.box(-3.5, H + 0.02, 69.4, 3.5, H + 0.04, 70.6, Mat.Trim, { color: 0xe8e8e0, noCollide: true });
+  b.addLoot(8, H, 60);
+  // penstock pipes: from the dam face (spillway) down to the hall, walkable on top, on piers
+  const pTop = 7.6;
+  for (const px of pipeX) {
+    b.box(px - 1.6, pTop - 3.2, 18, px + 1.6, pTop, Z0 + 0.3, Mat.Metal, { color: red, shape: 'cyl' });
+    for (let z = 22; z < Z0; z += 8) b.box(px - 1.1, 0.05, z - 0.5, px + 1.1, pTop - 2.8, z + 0.5, Mat.Concrete, { color: 0x9a968f });
+  }
+  // walkways from the hall roof up onto the spillway ledge
+  const ledge = crest - 6 - 4.5 - floor; // step 1 of the spillway, relative to the yard
+  for (const wx of [-13, 13]) {
+    b.ramp(wx - 1, ledge, 14.5, wx + 1, H, Z0 - 0.2, 1, 1, Mat.Metal);
+    b.box(wx - 1.1, ledge, 14.5, wx - 1, H + 1, Z0, Mat.Metal, { color: steel }); b.box(wx + 1, ledge, 14.5, wx + 1.1, H + 1, Z0, Mat.Metal, { color: steel }); // solid side rails
+  }
+  // transformer yard (16) beside the hall
+  for (let i = 0; i < 16; i++) { const tx = -34 + (i % 4) * 4.5, tz = 60 + Math.floor(i / 4) * 6; b.box(tx - 1.2, 0.05, tz - 1, tx + 1.2, 2.6, tz + 1, Mat.Metal, { color: 0x7a7e76 }); b.box(tx - 0.3, 2.6, tz - 0.3, tx + 0.3, 3.4, tz + 0.3, Mat.Metal, { color: 0x8a6a4a }); }
+  b.addLoot(-28, 0.05, 72);
+  const [hx, hz] = Wd(0, 0);
+  ctx.place(b, 'damhall', hx, hz, ang, { y: floor, flatten: false, poi: 'dam', lodColor: wall });
+  // east entrance: sentry hut, office sheds, transformer cylinders with ladders
+  const e = new Builder();
+  e.wall(0, -1.5, 1.5, -1.5, 0.05, 2.8, 0.2, Mat.Concrete, [{ u0: 0.3, u1: 2.7, v0: 1.1, v1: 2.2, glass: true }], 0xc8c2b4); e.wall(0, -1.5, 1.5, 1.5, 0.05, 2.8, 0.2, Mat.Concrete, [{ u0: 1, u1: 2, v0: 0, v1: 2.2 }], 0xc8c2b4);
+  e.wall(1, -1.4, 1.4, -1.5, 0.05, 2.8, 0.2, Mat.Concrete, [], 0xc8c2b4); e.wall(1, -1.4, 1.4, 1.5, 0.05, 2.8, 0.2, Mat.Concrete, [], 0xc8c2b4);
+  e.box(-1.8, 2.85, -1.8, 1.8, 3.05, 1.8, Mat.Roof, { color: 0x5a5d62 }); e.addLoot(0, 0.05, 0);
+  for (const [ox, oz] of [[8, 10], [8, 22]]) {
+    e.wall(0, ox - 4, ox + 4, oz - 3, 0.05, 3, 0.2, Mat.Metal, [{ u0: 3.5, u1: 4.5, v0: 0, v1: 2.2 }], 0x8a8f94); e.wall(0, ox - 4, ox + 4, oz + 3, 0.05, 3, 0.2, Mat.Metal, [{ u0: 1, u1: 3, v0: 1, v1: 2, glass: true }], 0x8a8f94);
+    e.wall(1, oz - 2.9, oz + 2.9, ox - 4, 0.05, 3, 0.2, Mat.Metal, [], 0x8a8f94); e.wall(1, oz - 2.9, oz + 2.9, ox + 4, 0.05, 3, 0.2, Mat.Metal, [], 0x8a8f94);
+    e.box(ox - 4.2, 3.05, oz - 3.2, ox + 4.2, 3.25, oz + 3.2, Mat.Roof, { color: 0x5a5d62 }); e.light(ox, 2.8, oz); e.addLoot(ox, 0.05, oz);
+  }
+  for (const oz of [34, 42]) { e.box(4, 0.05, oz - 2.5, 9, 7, oz + 2.5, Mat.Metal, { color: 0x9a9c96, shape: 'cyl' }); e.ladder(3.85, oz, -1, 0, 0.05, 7); e.addLoot(6.5, 7, oz); }
+  const [ex, ez] = Wd(len / 2 + 30, 18);
+  ctx.place(e, 'damentry', ex, ez, ang, { poi: 'dam', lodColor: 0xc8c2b4 });
 }
 
 function airport(ctx: GenContext) {
