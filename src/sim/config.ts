@@ -61,6 +61,8 @@ export const CASH = { stack: [100, 200, 300, 500], chestCash: [100, 800] };
  * reach a marked buy station; cash plus one purchase at 80 % off (a Self-Revive or buyback is free).
  */
 export const CONTRACT = {
+  /** an untaken tablet left in the gas is destroyed this many seconds later */
+  gasDestroy: 6,
   bounty: { time: 150, reward: 1000 },
   scavenger: { time: 120, stepTime: 90, reward: 1000 },
   recon: { time: 240, reward: 1000, capture: 25, radius: 9 },

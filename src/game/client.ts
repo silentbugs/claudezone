@@ -352,6 +352,8 @@ export class Match {
       case 'melee': if (e.p === 0) audio.play('melee', { vol: 0.6 }); break;
       case 'gulag': if (e.p === this.me.id && e.msg === 'win') this.fadeTo(1, 1.2, 1.3); break;
       case 'redeploy': if (e.p === this.me.id) { this.fadeK = 1; this.fadeTo(0, 0.9, 0); } break;
+      case 'vcrash': if (d(e.x, e.y, e.z) < 150) audio.play('vehicleCrash', { x: e.x, y: e.y, z: e.z, range: 60, vol: Math.min(1.2, 0.45 + e.impact / 25), rate: 0.9 + Math.random() * 0.2 }); break;
+      case 'contractGone': if (d(e.x, e.y, e.z) < 80) audio.play('impactMetal', { x: e.x, y: e.y, z: e.z, range: 30, vol: 0.9, rate: 0.6 }); break;
       case 'flare': if (d(e.x, e.y, e.z) < 700) audio.play('flareLaunch', { x: e.x, y: e.y + 20, z: e.z, range: 180, vol: 1 }); if (e.squad !== me.squad) this.hud.showNote('Enemy Recon flare spotted'); break;
       case 'callin': if (e.p === this.viewId()) audio.play('callin', { ui: true, vol: 0.6 }); break;
       case 'marker': if (e.kind === 'airstrike' || e.kind === 'cluster') { const pass = e.kind === 'cluster' ? 3.1 : 3.9, gy = sim.world.hf.at(e.x, e.z); setTimeout(() => audio.play('jet', { x: e.x, y: gy + 100, z: e.z, range: 600, vol: 1.2 }), Math.max(0, (pass - 1.6) * 1000)); }
@@ -559,9 +561,20 @@ export class Match {
     }
     if (fp && this.spectate < 0 && !this.debugCam && !this.postMode) {
       this.vm.simTime = sim.time;
-      // recon capture: a deep thud pulses while your squad holds the zone, quicker as it nears completion
+      // recon capture music: thud + "ta-ta-ta, ta-ta-ta" bars while your squad holds the zone (in or out of a vehicle),
+      // layers building up as the upload nears completion
       { const ac = sim.active.find((q) => q.squad === me.squad && q.kind === 'recon'); const inside = ac && ac.flare && sim.players.some((q) => q.squad === me.squad && q.phase === Phase.Alive && Math.hypot(q.x - ac.zx!, q.z - ac.zz!) < 9);
-        if (inside) { this.reconT -= dt; if (this.reconT <= 0) { const k = Math.min(1, (ac!.progress ?? 0) / 25); this.reconT = 1.05 - 0.55 * k; audio.play('reconTick', { ui: true, vol: 0.8 }); } } else this.reconT = 0; }
+        if (inside) {
+          this.reconT -= dt;
+          if (this.reconT <= 0) {
+            // same tempo throughout; each layer fades in over its own stretch of the upload, so it keeps building
+            this.reconT += 1; if (this.reconT <= 0) this.reconT = 1;
+            const k = Math.min(1, (ac!.progress ?? 0) / 25), ramp = (a: number, b: number) => Math.max(0, Math.min(1, (k - a) / (b - a)));
+            audio.play('reconThud', { ui: true, vol: 0.85 });
+            audio.play('reconStab', { ui: true, vol: 0.2 + 0.8 * ramp(0, 0.35) });
+            for (const [name, a, b, v] of [['reconPulse', 0.15, 0.55, 0.8], ['reconHat', 0.35, 0.75, 0.55], ['reconPad', 0.55, 0.95, 0.7]] as const) { const g = ramp(a, b); if (g > 0.02) audio.play(name, { ui: true, vol: v * g }); }
+          }
+        } else this.reconT = 0; }
       // unopened supply boxes hum; louder as you get close, from the box's position
       this.humT -= dt;
       if (this.humT <= 0) {

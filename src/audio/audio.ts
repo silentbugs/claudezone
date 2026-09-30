@@ -16,7 +16,7 @@ export type SoundName =
   | 'hit' | 'hitArmor' | 'armorBreak' | 'headshot' | 'kill' | 'down' | 'selfArmorBreak' | 'bodyHit'
   | 'plate' | 'magOut' | 'magIn' | 'bolt' | 'swap' | 'dry' | 'melee' | 'throw' | 'pin'
   | 'step_dirt' | 'step_concrete' | 'step_metal' | 'step_wood' | 'land' | 'jump' | 'slide' | 'gear'
-  | 'flareLaunch' | 'reconTick' | 'chestHum' | 'jet' | 'callin' | 'contractStart' | 'contractDone' | 'contractStep' | 'pickup' | 'cash' | 'chute' | 'chuteCut' | 'explosion' | 'explosionFar' | 'whiz' | 'impact' | 'impactMetal' | 'impactWood' | 'impactGlass' | 'impactWater'
+  | 'flareLaunch' | 'reconTick' | 'reconThud' | 'reconStab' | 'reconPulse' | 'reconHat' | 'reconPad' | 'vehicleCrash' | 'chestHum' | 'jet' | 'callin' | 'contractStart' | 'contractDone' | 'contractStep' | 'pickup' | 'cash' | 'chute' | 'chuteCut' | 'explosion' | 'explosionFar' | 'whiz' | 'impact' | 'impactMetal' | 'impactWood' | 'impactGlass' | 'impactWater'
   | 'musicInfil' | 'musicVictory' | 'musicDefeat'
   | 'uiOpen' | 'uiHover' | 'uiBuy' | 'uiDeny' | 'downed' | 'cough' | 'heartbeat' | 'breath' | 'doorOpen' | 'doorClose' | 'doorSlam' | 'beep' | 'revive' | 'crate' | 'stinger' | 'flag' | 'rock';
 
@@ -419,6 +419,19 @@ export class Audio {
     // recon capture: the repeating data-upload chirp while the zone is being held
     // recon capture: a deep rhythmic thud (a kick-drum like thump: falling low sine + a soft low-passed knock)
     this.add('reconTick', tone(0.5, (t) => { const f = 48 + 70 * Math.exp(-t * 28); return Math.sin(2 * Math.PI * f * t) * Math.exp(-t * 7.5) * (t < 0.004 ? t / 0.004 : 1) * 0.95; }).mix(N(0.08, 4242).filter('lp', 420).env((t) => Math.exp(-t * 45)), 0.45));
+    // recon capture music (2020): a fixed-tempo 1 s bar in five layers played together; the client fades the upper
+    // layers in as the upload progresses, so the cue starts as a bare thud and builds to a full, dense texture
+    const stab = (t: number, t0: number, f: number, acc: number) => { const u = t - t0; if (u < 0 || u > 0.1) return 0; let v = 0; for (let k = 1; k <= 6; k++) v += Math.sin(2 * Math.PI * f * k * u + k) / k; return v * Math.exp(-u * 38) * Math.min(1, u / 0.003) * acc * 0.3; };
+    this.add('reconThud', tone(1.0, (t) => { let v = 0; for (const [t0, a] of [[0, 0.85], [0.5, 0.7]]) { const u = t - t0; if (u >= 0 && u < 0.45) v += Math.sin(2 * Math.PI * (50 + 70 * Math.exp(-u * 28)) * u) * Math.exp(-u * 8) * Math.min(1, u / 0.004) * a; } return v; }));
+    this.add('reconStab', tone(1.0, (t) => { let v = 0; for (let i = 0; i < 3; i++) { v += stab(t, i * 0.11, 220, i === 0 ? 1 : 0.75); v += stab(t, 0.5 + i * 0.11, 247, i === 0 ? 1 : 0.75); } return v; }));
+    this.add('reconPulse', tone(1.0, (t) => { const u = t % 0.125, f = t < 0.5 ? 55 : 61.7; let v = 0; for (let k = 1; k <= 5; k++) v += Math.sin(2 * Math.PI * f * k * t) / k; return v * Math.exp(-u * 22) * Math.min(1, u / 0.004) * 0.3; }));
+    this.add('reconHat', N(1.0, 6060).filter('bp', 7500, 1.2).env((t) => { const u = t % 0.0625, acc = Math.floor(t / 0.0625) % 4 === 2 ? 1 : 0.55; return Math.exp(-u * 90) * acc * 0.9; }));
+    this.add('reconPad', tone(1.0, (t) => { const trem = 0.6 + 0.4 * Math.sin(2 * Math.PI * 12 * t); return (Math.sin(2 * Math.PI * 440 * t) * 0.5 + Math.sin(2 * Math.PI * 466.2 * t) * 0.35 + Math.sin(2 * Math.PI * 659.3 * t) * 0.2) * trem * 0.22 * Math.min(1, t / 0.02, (1 - t) / 0.02); }));
+    // vehicle crash: a heavy body thump, crunching sheet metal and a short metallic ring
+    const vcrunch = (sd: number) => tone(0.9, (t) => Math.sin(2 * Math.PI * (70 + 60 * Math.exp(-t * 20)) * t) * Math.exp(-t * 9) * 0.9 + (Math.sin(2 * Math.PI * 610 * t) * 0.25 + Math.sin(2 * Math.PI * 1370 * t) * 0.15) * Math.exp(-t * 7))
+      .mix(N(0.5, sd).filter('lp', 2600).env((t) => Math.min(1, t * 400) * (Math.exp(-t * 16) + 0.35 * Math.exp(-Math.pow((t - 0.12) / 0.05, 2)))), 0.9)
+      .mix(N(0.3, sd + 7).filter('bp', 3400, 2).env((t) => Math.exp(-t * 25) * 0.5), 0.6);
+    this.add('vehicleCrash', vcrunch(5101), vcrunch(5202), vcrunch(5303));
     this.add('chestHum', tone(1.4, (t) => { const env = Math.sin(Math.PI * Math.min(1, t / 1.4)); return (Math.sin(2 * Math.PI * 196 * t) * 0.35 + Math.sin(2 * Math.PI * 294 * t + Math.sin(t * 9) * 0.6) * 0.25 + Math.sin(2 * Math.PI * 1175 * t) * 0.08 * Math.exp(-t * 3)) * env * 0.7; }));
     this.add('jet', N(4, 4321).filter('lp', 900).env((t) => Math.exp(-Math.pow((t - 1.6) / 0.7, 2)) * 1.3).mix(tone(4, (t) => Math.sin(2 * Math.PI * (1500 - t * 260) * t) * 0.06 * Math.exp(-Math.pow((t - 1.5) / 0.6, 2))), 1));
     this.add('callin', tone(0.5, (t) => (Math.sin(2 * Math.PI * 1760 * t) * (t < 0.08 ? 1 : 0) + Math.sin(2 * Math.PI * 1320 * t) * (t > 0.12 && t < 0.2 ? 1 : 0)) * 0.3).mix(N(0.3, 77).filter('bp', 2500, 0.5).env((t) => Math.exp(-t * 20) * 0.15), 1));

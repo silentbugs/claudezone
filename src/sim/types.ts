@@ -102,6 +102,9 @@ export type SimEvent =
   | { t: 'reload'; p: number; w: string }
   | { t: 'pickup'; p: number; kind: ItemKind; label: string }
   | { t: 'chest'; p: number; x: number; y: number; z: number }
+  | { t: 'vcrash'; x: number; y: number; z: number; impact: number }
+  | { t: 'contractGone'; x: number; y: number; z: number }
+  | { t: 'reveal'; squad: number }
   | { t: 'jump'; p: number }
   | { t: 'chute'; p: number }
   | { t: 'land'; p: number; hard: boolean }

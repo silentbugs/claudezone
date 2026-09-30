@@ -125,3 +125,17 @@ export function vehicleIcon(type: string, tint: string): HTMLCanvasElement {
   }
   vehCache.set(key, c); return c;
 }
+
+/** Buy station (2020 tac map): a faint green shopping cart with a dark outline, readable on the grey map. */
+let buyIconC: HTMLCanvasElement | null = null;
+export function buyStationIcon(): HTMLCanvasElement {
+  if (buyIconC) return buyIconC;
+  const c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d')!;
+  g.lineJoin = 'round'; g.lineCap = 'round';
+  const cart = () => { g.beginPath(); g.moveTo(6, 14); g.lineTo(15, 14); g.lineTo(22, 40); g.lineTo(50, 40); g.lineTo(56, 20); g.lineTo(18, 20); };
+  const wheels = () => { g.beginPath(); g.arc(25, 50, 4.5, 0, 7); g.moveTo(51.5, 50); g.arc(47, 50, 4.5, 0, 7); };
+  g.strokeStyle = 'rgba(12,16,12,0.9)'; g.lineWidth = 10; cart(); g.stroke(); wheels(); g.stroke();
+  g.fillStyle = 'rgba(120,205,110,0.55)'; g.beginPath(); g.moveTo(18, 20); g.lineTo(56, 20); g.lineTo(50, 40); g.lineTo(22, 40); g.closePath(); g.fill();
+  g.strokeStyle = '#86d67a'; g.lineWidth = 5; cart(); g.stroke(); g.fillStyle = '#86d67a'; wheels(); g.fill();
+  return (buyIconC = c);
+}

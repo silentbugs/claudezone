@@ -173,9 +173,20 @@
 .hud .alt .mk i { width: calc(var(--px) * 13); height: calc(var(--px) * 13); background: #fff; border-radius: 50%; }
 .hud .alt .mk u { width: calc(var(--px) * 37); height: 1px; background: #fff; }
 /* tac map */
-.fullmap { position: absolute; inset: 0; background: rgba(8,10,12,0.9); display: none; align-items: center; justify-content: center; pointer-events: auto; }
-.fullmap canvas { height: 92vh; width: 92vh; }
-.fullmap .legend { position: absolute; right: 30px; top: 30px; width: 260px; font-size: 14px; line-height: 1.6; color: #bbb; font-family: 'Rajdhani', sans-serif; }
+/* tac map (2020 layout, measured from hud_tacmap_1: frame 76vh square at 13.7vh from the top, centred; legend to its right) */
+.fullmap { position: absolute; inset: 0; background: rgba(10,12,14,0.55); display: none; pointer-events: auto; font-family: 'Rajdhani', sans-serif; }
+.fullmap .fmc { position: absolute; height: 76vh; width: 76vh; left: calc(50% - 38vh); top: 13.7vh; box-shadow: 0 0 2vh rgba(0,0,0,0.6); }
+.fullmap .legend { position: absolute; left: calc(50% + 39.6vh); top: 14.1vh; width: 36vh; height: 75.2vh; box-sizing: border-box; padding: 2vh 3.6vh 2vh 3.4vh; background: rgba(22,26,30,0.72); color: #d9dde0; font-size: 2vh; }
+.fullmap .ltitle { color: #4a90c8; font-size: 2.3vh; font-weight: 600; letter-spacing: 0.04em; padding-bottom: 0.6vh; margin-bottom: 1vh; border-bottom: 2px solid rgba(74,144,200,0.55); }
+.fullmap .lrow { display: flex; align-items: center; gap: 1.6vh; height: 3.8vh; }
+.fullmap .lrow img, .fullmap .lrow svg { width: 2.6vh; height: 2.6vh; object-fit: contain; }
+.fullmap .lband { display: flex; align-items: center; gap: 1.6vh; height: 3.2vh; margin: 1.2vh -0.4vh 0.4vh; padding: 0 1.2vh; color: #fff; font-weight: 600; letter-spacing: 0.04em;
+  background: repeating-linear-gradient(135deg, rgba(64,110,150,0.55) 0 2px, rgba(46,86,122,0.55) 2px 5px); }
+.fullmap .lband img { width: 1.9vh; height: 1.9vh; }
+.fullmap .lband .sqr { width: 1.2vh; height: 1.2vh; background: #fff; }
+.fullmap .lband .dotb { width: 1.2vh; height: 1.2vh; background: #fff; border-radius: 50%; }
+.fullmap .fmprompts { position: absolute; left: 0; right: 0; top: 93vh; display: flex; justify-content: center; gap: 2.6vh; color: #fff; font-size: 1.8vh; font-weight: 500; }
+.fullmap .fk b { display: inline-block; min-width: 1.8vh; padding: 0 0.6vh; margin-right: 0.7vh; border-radius: 0.4vh; background: #eee; color: #111; font-size: 1.4vh; font-weight: 700; line-height: 2vh; text-align: center; }
 .buy { position: absolute; inset: 0; background: rgba(4,6,8,0.65); display: flex; align-items: center; justify-content: center; pointer-events: auto; }
 .buy .bbox { width: min(980px, 94vw); max-height: 90vh; overflow-y: auto; background: rgba(18,20,22,0.97); border-top: 3px solid #f39a2a; padding: 18px 24px 16px; }
 .buy .bhead { display: flex; justify-content: space-between; align-items: center; font-size: 26px; font-weight: 700; letter-spacing: 0.08em; }

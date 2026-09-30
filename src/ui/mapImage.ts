@@ -17,41 +17,45 @@ export function renderTacRegion(w: WorldData, x0: number, z0: number, span: numb
     const x = x0 + i * S, z = z0 + j * S, h = hf.at(x, z);
     const k = Math.round(z / hf.step) * hf.res + Math.round(x / hf.step);
     const [nx, ny, nz] = hf.normal(x, z);
-    const shade = Math.max(0.35, Math.min(1.25, 0.75 + (-nx * 0.6 - nz * 0.5) * 1.8 + (ny - 0.9)));
+    // 2020 tac map: a greyscale "satellite" look - strong hillshade, fine grain, pale roads, near-black water
+    const shade = Math.max(0.3, Math.min(1.35, 0.72 + (-nx * 0.6 - nz * 0.5) * 2.2 + (ny - 0.9)));
+    const grain = (hash(Math.floor(x * 0.9), Math.floor(z * 0.9)) - 0.5) * 14 + (hash(Math.floor(x / 7), Math.floor(z / 7)) - 0.5) * 10;
     let r: number, gg: number, b: number;
-    if (h < 0 || w.extra.river[k] === 2) { const d = Math.min(1, -h / 20); r = 38 - d * 12; gg = 58 - d * 14; b = 66 - d * 10; }
-    else if (w.extra.river[k] === 1) { r = 170; gg = 182; b = 188; }
+    if (h < 0 || w.extra.river[k] === 2) { const d = Math.min(1, -h / 20); r = 44 - d * 12; gg = 48 - d * 12; b = 52 - d * 12; }
+    else if (w.extra.river[k] === 1) { r = 176; gg = 178; b = 180; }
     else {
       const snow = w.extra.snow[k], road = w.extra.road[k];
-      r = 92 + h * 0.08; gg = 98 + h * 0.06; b = 84;
-      r += (206 - r) * snow; gg += (210 - gg) * snow; b += (212 - b) * snow;
+      r = gg = b = 104 + h * 0.07 + grain;
+      r += (214 - r) * snow; gg += (216 - gg) * snow; b += (218 - b) * snow;
       r *= shade; gg *= shade; b *= shade;
-      if (road > 0.35) { r = gg = b = 138; }
+      if (road > 0.35) { r = gg = b = road > 0.6 ? 168 : 128; }
     }
     const o = (j * size + i) * 4; img.data[o] = r; img.data[o + 1] = gg; img.data[o + 2] = b; img.data[o + 3] = 255;
   }
   g.putImageData(img, 0, 0);
-  // buildings: footprints of tall parts
+  // buildings: pale roofs with a dark outline and a soft south-east drop shadow (2020)
+  g.shadowColor = 'rgba(0,0,0,0.45)'; g.shadowOffsetX = g.shadowOffsetY = Math.max(1, 1.2 / S); g.shadowBlur = Math.max(1, 1 / S);
   g.lineWidth = detail ? 1 : Math.max(1, size / 1620);
   const k = 1 / S;
   for (const s of w.col.structures) {
     if (s.kind === 'gulag' || s.kind === 'prop' || s.kind === 'door') continue;
     if (s.x + s.radius < x0 || s.x - s.radius > x0 + span || s.z + s.radius < z0 || s.z - s.radius > z0 + span) continue;
-    if (s.kind === 'tree') { if (detail) { g.fillStyle = 'rgba(40,56,36,0.8)'; g.beginPath(); g.arc((s.x - x0) * k, (s.z - z0) * k, Math.max(1.5, 2.2 * k), 0, Math.PI * 2); g.fill(); } continue; }
+    if (s.kind === 'tree') { if (detail) { g.fillStyle = 'rgba(38,40,40,0.8)'; g.beginPath(); g.arc((s.x - x0) * k, (s.z - z0) * k, Math.max(1.5, 2.2 * k), 0, Math.PI * 2); g.fill(); } continue; }
     const c = s.cos, sn = s.sin;
     const draw = (ax: number, az: number, bx: number, bz: number) => {
       const pts = [[ax, az], [bx, az], [bx, bz], [ax, bz]].map(([u, v]) => [(s.x + u * c + v * sn - x0) * k, (s.z - u * sn + v * c - z0) * k]);
       g.beginPath(); g.moveTo(pts[0][0], pts[0][1]); for (let q = 1; q < 4; q++) g.lineTo(pts[q][0], pts[q][1]); g.closePath(); g.fill(); g.stroke();
     };
-    g.fillStyle = s.kind === 'runway' ? '#4c4e50' : '#b9bcbc'; g.strokeStyle = s.kind === 'runway' ? '#4c4e50' : '#e8eaea';
+    g.fillStyle = s.kind === 'runway' ? '#4a4a4a' : '#cfcfcf'; g.strokeStyle = s.kind === 'runway' ? '#4a4a4a' : '#2e2e2e';
     if (s.kind === 'runway') { for (const p of s.parts) if (p.mat === Mat.Asphalt) draw(p.x0, p.z0, p.x1, p.z1); continue; }
     if (detail && s.kind !== 'runway') {
       // close zoom: pale roof footprint, then every wall (openings show as gaps)
-      g.fillStyle = '#a7aaaa'; g.strokeStyle = 'rgba(0,0,0,0)'; draw(s.bx0, s.bz0, s.bx1, s.bz1);
-      g.fillStyle = '#3e4244'; g.strokeStyle = '#3e4244';
+      g.fillStyle = '#b4b4b4'; g.strokeStyle = 'rgba(0,0,0,0)'; draw(s.bx0, s.bz0, s.bx1, s.bz1); g.shadowColor = 'rgba(0,0,0,0)';
+      g.fillStyle = '#383838'; g.strokeStyle = '#383838';
       for (const p of s.parts) if (!p.noCollide && p.y0 < 2.5 && p.y1 - p.y0 > 1.5 && Math.min(p.x1 - p.x0, p.z1 - p.z0) < 1.3) draw(p.x0, p.z0, p.x1, p.z1);
-      g.fillStyle = '#7d8284'; g.strokeStyle = '#7d8284';
+      g.fillStyle = '#808080'; g.strokeStyle = '#808080';
       for (const r of s.ramps) if (r.mat !== Mat.Roof) draw(r.x0, r.z0, r.x1, r.z1);
+      g.shadowColor = 'rgba(0,0,0,0.45)';
       continue;
     }
     if (s.parts.length > 8 || s.kind === 'house') draw(s.bx0, s.bz0, s.bx1, s.bz1);
@@ -59,3 +63,5 @@ export function renderTacRegion(w: WorldData, x0: number, z0: number, span: numb
   }
   return cv;
 }
+
+function hash(x: number, z: number) { let h = (x * 374761393 + z * 668265263) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; }

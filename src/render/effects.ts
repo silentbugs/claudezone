@@ -8,6 +8,7 @@ import { RARITY_COLORS, WEAPON } from '../data/weapons';
 import { Mat } from '../world/collision';
 import { SHADER_NOISE } from './terrainMesh';
 import { eyeHeight } from '../sim/movement';
+import { VEHICLES, VEHICLE_FIRE } from '../sim/vehicles';
 
 // ------------------------------------------------------------------ particles
 const MAXP = 6000;
@@ -218,6 +219,20 @@ export class Effects {
         for (let i = 0; i < 6; i++) this.smoke.spawn(e.x, e.y, e.z, (R() - 0.5), R() * 0.5, (R() - 0.5), 0.6, 0.2, 0.6, 0.85, 0.9, 0.95, 0.3, 2, 0);
         break;
       }
+      case 'vcrash': {
+        // crunch: a spray of sparks and grit off the body
+        const n = Math.min(18, 4 + e.impact * 0.6);
+        for (let i = 0; i < n; i++) this.add.spawn(e.x, e.y, e.z, (R() - 0.5) * 7, 1 + R() * 4, (R() - 0.5) * 7, 0.25, 0.04, 0, 1, 0.8, 0.4, 0.8, 1, 9);
+        for (let i = 0; i < 4; i++) this.smoke.spawn(e.x, e.y - 0.5, e.z, (R() - 0.5) * 2, R(), (R() - 0.5) * 2, 1.2, 0.5, 1.2, 0.55, 0.5, 0.45, 0.4, 0.5, 0);
+        break;
+      }
+      case 'contractGone': {
+        // the tablet shorts out in the gas: a spit of sparks and a puff of dark smoke
+        for (let i = 0; i < 14; i++) this.add.spawn(e.x, e.y + 0.2, e.z, (R() - 0.5) * 5, 2 + R() * 4, (R() - 0.5) * 5, 0.3, 0.04, 0, 1, 0.75, 0.3, 0.8, 1, 9);
+        for (let i = 0; i < 6; i++) this.smoke.spawn(e.x, e.y + 0.3, e.z, (R() - 0.5) * 0.6, 0.8 + R(), (R() - 0.5) * 0.6, 2.2, 0.3, 1.2, 0.2, 0.2, 0.2, 0.55, 0.4, 0);
+        this.light(e.x, e.y + 0.5, e.z, 0xffb060, 5);
+        break;
+      }
       case 'flare': this.flares.push({ x: e.x, y: e.y + 1, z: e.z, t: 0, y0: e.y }); break;
       case 'marker': {
         if (e.kind !== 'airstrike' && e.kind !== 'cluster') break;
@@ -289,6 +304,26 @@ export class Effects {
       m.position.set(c.x, c.y + 0.55 + k * 350, c.z);
     }
     for (const [id, m] of this.crates) if (!sim.crates.some((c) => c.id === id)) { this.group.remove(m); this.crates.delete(id); }
+    // vehicle damage states (2020): grey smoke from the engine below 60 %, thick black smoke below 35 %, flames below
+    // 20 % (it is about to blow); wrecks smoulder
+    for (const v of sim.vehicles) {
+      if (Math.hypot(v.x - cam.x, v.z - cam.z) > 700) continue;
+      const d = VEHICLES[v.type], f = v.alive ? v.health / d.health : 0;
+      if (v.alive && f >= 0.6) continue;
+      if (!v.alive && v.burnT <= 0) continue;
+      const R = Math.random, fx = -Math.sin(v.yaw), fz = -Math.cos(v.yaw);
+      const ex = v.x + fx * d.len * (v.type === 'heli' ? 0.1 : 0.32), ez = v.z + fz * d.len * (v.type === 'heli' ? 0.1 : 0.32), ey = v.y + d.hgt * (v.type === 'heli' ? 0.9 : 0.75);
+      const heavy = !v.alive || f < 0.35, fire = !v.alive || f < VEHICLE_FIRE;
+      const rate = !v.alive ? 7 : fire ? 16 : heavy ? 11 : 5;
+      if (R() < dt * rate) {
+        const g = heavy ? 0.1 + R() * 0.06 : 0.55 + R() * 0.1;
+        this.smoke.spawn(ex + (R() - 0.5) * 0.5, ey, ez + (R() - 0.5) * 0.5, (R() - 0.5) * 0.6 - v.vx * 0.3, 1.6 + R() * 1.2, (R() - 0.5) * 0.6 - v.vz * 0.3, heavy ? 4.5 : 3, heavy ? 1.1 : 0.7, heavy ? 1.6 : 1.0, g, g, g, heavy ? 0.75 : 0.45, 0.6, 0);
+      }
+      if (fire && R() < dt * 30) {
+        this.add.spawn(ex + (R() - 0.5) * 0.8, ey - 0.2, ez + (R() - 0.5) * 0.8, (R() - 0.5) * 0.4, 1.5 + R() * 1.5, (R() - 0.5) * 0.4, 0.45, 0.6, 0.4, 1, 0.45 + R() * 0.2, 0.12, 0.9, 1, 0);
+        if (R() < 0.3) this.light(ex, ey, ez, 0xff7a30, 8);
+      }
+    }
     for (const j of this.jets) {
       j.t += dt; const d = j.t * 190;
       j.m.visible = j.t > -5 && j.t < 5;
@@ -312,6 +347,7 @@ export class Effects {
       b.sp.visible = b.beam.visible = !c.taken;
       if (c.taken) continue;
       const t = this.badgeT + b.ph;
+      if (c.doomAt !== undefined) { const left = c.doomAt - sim.time; b.sp.visible = b.beam.visible = left > 2.5 || Math.sin(t * (40 - left * 8)) > -0.2; }
       b.sp.position.y = b.y + 1.5 + Math.sin(t * 1.8) * 0.12;
       b.sp.scale.setScalar(0.9 * (1 + Math.sin(t * 3.2) * 0.06));
       (b.beam.material as THREE.MeshBasicMaterial).opacity = 0.18 + 0.1 * (0.5 + 0.5 * Math.sin(t * 2.4));

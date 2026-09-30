@@ -28,7 +28,7 @@ import { NavGrid } from './nav';
 
 export interface CircleState { phase: number; closing: boolean; t: number; cx: number; cz: number; r: number; nx: number; nz: number; nr: number; sx: number; sz: number; sr: number; done: boolean }
 export type ContractKind = 'bounty' | 'scavenger' | 'recon' | 'mostwanted' | 'supply';
-export interface Contract { id: number; kind: ContractKind; x: number; y: number; z: number; taken: boolean }
+export interface Contract { id: number; kind: ContractKind; x: number; y: number; z: number; taken: boolean; /** caught by the gas: destroyed at this time */ doomAt?: number; gone?: boolean }
 export interface ActiveContract { kind: Contract['kind']; squad: number; t: number; target?: number; step?: number; chest?: number; zx?: number; zz?: number; zy?: number; progress?: number; flare?: boolean }
 export interface GulagFight { arena: number; a: number; b: number; t: number; flagT: number; flagOwner: number; overtime: boolean }
 export interface BuyStation { id: number; x: number; y: number; z: number }
@@ -86,7 +86,11 @@ export class Sim {
   counterUavs: { squad: number; x: number; z: number; until: number }[] = [];
   /** enemy pings ("enemy spotted"): a red marker where the enemy was, shared with the squad for a few seconds */
   enemyPings: { squad: number; by: number; target: number; x: number; y: number; z: number; until: number }[] = [];
-  squadReveal = new Set<number>(); // squads that see the next circle early (recon)
+  /** recon (2020): each completed recon shows the squad one more future circle, up to this circle index */
+  revealTo = new Map<number, number>();
+  /** the whole circle sequence, decided up front so recon can show circles ahead (index i = where circle i closes to) */
+  private circlePlan: { x: number; z: number; r: number }[] = [];
+  private circleRng: Rng;
   placementCounter = 0;
   private itemGrid = new Map<number, Item[]>();
   itemById = new Map<number, Item>();
@@ -98,7 +102,7 @@ export class Sim {
   squadSize = SQUAD_SIZE;
   constructor(public world: WorldData, seed = 1, opts: { humans?: number; players?: number; warmup?: number; squadSize?: number; difficulty?: Difficulty } = {}) {
     this.squadSize = opts.squadSize ?? SQUAD_SIZE;
-    this.rng = new Rng(seed);
+    this.rng = new Rng(seed); this.circleRng = new Rng((seed * 7919 + 13) >>> 0);
     this.nav = (world as any).__nav ?? ((world as any).__nav = new NavGrid(world.col));
     const n = opts.players ?? PLAYERS;
     for (let i = 0; i < n; i++) this.players.push(this.makePlayer(i, Math.floor(i / this.squadSize), i >= (opts.humans ?? 1)));
@@ -733,16 +737,32 @@ export class Sim {
   }
 
   // ------------------------------------------------------------ circle
-  private pickNextCircle() {
-    const c = this.circle, spec = CIRCLES[c.phase];
-    const nr = spec.radius;
-    for (let i = 0; i < 200; i++) {
-      const a = this.rng.range(0, Math.PI * 2), d = Math.sqrt(this.rng.next()) * Math.max(0, c.r - nr) * (c.phase === 0 ? 0.55 : 0.95);
-      const x = c.cx + Math.cos(a) * d, z = c.cz + Math.sin(a) * d;
-      if (this.world.hf.at(x, z) < 1 || !inPlayable(x, z)) continue;
-      c.nx = x; c.nz = z; c.nr = nr; return;
+  /** Circle i of the match (where phase i closes to), each one inside the one before. */
+  planCircle(i: number): { x: number; z: number; r: number } {
+    while (this.circlePlan.length <= i) {
+      const k = this.circlePlan.length, prev = k === 0 ? { x: 1640, z: 1780, r: INITIAL_RADIUS } : this.circlePlan[k - 1];
+      const nr = CIRCLES[Math.min(k, CIRCLES.length - 1)].radius, rng = this.circleRng;
+      let out = { x: prev.x, z: prev.z, r: nr };
+      for (let n = 0; n < 200; n++) {
+        const a = rng.range(0, Math.PI * 2), d = Math.sqrt(rng.next()) * Math.max(0, prev.r - nr) * (k === 0 ? 0.55 : 0.95);
+        const x = prev.x + Math.cos(a) * d, z = prev.z + Math.sin(a) * d;
+        if (this.world.hf.at(x, z) < 1 || !inPlayable(x, z)) continue;
+        out = { x, z, r: nr }; break;
+      }
+      this.circlePlan.push(out);
     }
-    c.nx = c.cx; c.nz = c.cz; c.nr = nr;
+    return this.circlePlan[i];
+  }
+  /** Future circles beyond the announced next one that this squad has revealed with recon contracts. */
+  revealedCircles(squad: number): { x: number; z: number; r: number; i: number }[] {
+    const c = this.circle, to = Math.min(this.revealTo.get(squad) ?? -1, CIRCLES.length - 1), out = [];
+    if (c.done) return [];
+    for (let i = c.phase + 1; i <= to; i++) out.push({ ...this.planCircle(i), i });
+    return out;
+  }
+  private pickNextCircle() {
+    const c = this.circle, n = this.planCircle(c.phase);
+    c.nx = n.x; c.nz = n.z; c.nr = n.r;
   }
   private updateCircle(dt: number) {
     const c = this.circle;
@@ -906,6 +926,15 @@ export class Sim {
     this.chests.push(ch); a.chest = ch.id;
   }
   private updateContracts(dt: number) {
+    // tablets caught outside the safe zone short-circuit and burn out a few seconds later (2020)
+    const cc = this.circle;
+    for (const k of this.contracts) {
+      if (k.taken) continue;
+      if (Math.hypot(k.x - cc.cx, k.z - cc.cz) > cc.r) {
+        k.doomAt ??= this.time + CONTRACT.gasDestroy;
+        if (this.time >= k.doomAt) { k.taken = true; k.gone = true; this.emit({ t: 'contractGone', x: k.x, y: k.y, z: k.z }); }
+      } else k.doomAt = undefined;
+    }
     for (const a of this.active) {
       a.t -= dt;
       const squad = this.players.filter((q) => q.squad === a.squad);
@@ -922,7 +951,7 @@ export class Sim {
         if (n > 0) {
           if (!a.flare) { a.flare = true; this.emit({ t: 'flare', x: a.zx!, y: a.zy!, z: a.zz!, squad: a.squad }); }
           a.progress! += dt * (1 + 0.5 * (n - 1)); // more squadmates capture faster
-          if (a.progress! >= CONTRACT.recon.capture) { this.reward(a, CONTRACT.recon.reward); this.squadReveal.add(a.squad); this.spawnChestAt(a.zx! + 2, a.zz!); a.t = -2; }
+          if (a.progress! >= CONTRACT.recon.capture) { this.reward(a, CONTRACT.recon.reward); { const c = this.circle; this.revealTo.set(a.squad, Math.max(this.revealTo.get(a.squad) ?? c.phase, c.phase) + 1); this.emit({ t: 'reveal', squad: a.squad }); } this.spawnChestAt(a.zx! + 2, a.zz!); a.t = -2; }
         }
       } else if (a.kind === 'bounty') {
         const tgt = this.players[a.target!];

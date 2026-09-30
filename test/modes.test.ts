@@ -96,7 +96,7 @@ test('helicopter: bail out mid-air and it drops, crashes and explodes on the pla
   assert.ok(pilot.alive && (pilot.phase === 2 || pilot.phase === 3), 'the pilot is skydiving / parachuting');
 });
 
-test('vehicles (2020): ATV / Rover / SUV hit top speed in ~1.5 s, the Cargo Truck takes several seconds', async () => {
+test('vehicles (2020): ATV / Rover / SUV hit top speed in ~1 s, the Cargo Truck takes several seconds', async () => {
   const { updateVehicles, makeVehicle, VEHICLES } = await import('../src/sim/vehicles');
   // flat, empty stub world: measures the drive model alone
   const col = { groundAt: () => 0, pushOut: (_x: number, _y: number, _z: number, _h: number, _r: number, _s: number, out: any) => { out.hit = false; }, waterAt: () => -99 };
@@ -108,8 +108,33 @@ test('vehicles (2020): ATV / Rover / SUV hit top speed in ~1.5 s, the Cargo Truc
     const sim: any = { vehicles: [v], players: [p], world: { col, hf: { size: 4000 } }, playersNear: () => [], damage() {}, emit() {} };
     let t = 0; while (t < 10 && v.speed < VEHICLES[type].maxSpeed * 0.9) { updateVehicles(sim, 1 / 60); t += 1 / 60; }
     times[type] = +t.toFixed(2);
+    // bail out at speed: the empty vehicle scrubs its speed within about a second (2020)
+    p.vehicle = undefined; for (let i = 0; i < 72; i++) updateVehicles(sim, 1 / 60);
+    assert.ok(v.speed < 1.5, `${type} stops quickly once nobody drives it (${v.speed.toFixed(1)} m/s after 1.2 s)`);
   }
   console.log('0 -> 90% top speed (s)', JSON.stringify(times));
   for (const k of ['atv', 'rover', 'suv']) assert.ok(times[k] < 1.6, `${k} reaches top speed fast (${times[k]} s)`);
   assert.ok(times.truck > 2.5, `the Cargo Truck is slow to get going (${times.truck} s)`);
+});
+
+test('recon (2020): each completed recon reveals one more future circle; untaken tablets in the gas burn out after a few seconds', () => {
+  const s: any = new Sim(world, 3, { humans: 1 }); s.time = 120;
+  const me = s.players[0];
+  assert.equal(s.revealedCircles(me.squad).length, 0);
+  for (let n = 1; n <= 3; n++) {
+    s.active.push({ kind: 'recon', squad: me.squad, t: 100, zx: me.x, zz: me.z, zy: me.y, progress: 999, flare: true });
+    Object.assign(me, { phase: 4, alive: true });
+    s.updateContracts(1 / 60);
+    assert.equal(s.revealedCircles(me.squad).length, n, `recon #${n} shows ${n} circle(s) ahead`);
+  }
+  const [a, b] = s.revealedCircles(me.squad);
+  assert.ok(Math.hypot(a.x - s.circle.nx, a.z - s.circle.nz) + a.r <= s.circle.nr + 0.01, 'each revealed circle sits inside the one before');
+  assert.ok(Math.hypot(b.x - a.x, b.z - a.z) + b.r <= a.r + 0.01);
+  // shrink the circle so a tablet ends up in the gas
+  const k = s.contracts.find((c: any) => !c.taken);
+  Object.assign(s.circle, { cx: k.x + 900, cz: k.z, r: 300 });
+  s.updateContracts(1 / 60); assert.ok(!k.taken, 'not instantly');
+  s.time += 7; s.events.length = 0; s.updateContracts(1 / 60);
+  assert.ok(k.taken && k.gone, 'destroyed a few seconds later');
+  assert.ok(s.events.some((e: any) => e.t === 'contractGone'));
 });

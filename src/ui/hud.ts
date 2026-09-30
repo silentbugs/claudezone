@@ -12,7 +12,7 @@ import { LETHAL_NAMES, TACTICAL_NAMES, KILLSTREAK_NAMES, FIELD_UPGRADE_NAMES } f
 import { CIRCLES } from '../sim/config';
 import { POIS, MAP_SIZE } from '../world/mapdata';
 import { vehicleOf, VEHICLES } from '../sim/vehicles';
-import { ICON, LETHAL_ICON, TACTICAL_ICON, STREAK_ICON, contractBadge, vehicleIcon } from './icons';
+import { ICON, LETHAL_ICON, TACTICAL_ICON, STREAK_ICON, contractBadge, vehicleIcon, buyStationIcon } from './icons';
 import { renderTacRegion } from './mapImage';
 import { describeGun, gunSilhouette } from '../render/gunModel';
 import { models } from '../render/models';
@@ -42,6 +42,9 @@ function sil(id: string, rarity: number, fill = '#fff') {
   }
   return s;
 }
+
+/** Tac map canvas size and its black frame width (px, canvas space). */
+const FM_W = 1300, FM_B = 34;
 
 export class Hud {
   root = el('div', 'hud');
@@ -160,10 +163,25 @@ export class Hud {
     this.xh.innerHTML = '<i></i><i></i><i></i><i></i><i class="dot"></i>';
     this.hm.innerHTML = [45, 135, 225, 315].map((d) => `<i style="transform:rotate(${d}deg)"></i>`).join('') + `<div class="glyph a">${ICON.shield}</div><div class="glyph b">${ICON.shieldBroken}</div>`;
     this.alt.innerHTML = '<div class="rule"></div><div class="lab s">SPEED</div><div class="lab g">GROUND</div><div class="mk"><b>0</b><i></i><u></u></div>';
-    this.fmCanvas = document.createElement('canvas'); this.fmCanvas.width = this.fmCanvas.height = 1200;
-    this.fullmap.append(this.fmCanvas, el('div', 'legend', '<b style="color:#fff;font-size:18px">TAC MAP</b><br>White ring: next safe zone<br>Red: gas<br>Coloured arrows: your squad<br>Dashed line: C-130 route<br>Red dots: enemies (UAV / gunfire)<br>Orange carts: buy stations<br><br>Click to place a marker — your squad will head there'));
+    this.fmCanvas = document.createElement('canvas'); this.fmCanvas.width = this.fmCanvas.height = FM_W;
+    this.fmCanvas.className = 'fmc';
+    // 2020 tac map: black-framed square map, LEGEND panel to its right, control prompts underneath
+    const img = (c: HTMLCanvasElement) => `<img src="${c.toDataURL()}">`;
+    const row = (icon: string, label: string) => `<div class="lrow">${icon}<span>${label}</span></div>`;
+    const band = (label: string, icon = '') => `<div class="lband">${icon}<span>${label}</span></div>`;
+    const squadSvg = '<svg viewBox="0 0 24 24"><path d="M12 2 L21 21 L12 16 L3 21 Z" fill="none" stroke="#fff" stroke-width="2.2" stroke-linejoin="round"/></svg>';
+    const pingSvg = '<svg viewBox="0 0 24 24"><path d="M12 2 L22 12 L12 22 L2 12 Z" fill="none" stroke="#f6c343" stroke-width="2.4"/></svg>';
+    const dropSvg = '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" fill="#ff6fb5" stroke="#fff" stroke-width="1.5"/></svg>';
+    const legend = el('div', 'legend',
+      '<div class="ltitle">LEGEND</div>' + row(squadSvg, 'Squad') + row(pingSvg, 'Squad Leader Ping') + row(dropSvg, 'Loadout Drop') +
+      band('CONTRACTS', img(contractBadge('bounty'))) + row(img(contractBadge('bounty')), 'Bounty') + row(img(contractBadge('recon')), 'Recon') + row(img(contractBadge('scavenger')), 'Scavenger') + row(img(contractBadge('mostwanted')), 'Most Wanted') + row(img(contractBadge('supply')), 'Supply Run') +
+      band('POI', '<i class="sqr"></i>') + row(img(buyStationIcon()), 'Buy Station') +
+      band('VEHICLES', '<i class="dotb"></i>') + row(img(vehicleIcon('atv', '#f2f2f0')), 'ATV') + row(img(vehicleIcon('suv', '#f2f2f0')), 'SUV') + row(img(vehicleIcon('heli', '#f2f2f0')), 'Heli') + row(img(vehicleIcon('truck', '#f2f2f0')), 'Cargo Truck') + row(img(vehicleIcon('rover', '#f2f2f0')), 'Tac Rover'));
+    const key = (k: string, label: string) => `<span class="fk"><b>${k}</b>${label}</span>`;
+    const prompts = el('div', 'fmprompts', key('Drag', 'Move Cursor') + key('Wheel', 'Zoom Out &amp; In') + key('Click', 'Ping') + key('Click Ping', 'Delete Ping') + key('M', 'Close'));
+    this.fullmap.append(this.fmCanvas, legend, prompts);
     // tac map: wheel zooms toward the cursor (x1..x8, more detail as you zoom), drag pans, click places / removes your marker
-    const toWorld = (e: MouseEvent): [number, number] => { const r = this.fmCanvas.getBoundingClientRect(), v = this.fmView(); return [v.x0 + ((e.clientX - r.left) / r.width) * v.span, v.z0 + ((e.clientY - r.top) / r.height) * v.span]; };
+    const toWorld = (e: MouseEvent): [number, number] => { const r = this.fmCanvas.getBoundingClientRect(), v = this.fmView(), fx = ((e.clientX - r.left) / r.width * FM_W - FM_B) / (FM_W - 2 * FM_B), fz = ((e.clientY - r.top) / r.height * FM_W - FM_B) / (FM_W - 2 * FM_B); return [v.x0 + fx * v.span, v.z0 + fz * v.span]; };
     this.fmCanvas.addEventListener('wheel', (e) => {
       e.preventDefault();
       const [wx, wz] = toWorld(e), z0 = this.fmZoom;
@@ -175,12 +193,12 @@ export class Hud {
     addEventListener('mousemove', (e) => {
       if (!drag) return; const r = this.fmCanvas.getBoundingClientRect(), v = this.fmView(), dx = e.clientX - drag.x, dy = e.clientY - drag.y;
       if (Math.hypot(dx, dy) > 4) drag.moved = true;
-      if (drag.moved) { this.fmCx = drag.cx - (dx / r.width) * v.span; this.fmCz = drag.cz - (dy / r.height) * v.span; }
+      if (drag.moved) { const inner = (FM_W - 2 * FM_B) / FM_W; this.fmCx = drag.cx - (dx / (r.width * inner)) * v.span; this.fmCz = drag.cz - (dy / (r.height * inner)) * v.span; }
     });
     addEventListener('mouseup', (e) => {
       if (!drag) return; const d = drag; drag = null; if (d.moved || e.target !== this.fmCanvas) return;
       const [x, z] = toWorld(e), me: any = this.sim.players[this.localId], v = this.fmView();
-      if (me.ping && Math.hypot(me.ping.x - x, me.ping.z - z) < 14 * v.span / this.fmCanvas.width * 2) { this.pings = []; me.ping = undefined; return; }
+      if (me.ping && Math.hypot(me.ping.x - x, me.ping.z - z) < 14 * v.span / (FM_W - 2 * FM_B) * 2) { this.pings = []; me.ping = undefined; return; }
       this.pings = [{ x, z, t: 999 }]; me.ping = { x, z };
     });
     this.root.append(this.ctr, this.threat, this.eqhm, this.gstat, this.gcount, this.low, this.hurtEl, this.breakEl, this.vig, this.scope, mmw, this.circ, this.compass, this.cpings, this.heading, this.loc, this.counters, this.feed, this.squad, this.inv, this.fu, this.weap, this.xh, this.hm, this.tags, this.lcard, this.hold, this.prog, this.ctx, this.alt, this.banner, this.note, this.dmg, this.flash, this.dot, this.fullmap);
@@ -242,6 +260,7 @@ export class Hud {
         break;
       case 'redeploy': if (this.sim.players[e.p].squad === me.squad) this.feedLine(`${name(e.p)} <span style="opacity:.7">redeployed</span>`); break;
       case 'announce': if ((e.squad === undefined || e.squad === -1 || e.squad === me.squad) && !e.text.startsWith('__')) this.showNote(e.text); break;
+      case 'reveal': if (e.squad === me.squad) this.showBanner('Recon complete', `Future safe zone revealed (${this.sim.revealedCircles(me.squad).length} ahead)`); break;
       case 'contract': if (this.sim.players[e.p].squad === me.squad) this.showBanner(`${({ bounty: 'Bounty', scavenger: 'Scavenger', recon: 'Recon', mostwanted: 'Most Wanted', supply: 'Supply Run' } as Record<string, string>)[e.kind] ?? e.kind} contract`, e.msg === 'start' ? 'Contract accepted' : e.msg === 'done' ? 'Contract complete' : e.msg === 'fail' ? 'Contract failed' : 'Next target marked'); break;
       case 'uav': this.showNote(e.squad === me.squad ? 'UAV online' : 'Enemy UAV overhead'); break;
       case 'cuav': this.showNote(e.squad === me.squad ? 'Counter UAV online' : 'Enemy Counter UAV deployed'); break;
@@ -525,11 +544,26 @@ export class Hud {
     const sim = this.sim, c = sim.circle;
     g.save();
     g.beginPath(); g.rect(-3000, -3000, MAP_SIZE + 6000, MAP_SIZE + 6000); g.arc(c.cx, c.cz, Math.max(0, c.r), 0, Math.PI * 2, true);
-    g.fillStyle = 'rgba(220,50,40,0.33)'; g.fill('evenodd');
+    if (mini) { g.fillStyle = 'rgba(220,50,40,0.33)'; g.fill('evenodd'); }
+    else {
+      // tac map gas (2020): red diagonal hatching over a light red wash
+      g.fillStyle = 'rgba(210,40,36,0.16)'; g.fill('evenodd'); g.clip('evenodd');
+      const step = 26 * px, S2 = MAP_SIZE + 6000; g.strokeStyle = 'rgba(225,50,44,0.5)'; g.lineWidth = 9 * px; g.beginPath();
+      for (let d = -S2; d < S2 * 2; d += step) { g.moveTo(-3000 + d, -3000); g.lineTo(-3000 + d - S2, -3000 + S2); }
+      g.stroke();
+    }
     g.restore();
-    g.lineWidth = 2 * px; g.strokeStyle = 'rgba(255,90,70,0.9)'; g.beginPath(); g.arc(c.cx, c.cz, Math.max(0, c.r), 0, Math.PI * 2); g.stroke();
+    g.lineWidth = (mini ? 2 : 3.5) * px; g.strokeStyle = 'rgba(228,58,48,0.95)';
+    if (!mini) g.setLineDash([16 * px, 12 * px]);
+    g.beginPath(); g.arc(c.cx, c.cz, Math.max(0, c.r), 0, Math.PI * 2); g.stroke(); g.setLineDash([]);
     if (!c.done && !sim.inWarmup) {
-      g.strokeStyle = '#ffffff'; g.lineWidth = 2 * px; g.setLineDash([10 * px, 6 * px]); g.beginPath(); g.arc(c.nx, c.nz, c.nr, 0, Math.PI * 2); g.stroke(); g.setLineDash([]);
+      g.strokeStyle = '#f2f2f3'; g.lineWidth = 2 * px; g.beginPath(); g.arc(c.nx, c.nz, c.nr, 0, Math.PI * 2); g.stroke();
+      // circles further ahead, revealed by recon contracts: thinner dotted rings, fainter the further out
+      for (const f of sim.revealedCircles(me.squad)) {
+        const k = f.i - c.phase;
+        g.strokeStyle = `rgba(255,255,255,${Math.max(0.45, 0.95 - k * 0.15)})`; g.lineWidth = 1.6 * px; g.setLineDash([3 * px, 5 * px]);
+        g.beginPath(); g.arc(f.x, f.z, f.r, 0, Math.PI * 2); g.stroke(); g.setLineDash([]);
+      }
       // line toward the safe zone when outside it
       if (Math.hypot(me.x - c.nx, me.z - c.nz) > c.nr) { const a = Math.atan2(c.nz - me.z, c.nx - me.x), d = Math.hypot(me.x - c.nx, me.z - c.nz) - c.nr; g.strokeStyle = 'rgba(255,255,255,0.85)'; g.lineWidth = 2 * px; g.beginPath(); g.moveTo(me.x, me.z); g.lineTo(me.x + Math.cos(a) * d, me.z + Math.sin(a) * d); g.stroke(); }
     }
@@ -545,7 +579,7 @@ export class Hud {
       else if (shape === 'diamond') { g.beginPath(); g.moveTo(x, z - size * px); g.lineTo(x + size * px, z); g.lineTo(x, z + size * px); g.lineTo(x - size * px, z); g.closePath(); g.fill(); }
       else { g.strokeStyle = color; g.lineWidth = 1.6 * px; g.beginPath(); g.moveTo(x - size * px, z - size * px); g.lineTo(x - size * 0.6 * px, z + size * 0.4 * px); g.lineTo(x + size * px, z + size * 0.4 * px); g.lineTo(x + size * 1.1 * px, z - size * 0.5 * px); g.stroke(); g.beginPath(); g.arc(x - size * 0.4 * px, z + size * px, size * 0.3 * px, 0, 7); g.arc(x + size * 0.7 * px, z + size * px, size * 0.3 * px, 0, 7); g.fill(); }
     };
-    for (const b of sim.buyStations) icon(b.x, b.z, '#f39a2a', 'cart', 6);
+    for (const b of sim.buyStations) { const r = (mini ? 10 : 14) * px; g.drawImage(buyStationIcon(), b.x - r, b.z - r, r * 2, r * 2); }
     // contracts: large static yellow badges (2020)
     for (const k of sim.contracts) if (!k.taken) { const r = (mini ? 13 : 16) * px; g.drawImage(contractBadge(k.kind), k.x - r, k.z - r, r * 2, r * 2); }
     // vehicles (2020): everyone sees every vehicle on both maps; the icon is tinted by who is inside, so riders show up too
@@ -606,9 +640,12 @@ export class Hud {
   }
 
   private drawFullMap(me: Player) {
-    const g = this.fmCanvas.getContext('2d')!, W = this.fmCanvas.width, v = this.fmView(), sc = W / v.span, T = this.tac, k = T.width / MAP_SIZE;
+    const g = this.fmCanvas.getContext('2d')!, B = FM_B, W = FM_W - 2 * B, v = this.fmView(), sc = W / v.span, T = this.tac, k = T.width / MAP_SIZE;
     const X = (x: number) => (x - v.x0) * sc, Z = (z: number) => (z - v.z0) * sc;
-    g.fillStyle = '#23272a'; g.fillRect(0, 0, W, W);
+    // the map lives inside a black frame; everything below draws in the inner square
+    g.setTransform(1, 0, 0, 1, 0, 0); g.fillStyle = '#050505'; g.fillRect(0, 0, FM_W, FM_W);
+    g.save(); g.beginPath(); g.rect(B, B, W, W); g.clip(); g.translate(B, B);
+    g.fillStyle = '#2a2c2e'; g.fillRect(0, 0, W, W);
     g.drawImage(T, v.x0 * k, v.z0 * k, v.span * k, v.span * k, 0, 0, W, W);
     // zoomed in: detailed tiles (405 m, 0.8 m/px) rendered lazily, one per frame
     if (this.fmZoom >= 1.9) {
@@ -620,35 +657,45 @@ export class Hud {
           if (t) g.drawImage(t, X(ti * TS), Z(tj * TS), TS * sc + 0.5, TS * sc + 0.5);
         }
     }
-    g.save(); g.setTransform(sc, 0, 0, sc, -v.x0 * sc, -v.z0 * sc);
-    this.drawOverlays(g, me, 1 / sc);
+    g.save(); g.transform(sc, 0, 0, sc, -v.x0 * sc, -v.z0 * sc);
+    this.drawOverlays(g, me, 1.4 / sc); // the canvas shows at ~0.63x, so icons are drawn 1.4x
     g.restore();
-    g.strokeStyle = 'rgba(255,255,255,0.14)'; g.lineWidth = 1; g.fillStyle = 'rgba(255,255,255,0.6)'; g.font = '600 15px Rajdhani, sans-serif'; g.textAlign = 'left';
     // grid registered to the 2020 tac map: column B starts at x=85 m, row 1 at z=118 m, cells 381 m
+    g.strokeStyle = 'rgba(255,255,255,0.16)'; g.lineWidth = 1.2;
     for (let i = 0; i < 11; i++) {
       const gx = 85 - 381 + i * 381, gz = 118 - 381 + i * 381;
       g.beginPath(); g.moveTo(X(gx), 0); g.lineTo(X(gx), W); g.stroke(); g.beginPath(); g.moveTo(0, Z(gz)); g.lineTo(W, Z(gz)); g.stroke();
-      if (i < 10) { g.fillText('ABCDEFGHIJ'[i], Math.max(4, Math.min(W - 14, X(gx + 190) - 5)), 16); g.fillText(String(i), 4, Math.max(20, Math.min(W - 6, Z(gz + 190) + 5))); }
     }
     g.textAlign = 'center';
     for (const p of POIS) {
       const show = p.tier === 'major' || (p.tier === 'minor' && this.fmZoom >= 1.9) || this.fmZoom >= 3.5;
       if (!show) continue;
-      g.font = p.tier === 'major' ? `700 ${16 + Math.min(6, this.fmZoom)}px Rajdhani, sans-serif` : '600 14px Rajdhani, sans-serif';
-      const tw = g.measureText(p.name).width; g.fillStyle = 'rgba(0,0,0,0.55)'; g.fillRect(X(p.x) - tw / 2 - 5, Z(p.z) - 12, tw + 10, 20); g.fillStyle = p.tier === 'major' ? '#fff' : '#d8dcdc'; g.fillText(p.name, X(p.x), Z(p.z) + 3);
+      g.font = p.tier === 'major' ? `600 ${27 + Math.min(8, this.fmZoom * 1.2)}px Rajdhani, sans-serif` : '600 23px Rajdhani, sans-serif';
+      // plain white names with a soft shadow, no plate (2020)
+      g.shadowColor = 'rgba(0,0,0,0.9)'; g.shadowBlur = 4; g.fillStyle = p.tier === 'major' ? '#fff' : '#e4e4e4'; g.fillText(p.name, X(p.x), Z(p.z) + 3); g.shadowBlur = 0; g.shadowColor = 'rgba(0,0,0,0)';
     }
-    g.textAlign = 'left'; g.fillStyle = 'rgba(255,255,255,0.7)'; g.font = '600 14px Rajdhani, sans-serif'; g.fillText(`ZOOM x${this.fmZoom.toFixed(1)}  (wheel to zoom, drag to pan)`, 10, W - 10);
+    // zoom readout, top left in orange (2020 'Zoom: 84%')
+    g.textAlign = 'left'; g.fillStyle = 'rgba(0,0,0,0.35)'; g.fillRect(0, 0, 250, 60); g.fillStyle = '#f5a142'; g.font = '700 34px Rajdhani, sans-serif'; g.fillText(`Zoom: ${Math.round(((this.fmZoom - 1) / 7) * 100)}%`, 22, 42);
     // you (2020 tac map): big yellow arrow with a dark outline and a view cone; it turns with your view
     {
       const yaw = this.sim.players[this.localId] === me ? this.camYawV : me.yaw;
       g.save(); g.translate(X(me.x), Z(me.z));
-      g.rotate(-yaw);
+      g.rotate(-yaw); g.scale(1.35, 1.35);
       const cone = g.createRadialGradient(0, 0, 4, 0, 0, 90); cone.addColorStop(0, 'rgba(246,195,67,0.45)'); cone.addColorStop(1, 'rgba(246,195,67,0)');
       g.fillStyle = cone; g.beginPath(); g.moveTo(0, 0); g.arc(0, 0, 90, -Math.PI / 2 - 0.55, -Math.PI / 2 + 0.55); g.closePath(); g.fill();
       g.beginPath(); g.moveTo(0, -20); g.lineTo(14, 14); g.lineTo(0, 7); g.lineTo(-14, 14); g.closePath();
       g.fillStyle = '#ffd24a'; g.fill(); g.lineWidth = 3.5; g.strokeStyle = '#111'; g.stroke();
       g.restore();
     }
+    g.restore();
+    // grid letters along the top border, numbers down the left, centred on their cells (they follow pan / zoom)
+    g.fillStyle = '#f0f0f0'; g.font = '600 26px Rajdhani, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    for (let i = 0; i < 10; i++) {
+      const cx = B + X(85 - 381 + i * 381 + 190), cz = B + Z(118 - 381 + i * 381 + 190);
+      if (cx > B + 8 && cx < B + W - 8) g.fillText('ABCDEFGHIJ'[i], cx, B / 2 + 1);
+      if (cz > B + 8 && cz < B + W - 8) g.fillText(String(i), B / 2, cz);
+    }
+    g.textBaseline = 'alphabetic';
   }
 
 

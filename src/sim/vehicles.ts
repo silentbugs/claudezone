@@ -16,11 +16,11 @@ export type VehicleType = 'atv' | 'rover' | 'suv' | 'truck' | 'heli';
 export interface VehicleDef { name: string; seats: [number, number, number][]; maxSpeed: number; accel: number; turn: number; health: number; len: number; wid: number; hgt: number; air?: boolean }
 /** Seat offsets are local (x right, y up, z forward = -z). Seat 0 drives. */
 export const VEHICLES: Record<VehicleType, VehicleDef> = {
-  atv: { name: 'ATV', seats: [[0, 0.9, 0.1], [0, 1.0, 0.8]], maxSpeed: 17.8, accel: 19, turn: 1.9, health: 900, len: 2.2, wid: 1.2, hgt: 1.2 },
-  rover: { name: 'Tactical Rover', seats: [[-0.45, 0.9, -0.2], [0.45, 0.9, -0.2], [-0.45, 1.1, 0.9], [0.45, 1.1, 0.9]], maxSpeed: 19.4, accel: 19, turn: 1.5, health: 1200, len: 3.6, wid: 1.9, hgt: 1.6 },
-  suv: { name: 'SUV', seats: [[-0.45, 0.9, -0.3], [0.45, 0.9, -0.3], [-0.45, 0.9, 0.8], [0.45, 0.9, 0.8]], maxSpeed: 16.9, accel: 15, turn: 1.3, health: 2000, len: 4.8, wid: 2.1, hgt: 1.9 },
-  truck: { name: 'Cargo Truck', seats: [[-0.5, 1.8, -2.2], [0.5, 1.8, -2.2], [-0.6, 1.9, 1.2], [0.6, 1.9, 1.2], [-0.6, 1.9, 2.6], [0.6, 1.9, 2.6]], maxSpeed: 15, accel: 4.6, turn: 1.0, health: 3000, len: 7.5, wid: 2.5, hgt: 3.0 },
-  heli: { name: 'Helicopter', seats: [[-0.5, 0.8, -1.2], [0.5, 0.8, -1.2], [-0.8, 0.8, 0.4], [0.8, 0.8, 0.4]], maxSpeed: 25.8, accel: 14, turn: 1.4, health: 1500, len: 9, wid: 2.4, hgt: 2.8, air: true },
+  atv: { name: 'ATV', seats: [[0, 0.9, 0.1], [0, 1.0, 0.8]], maxSpeed: 17.8, accel: 25, turn: 1.9, health: 900, len: 2.2, wid: 1.2, hgt: 1.2 },
+  rover: { name: 'Tactical Rover', seats: [[-0.45, 0.9, -0.2], [0.45, 0.9, -0.2], [-0.45, 1.1, 0.9], [0.45, 1.1, 0.9]], maxSpeed: 19.4, accel: 24, turn: 1.5, health: 1200, len: 3.6, wid: 1.9, hgt: 1.6 },
+  suv: { name: 'SUV', seats: [[-0.45, 0.9, -0.3], [0.45, 0.9, -0.3], [-0.45, 0.9, 0.8], [0.45, 0.9, 0.8]], maxSpeed: 16.9, accel: 20, turn: 1.3, health: 2000, len: 4.8, wid: 2.1, hgt: 1.9 },
+  truck: { name: 'Cargo Truck', seats: [[-0.5, 1.8, -2.2], [0.5, 1.8, -2.2], [-0.6, 1.9, 1.2], [0.6, 1.9, 1.2], [-0.6, 1.9, 2.6], [0.6, 1.9, 2.6]], maxSpeed: 15, accel: 5.2, turn: 1.0, health: 3000, len: 7.5, wid: 2.5, hgt: 3.0 },
+  heli: { name: 'Helicopter', seats: [[-0.5, 0.8, -1.2], [0.5, 0.8, -1.2], [-0.8, 0.8, 0.4], [0.8, 0.8, 0.4]], maxSpeed: 25.8, accel: 17, turn: 1.4, health: 1500, len: 9, wid: 2.4, hgt: 2.8, air: true },
 };
 
 export interface Vehicle {
@@ -75,6 +75,10 @@ export function updateVehicles(sim: Sim, dt: number) {
     v.px = v.x; v.py = v.y; v.pz = v.z; v.pyaw = v.yaw;
     const d = VEHICLES[v.type];
     if (!v.alive) { v.burnT -= dt; continue; }
+    // 2020 damage states: smoking below 60 %, black smoke below 35 %, on fire below 20 % - and a burning vehicle
+    // burns down to an explosion in ~10 s
+    if (v.health < d.health * VEHICLE_FIRE && v.health > 0) v.health -= d.health * 0.02 * dt;
+    (v as any).crashCd = Math.max(0, ((v as any).crashCd ?? 0) - dt);
     // clear seats of players who left or died
     for (let i = 0; i < v.seats.length; i++) { const id = v.seats[i]; if (id >= 0) { const p = sim.players[id]; if (!p.alive || p.phase !== Phase.Alive || (p as any).vehicle !== v.id) v.seats[i] = -1; } }
     const driver = v.seats[0] >= 0 ? sim.players[v.seats[0]] : null;
@@ -86,11 +90,12 @@ export function updateVehicles(sim: Sim, dt: number) {
       const fwdX = -Math.sin(v.yaw), fwdZ = -Math.cos(v.yaw);
       let sp = v.vx * fwdX + v.vz * fwdZ;
       const target = throttle > 0 ? d.maxSpeed * throttle : throttle < 0 ? -d.maxSpeed * 0.35 : 0;
-      // engine pull stays strong almost to top speed (60 % at the very top); braking against motion is twice as strong
+      // engine pull stays strong almost to top speed (60 % at the very top); reversing against motion brakes at 2.5x,
+      // lifting off coasts down at 8 m/s², and a vehicle nobody is driving (you bailed out) scrubs its speed at 16 m/s²
       const pull = 1 - 0.4 * Math.min(1, Math.abs(sp) / d.maxSpeed) ** 3; // 2020: punchy right up to top speed
-      const acc = throttle !== 0 ? d.accel * (Math.sign(target - sp) !== Math.sign(sp) && sp !== 0 ? 2 : pull) : 4;
+      const acc = throttle !== 0 ? d.accel * (Math.sign(target - sp) !== Math.sign(sp) && sp !== 0 ? 2.5 : pull) : driver ? 8 : 16;
       sp += clamp(target - sp, -acc * dt * (brake ? 3 : 1), acc * dt);
-      if (brake) sp *= Math.exp(-dt * 2.5);
+      if (brake) sp *= Math.exp(-dt * 3.5);
       const onGround = v.y - col.groundAt(v.x, v.z, v.y + 1.5, 1) < 0.4;
       if (onGround) v.yaw += steer * d.turn * clamp(Math.abs(sp) / 8, 0, 1) * Math.sign(sp || 1) * dt * (brake ? 1.6 : 1);
       // velocity follows heading on the ground (a little drift), coasts in the air
@@ -115,7 +120,7 @@ export function updateVehicles(sim: Sim, dt: number) {
       }
       if (hitAny && v.speed > 6) {
         const impact = v.speed;
-        v.health -= impact * impact * 0.9;
+        v.health -= impact * impact * 0.9; crash(sim, v, impact);
         v.vx *= -0.25; v.vz *= -0.25;
         for (const id of v.seats) if (id >= 0 && impact > 18) sim.damage(sim.players[id], (impact - 18) * 6, -1, 'crash', false, true);
       }
@@ -124,7 +129,7 @@ export function updateVehicles(sim: Sim, dt: number) {
       const wh = (lx: number, lz: number) => col.groundAt(v.x + lx * c + lz * s, v.z - lx * s + lz * c, v.y + 1.2, 0.3);
       const fl = wh(-hw, -hl), fr = wh(hw, -hl), bl = wh(-hw, hl), br = wh(hw, hl);
       const gy = (fl + fr + bl + br) / 4;
-      if (v.y > gy + 0.05) { v.vy -= 20 * dt; v.y += v.vy * dt; if (v.y < gy) { if (v.vy < -14) v.health -= (-v.vy - 14) * 40; v.y = gy; v.vy = 0; } }
+      if (v.y > gy + 0.05) { v.vy -= 20 * dt; v.y += v.vy * dt; if (v.y < gy) { if (v.vy < -14) { v.health -= (-v.vy - 14) * 40; crash(sim, v, -v.vy); } v.y = gy; v.vy = 0; } }
       else { v.y = gy; v.vy = Math.max(0, (gy - v.py) / dt) * 0.5; }
       v.pitch += (Math.atan2(((fl + fr) - (bl + br)) / 2, hl * 2) - v.pitch) * Math.min(1, dt * 8);
       v.roll += (Math.atan2(((fr + br) - (fl + bl)) / 2, hw * 2) - v.roll) * Math.min(1, dt * 8);
@@ -188,16 +193,24 @@ function heli(sim: Sim, v: Vehicle, d: VehicleDef, driver: Player | null, dt: nu
   const g2 = col.groundAt(v.x, v.z, v.y + 2, 2);
   if (v.y < g2) {
     if (abandoned && v.vy < -8) v.health = 0; // crashes and blows up on whatever it hits (ground, roof, vehicle)
-    else if (v.vy < -10 || v.speed > 20) v.health -= (Math.abs(v.vy) + v.speed) * 30;
+    else if (v.vy < -10 || v.speed > 20) { v.health -= (Math.abs(v.vy) + v.speed) * 30; crash(sim, v, Math.abs(v.vy) + v.speed); }
     v.y = g2; v.vy = 0; v.vx *= 0.5; v.vz *= 0.5;
     if (!driver && v.health > 0) { (v as any).lastDriver = undefined; (v as any).falling = false; } // (a crash keeps the pilot for the kill credit)
   }
   // rotor strikes on structures
   // rotor / body strikes on buildings: pushed clear, damage only from a real impact (not brushing a tree or landing by a wall)
   col.pushOut(v.x, v.y + 0.3, v.z, d.hgt - 0.3, 3.2, 0.2, push);
-  if (push.hit) { if (abandoned && Math.hypot(v.speed, v.vy) > 12) v.health = 0; else if (v.speed > 6) v.health -= v.speed * 25 * dt; v.x = push.x; v.z = push.z; v.vx *= 0.5; v.vz *= 0.5; }
+  if (push.hit) { if (abandoned && Math.hypot(v.speed, v.vy) > 12) v.health = 0; else if (v.speed > 6) { v.health -= v.speed * 25 * dt; crash(sim, v, v.speed); } v.x = push.x; v.z = push.z; v.vx *= 0.5; v.vz *= 0.5; }
 }
 
+/** Damage below this fraction of max health sets the vehicle on fire. */
+export const VEHICLE_FIRE = 0.2;
+/** A hit that dents the vehicle: crunch sound + debris (throttled so scraping along a wall isn't a machine gun). */
+function crash(sim: Sim, v: Vehicle, impact: number) {
+  if ((v as any).crashCd > 0 || v.health <= 0) return;
+  (v as any).crashCd = 0.35;
+  sim.emit({ t: 'vcrash', x: v.x, y: v.y + 0.8, z: v.z, impact });
+}
 function destroy(sim: Sim, v: Vehicle) {
   v.alive = false; v.burnT = 30;
   for (const id of v.seats) if (id >= 0) { const p = sim.players[id]; (p as any).vehicle = undefined; sim.damage(p, 400, -1, 'vehicle', false, true); }
