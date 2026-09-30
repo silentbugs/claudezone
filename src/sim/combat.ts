@@ -357,6 +357,7 @@ export function updateThrowables(sim: Sim, dt: number) {
             const d = Math.hypot(p.x - t.x, p.y + 1.5 - t.y, p.z - t.z); if (d > 12 || !sim.world.col.los(t.x, t.y + 0.3, t.z, p.x, p.y + 1.5, p.z)) continue;
             const k = 1 - d / 12;
             if (t.type === 'stun') p.stunT = Math.max(p.stunT, 1 + 3 * k); else { p.flashT = Math.max(p.flashT, 1 + 3 * k); sim.emit({ t: 'flash', p: p.id, s: k }); }
+            const o = sim.players[t.owner]; if (o && o.squad !== p.squad && p.alive) sim.emit({ t: 'eqhit', attacker: t.owner, victim: p.id, kind: t.type });
           }
           break;
         case 'smoke': sim.smokes.push({ x: t.x, y: t.y, z: t.z, t: 20 }); sim.emit({ t: 'explosion', x: t.x, y: t.y, z: t.z, r: 1, kind: 'smoke' }); break;

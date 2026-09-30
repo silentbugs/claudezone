@@ -113,6 +113,7 @@ export class Hud {
   }
   private bountyK = -1; private bountyAt: [number, number, number] | null = null;
   private objImg = new Map<string, string>();
+  private eqhm = el('div', 'eqhm'); private eqT = 0; private eqKind = '';
   private gstat = el('div', 'gstat'); private gcount = el('div', 'gcount');
   private uavSnapT = -99; private uavDots: [number, number][] = [];
   private dmgArcs: { a: number; t: number; e: HTMLElement }[] = [];
@@ -151,7 +152,7 @@ export class Hud {
       if (me.ping && Math.hypot(me.ping.x - x, me.ping.z - z) < 14 * v.span / this.fmCanvas.width * 2) { this.pings = []; me.ping = undefined; return; }
       this.pings = [{ x, z, t: 999 }]; me.ping = { x, z };
     });
-    this.root.append(this.gstat, this.gcount, this.low, this.hurtEl, this.breakEl, this.vig, this.scope, mmw, this.circ, this.compass, this.cpings, this.heading, this.loc, this.counters, this.feed, this.squad, this.inv, this.fu, this.weap, this.xh, this.hm, this.tags, this.lcard, this.hold, this.prog, this.ctx, this.alt, this.banner, this.note, this.dmg, this.flash, this.dot, this.fullmap);
+    this.root.append(this.eqhm, this.gstat, this.gcount, this.low, this.hurtEl, this.breakEl, this.vig, this.scope, mmw, this.circ, this.compass, this.cpings, this.heading, this.loc, this.counters, this.feed, this.squad, this.inv, this.fu, this.weap, this.xh, this.hm, this.tags, this.lcard, this.hold, this.prog, this.ctx, this.alt, this.banner, this.note, this.dmg, this.flash, this.dot, this.fullmap);
     this.buildCompass();
   }
 
@@ -174,6 +175,13 @@ export class Hud {
     const color = (id: number) => { const p = this.sim.players[id]; if (!p) return '#fff'; if (p.squad !== me.squad) return '#ff5a4a'; return SQUAD_COLORS[p.id % 3 === me.id % 3 ? 0 : (p.id % 3) + 1]; };
     const name = (id: number) => { const p = this.sim.players[id]; return p ? `<span style="color:${color(id)}">${p.name}</span>` : '?'; };
     switch (e.t) {
+      case 'eqhit':
+        if (e.attacker === this.localId && (e.kind !== this.eqKind || this.eqT < 0.5)) {
+          this.eqKind = e.kind; this.eqT = 1;
+          this.eqhm.innerHTML = ICON[LETHAL_ICON[e.kind] ?? TACTICAL_ICON[e.kind] ?? e.kind] ?? '';
+          this.hmT = Math.max(this.hmT, 0.26); this.hm.className = 'hm';
+        }
+        break;
       case 'hit':
         if (e.attacker === this.localId) {
           this.hmT = 0.26;
@@ -218,6 +226,7 @@ export class Hud {
   // ---------------------------------------------------------------- per frame
   update(dt: number, camYaw: number, _camPitch: number, project: (x: number, y: number, z: number) => [number, number, boolean], opts: { ads: number; scope: boolean; optic?: boolean; spectating: Player | null; mapOpen: boolean }) {
     this.camYawV = camYaw;
+    this.eqT = Math.max(0, this.eqT - dt / 0.9); this.eqhm.style.opacity = this.eqT > 0 ? String(Math.min(1, this.eqT * 2)) : '0'; this.eqhm.style.transform = `translate(-50%, -50%) scale(${1 + (1 - this.eqT) * 0.15 + (this.eqT > 0.85 ? (this.eqT - 0.85) * 2 : 0)})`;
     this.gulagHud();
     const sim = this.sim, me = sim.players[this.localId], view = opts.spectating ?? me;
     const c = sim.circle;

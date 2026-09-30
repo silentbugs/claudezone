@@ -49,12 +49,15 @@ export class Input {
     // closing / reloading the tab mid-match asks first (the browser's own "Leave site?" dialog; needs a prior click, which starting a match is)
     addEventListener('beforeunload', (e) => { if (this.inGame) { e.preventDefault(); e.returnValue = ''; } });
     addEventListener('contextmenu', (e) => e.preventDefault());
+    // leaving the window releases everything (no stuck keys after alt-tab)
+    addEventListener('blur', () => { for (const c of this.held) this.released.add(c); this.held.clear(); });
     addEventListener('wheel', (e) => { if (this.inGame && (e.ctrlKey || e.metaKey)) e.preventDefault(); }, { passive: false }); // no Ctrl+wheel page zoom
     addEventListener('keydown', (e) => { if (this.inGame && (e.ctrlKey || e.metaKey) && ['Equal', 'Minus', 'Digit0', 'NumpadAdd', 'NumpadSubtract'].includes(e.code)) e.preventDefault(); }, { capture: true });
     document.addEventListener('pointerlockchange', () => {
       const was = this.locked;
       this.locked = document.pointerLockElement === el;
-      if (was && !this.locked) { for (const c of this.held) this.released.add(c); this.held.clear(); this.onUnlock(); }
+      // freeing the cursor (tac map, backpack) keeps held movement keys; only mouse buttons are released
+      if (was && !this.locked) { for (const c of [...this.held]) if (c.startsWith('Mouse')) { this.released.add(c); this.held.delete(c); } this.onUnlock(); }
     });
   }
   private down(code: string) { if (!this.held.has(code)) this.pressed.add(code); this.held.add(code); }

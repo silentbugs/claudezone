@@ -171,8 +171,9 @@ function heli(sim: Sim, v: Vehicle, d: VehicleDef, driver: Player | null, dt: nu
   const g2 = col.groundAt(v.x, v.z, v.y + 2, 2);
   if (v.y < g2) { if (v.vy < -10 || v.speed > 20) v.health -= (Math.abs(v.vy) + v.speed) * 30; v.y = g2; v.vy = 0; v.vx *= 0.5; v.vz *= 0.5; }
   // rotor strikes on structures
-  col.pushOut(v.x, v.y, v.z, d.hgt, 4.5, 0.2, push);
-  if (push.hit) { v.health -= 300 * dt + v.speed * 10 * dt; v.x = push.x; v.z = push.z; v.vx *= 0.5; v.vz *= 0.5; }
+  // rotor / body strikes on buildings: pushed clear, damage only from a real impact (not brushing a tree or landing by a wall)
+  col.pushOut(v.x, v.y + 0.3, v.z, d.hgt - 0.3, 3.2, 0.2, push);
+  if (push.hit) { if (v.speed > 6) v.health -= v.speed * 25 * dt; v.x = push.x; v.z = push.z; v.vx *= 0.5; v.vz *= 0.5; }
 }
 
 function destroy(sim: Sim, v: Vehicle) {

@@ -118,7 +118,7 @@ export class Match {
 
   /** 2020 variable zoom: scoped weapons toggle between two magnifications while aiming */
   scopeLevel = 0;
-  private humT = 0;
+  private humT = 0; private pauseTime = 0;
   private hbT = 0; private hbBlips: [number, number][] = [];
   private tugT = 0; private lastAirPhase = -1; private chuteRoll = 0;
   /** current ADS magnification, eased so a zoom toggle or optic swap doesn't snap */
@@ -316,6 +316,8 @@ export class Match {
   private viewId() { return this.me.alive || this.me.phase === Phase.Downed ? 0 : this.spectate >= 0 ? this.spectate : 0; }
 
   private render(dt: number, time: number) {
+    // paused: everything that animates on the render side (viewmodel, bodies, loot, effects) holds still
+    if (this.paused) { dt = 0; time = this.pauseTime; } else this.pauseTime = time;
     const sim = this.sim, me = this.me, a = this.clock.alpha, cam = this.sm.camera;
     const meR = this.vm.interp(me, a, sim.time); // render-rate view of the local player's timers / ADS
     // spectate a squadmate when dead
@@ -338,7 +340,7 @@ export class Match {
       const dist = 55;
       cam.position.set(pl.x + Math.sin(this.camYaw) * Math.cos(this.camPitch) * dist, pl.y + 10 - Math.sin(this.camPitch) * dist, pl.z + Math.cos(this.camYaw) * Math.cos(this.camPitch) * dist);
       cam.lookAt(pl.x, pl.y, pl.z);
-      audio.loop('engine', 0.5, 1, 1200); audio.loop('wind', 0.15, 1, 900);
+      audio.loop('engine', 0.5, 1, 1200); audio.loop('wind', 0.15, 1, 900); audio.loop('heli', 0); audio.loop('vehicle', 0);
     } else if (phase === Phase.Freefall || phase === Phase.Chute) {
       // first person by default; hold the third-person key to look at yourself
       const tp = this.controls.thirdPersonHeld && this.spectate < 0;
@@ -362,6 +364,7 @@ export class Match {
       audio.loop('engine', Math.max(0, 0.4 - Math.hypot(sim.plane.x - x, sim.plane.z - z) / 800), 1, 800);
       audio.loop('wind', phase === Phase.Freefall ? clamp(sp / 70, 0.25, 0.95) : 0.2, phase === Phase.Freefall ? 1 + sp / 200 : 0.7, phase === Phase.Freefall ? 5000 : 1800);
       audio.loop('chute', phase === Phase.Chute ? 0.35 : 0);
+      audio.loop('heli', 0); audio.loop('vehicle', 0); // bailed out of a helicopter / vehicle: its engine stays behind
     } else if (vehicleOf(sim, vp) && (vp as any).seat === 0) {
       const v = vehicleOf(sim, vp)!, d = VEHICLES[v.type];
       const dist = d.len * 1.4 + 5, cp = Math.max(-0.6, Math.min(0.9, this.camPitch));
@@ -375,7 +378,7 @@ export class Match {
       this.chars.hidden = -1;
       cam.position.set(x + Math.sin(yaw) * 4, y + 2.6, z + Math.cos(yaw) * 4);
       cam.lookAt(x, y + 1.5, z);
-      audio.loop('wind', 0); audio.loop('engine', 0);
+      audio.loop('wind', 0); audio.loop('engine', 0); audio.loop('heli', 0); audio.loop('vehicle', 0);
     } else {
       // first person: eye height eases between stances (prone is slower), slides tilt the view
       const target = eyeHeight(vp) - (vp.slideT > 0 ? 0.15 : 0);

@@ -222,7 +222,7 @@ export class Effects {
         const a = e.yaw ?? 0, dx = -Math.sin(a), dz = -Math.cos(a), g = this.sim.world.hf.at(e.x, e.z);
         const passAt = e.kind === 'cluster' ? 3.1 : 3.9, n = e.kind === 'cluster' ? 2 : 1;
         for (let i = 0; i < n; i++) {
-          const m = new THREE.Mesh(this.jetGeo, new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.5, metalness: 0.3 })); m.visible = false; this.group.add(m);
+          const m = new THREE.Mesh(this.jetGeo, this.thrownMat); m.visible = false; this.group.add(m);
           // t counts to the pass over the target (t = 0); 190 m/s, 110-130 m up
           this.jets.push({ m, x: e.x + (i ? dz * 30 : 0), z: e.z - (i ? dx * 30 : 0), dx, dz, y: g + 115 + i * 15, t: -passAt - i * 0.25 });
         }

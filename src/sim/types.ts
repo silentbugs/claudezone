@@ -131,4 +131,5 @@ export type SimEvent =
   | { t: 'melee'; p: number }
   | { t: 'flash'; p: number; s: number }
   | { t: 'marker'; x: number; z: number; kind: string; squad: number; dur: number; yaw?: number }
-  | { t: 'callin'; p: number; kind: string };
+  | { t: 'callin'; p: number; kind: string }
+  | { t: 'eqhit'; attacker: number; victim: number; kind: string };

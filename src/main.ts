@@ -26,6 +26,7 @@ async function boot() {
   sm.buildWorld(world);
   sm.ao = settings.ao; sm.drawDistance = settings.drawDistance; sm.setQuality(settings.quality); sm.setRenderScale(settings.renderScale); sm.setFoliage(settings.foliage); sm.renderer.toneMappingExposure = settings.brightness;
   const tac = renderTacMap(world);
+  sm.prewarm(); // behind the loading screen: every mesh uploaded, every shader compiled
   loading.remove();
   const input = new Input(canvas);
   let match: Match | null = null;
@@ -59,6 +60,7 @@ async function boot() {
     menu.remove();
     match = new Match(sm, world, input, tac, ui, settings, (Date.now() & 0xffff) + 1, mode);
     match.onSettingChange = applySetting;
+    sm.prewarm([match.vm.scene]); // the match's own meshes (soldiers, loot, effects, viewmodel)
     match.onEnd = (won, place, me) => {
       document.exitPointerLock?.();
       input.inGame = false; input.unlockKeyboard();

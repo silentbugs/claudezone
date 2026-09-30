@@ -191,6 +191,28 @@ export class SceneMgr {
     this.resize();
   }
 
+  /**
+   * Upload every mesh and compile every shader (incl. shadow depth variants) once, off-screen, so turning
+   * round or driving into a new area never stalls on first-time GPU uploads / shader compiles. Run behind the
+   * loading screen and at match start. (Skipped under automation: SwiftShader would take minutes.)
+   */
+  prewarm(extra: THREE.Scene[] = []) {
+    if (navigator.webdriver) return;
+    const r = this.renderer, rt = new THREE.WebGLRenderTarget(64, 64);
+    const saved: [THREE.Object3D, boolean, boolean][] = [];
+    for (const sc of [this.scene, ...extra]) sc.traverse((o) => { saved.push([o, o.visible, o.frustumCulled]); o.visible = true; o.frustumCulled = false; });
+    const prevAuto = r.shadowMap.autoUpdate; r.shadowMap.needsUpdate = true;
+    try {
+      r.setRenderTarget(rt);
+      r.render(this.scene, this.camera);
+      for (const sc of extra) { const c = sc.children.find((q) => (q as THREE.Camera).isCamera) as THREE.Camera | undefined; r.render(sc, c ?? this.camera); }
+    } finally {
+      r.setRenderTarget(null); r.shadowMap.autoUpdate = prevAuto;
+      for (const [o, v, f] of saved) { o.visible = v; o.frustumCulled = f; }
+      rt.dispose();
+    }
+  }
+
   private csmMaterials = new WeakSet<THREE.Material>();
   /** Flag every lit material for CSM, chaining its own shader patch after CSM's uniform hook. */
   setupCsm() {

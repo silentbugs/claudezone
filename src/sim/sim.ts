@@ -525,6 +525,8 @@ export class Sim {
     if (att && att.squad === v.squad && att.id !== v.id) return; // no friendly fire
     if (att && v.phase === Phase.Gulag !== (att.phase === Phase.Gulag) && weapon !== 'rock') return;
     v.lastDamaged = this.time;
+    // equipment hits get their own marker (2020: the item's icon pops beside the crosshair)
+    if (att && att.id !== v.id && (weapon === 'frag' || weapon === 'c4' || weapon === 'molotov' || weapon === 'knife' || weapon === 'semtex')) this.emit({ t: 'eqhit', attacker: att.id, victim: v.id, kind: weapon });
     if (weapon !== 'gas') (v as any).stimUntil = 0; // damage cancels a stim
     if (att) v.killedBy = att.id;
     if (v.phase === Phase.Downed) {
