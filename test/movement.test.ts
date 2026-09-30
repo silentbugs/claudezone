@@ -267,3 +267,26 @@ test('glass: jumping at a shop window smashes it and vaults out; a bullet smashe
   assert.ok(sim.breakGlass(b.id, pi, gx, oy, gz), 'breakGlass on a pane');
   assert.ok(g.broken && g.noCollide, 'pane gone for collision');
 });
+
+test('cottage loft: walk up the loft stair and stand up in the attic', () => {
+  const sim = new Sim(world, 1, { humans: 1 });
+  sim.time = 200;
+  const lofts = world.col.structures.filter((q) => q.kind === 'house' && q.ramps.some((r) => r.mat === 4));
+  assert.ok(lofts.length > 5, 'cottages with lofts');
+  let ok = 0, tried = 0;
+  for (const s of lofts.slice(0, 8)) {
+    const r = s.ramps.find((q) => q.mat === 4)!, up = r.dir; // rises toward +x (dir 1) or -x
+    const lowX = up > 0 ? r.x0 : r.x1, highX = up > 0 ? r.x1 : r.x0;
+    const p: any = freshPlayer(sim);
+    const [sx, sz] = toWorld(s, lowX + up * 0.5, -1.5); // the flight starts at the side wall: step on from beside its foot
+    Object.assign(p, { x: sx, z: sz, y: world.col.groundAt(sx, sz, s.y + 1.5), stance: 0, mantleT: 0 }); p.fallStartY = p.y;
+    if (!world.col.fits(p.x, p.y, p.z, 1.8, 0.3)) continue;
+    tried++;
+    walk(sim, p, ...toWorld(s, lowX + up * 0.5, 0), 4);
+    walk(sim, p, ...toWorld(s, highX + up * 0.8, 0), 8);
+    const top = p.y - s.y;
+    console.log('loft', s.id, 'height', top.toFixed(2), 'stance', p.stance);
+    if (top > 3.4 && p.stance === 0) ok++;
+  }
+  assert.ok(tried >= 3 && ok === tried, `stood up in every loft (${ok}/${tried})`);
+});

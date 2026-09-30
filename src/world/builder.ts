@@ -160,7 +160,7 @@ export function house(rng: Rng, w: number, d: number, floors: number, st: Style)
     const y = f * H + E + 0.05, wh = H - 0.05;
     const door: Opening = { u0: w / 2 - 0.6, u1: w / 2 + 0.6, v0: 0, v1: 2.3 };
     const frontOps = [...windows(w, 3.2, 1.3, 0.95, 2.25, f === 0 ? [[door.u0, door.u1]] : []), ...(f === 0 ? [door] : [])];
-    const backDoor: Opening = { u0: w * 0.3 - 0.55, u1: w * 0.3 + 0.55, v0: 0, v1: 2.3 };
+    const backDoor: Opening = { u0: w * 0.72 - 0.55, u1: w * 0.72 + 0.55, v0: 0, v1: 2.3 }; // clear of the stair along the back-left wall
     const backOps = [...windows(w, 3.2, 1.3, 0.95, 2.25, f === 0 ? [[backDoor.u0, backDoor.u1]] : []), ...(f === 0 ? [backDoor] : [])];
     b.wall(0, -hw, hw, -hd, y, wh, WALL_T, st.wall, frontOps, st.wallColor, -1, st.trim);
     b.wall(0, -hw, hw, hd, y, wh, WALL_T, st.wall, backOps, st.wallColor, 1, st.trim);
@@ -169,7 +169,7 @@ export function house(rng: Rng, w: number, d: number, floors: number, st: Style)
     // interior partition across the depth with a doorway
     // interior partition: never right behind the front door (x = 0) or the back door (x = -hw + 0.3w)
     let px = rng.range(-hw * 0.3, hw * 0.3);
-    const bdx = -hw + w * 0.3;
+    const bdx = -hw + w * 0.72;
     for (let k = 0; k < 6 && (Math.abs(px) < 1.3 || Math.abs(px - bdx) < 1.3); k++) px = rng.range(-hw * 0.45, hw * 0.45);
     if (Math.abs(px) < 1.3 || Math.abs(px - bdx) < 1.3) px = hw * 0.4;
     if (f === 0) lastPx = px;
@@ -191,14 +191,16 @@ export function house(rng: Rng, w: number, d: number, floors: number, st: Style)
   // single-storey cottages: a loft under the ridge, reached by one straight stair (2020 atlas: "upstairs loft",
   // "check its attic"); the stair runs along the ridge line where there's headroom, on the side away from the partition
   const loft = floors === 1 && w >= 8;
-  const side = lastPx < 0 ? 1 : -1, sxLo = side * (hw - 0.4), sxHi = side * (hw - 4.6);
+  // lofts get a steeper roof: ~2.9-3.4 m under the ridge so you can stand and walk the middle of the attic
+  const ridge = loft ? Math.min(3.4, Math.max(2.9, d * 0.42)) : Math.min(2.6, d * 0.28);
+  const srun = w >= 10 ? 5.4 : 4.6;
+  const side = lastPx < 0 ? 1 : -1, sxLo = side * (hw - 0.4), sxHi = side * (hw - 0.4 - srun);
   if (loft) {
     b.ramp(Math.min(sxLo, sxHi), E + 0.05, -0.55, Math.max(sxLo, sxHi), top, 0.55, 0, side > 0 ? -1 : 1, Mat.Wood);
     b.slab(-hw - 0.3, -hd - 0.3, hw + 0.3, hd + 0.3, top, 0.25, st.roof, [[Math.min(sxLo, sxHi) - 0.1, -0.65, Math.max(sxLo, sxHi) + 0.1, 0.65]]);
-    b.light(0, top + Math.min(2.6, d * 0.28) - 0.35, 0);
+    b.light(0, top + ridge - 0.45, 0);
     b.addLoot(-side * (hw - 1.5), top, 0);
   } else b.slab(-hw - 0.3, -hd - 0.3, hw + 0.3, hd + 0.3, top, 0.25, st.roof);
-  const ridge = Math.min(2.6, d * 0.28);
   b.box(-hw - 0.4, top, -hd - 0.4, hw + 0.4, top + ridge, hd + 0.4, st.roof, { shape: 'gable', noCollide: true, color: st.roofColor });
   b.ramp(-hw - 0.4, top, -hd - 0.4, hw + 0.4, top + ridge, 0, 1, 1, st.roof);
   b.ramp(-hw - 0.4, top, 0, hw + 0.4, top + ridge, hd + 0.4, 1, -1, st.roof);
@@ -207,7 +209,7 @@ export function house(rng: Rng, w: number, d: number, floors: number, st: Style)
   b.box(-hw - 0.1, -0.3, -hd - 0.1, hw + 0.1, E + 0.35, hd + 0.1, Mat.Concrete, { color: 0x8a8580, noCollide: true }); // plinth band
   // steps up to the front and back doors
   const steps = (cx: number, zFace: number, out: number) => { for (let k = 0; k < 3; k++) { const z0 = zFace + out * (0.05 + (2 - k) * 0.3); b.box(cx - 0.8, 0, Math.min(z0, z0 + out * 0.3), cx + 0.8, (k + 1) * (E + 0.05) / 3, Math.max(z0, z0 + out * 0.3), Mat.Concrete, { color: 0x9a968f }); } };
-  steps(0, -hd - 0.1, -1); steps(-hw + w * 0.3, hd + 0.1, 1);
+  steps(0, -hd - 0.1, -1); steps(-hw + w * 0.72, hd + 0.1, 1);
   // single-storey lean-to annex with its own door; its flat roof is the way up onto the main roof
   if (rng.chance(0.55) && d >= 7) {
     const ax0 = hw + 0.1, ax1 = hw + 4.1, az0 = -hd + 0.6, az1 = az0 + 5, ay = 0.05, ah = 2.6;

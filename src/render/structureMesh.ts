@@ -122,6 +122,27 @@ class Emitter {
   }
   ramp(r: RampPart) {
     const { x0, y0, z0, x1, y1, z1 } = r;
+    // stair flights render as real steps (~18 cm risers) over the same walking surface; gentle ramps, roads,
+    // grass slopes and wide ramps stay smooth
+    {
+      const run = r.axis === 0 ? x1 - x0 : z1 - z0, wid = r.axis === 0 ? z1 - z0 : x1 - x0, rise = y1 - y0, slope = rise / Math.max(0.01, run);
+      if (rise > 0.6 && slope > 0.3 && slope < 1.4 && wid < 7) {
+        const n = Math.max(2, Math.round(rise / 0.18)), dh = rise / n, dl = run / n;
+        for (let i = 0; i < n; i++) {
+          const k = r.dir === 1 ? i : n - 1 - i; // step index along +axis
+          const top = y0 + (i + 0.5) * dh + 0.05, a0 = (r.axis === 0 ? x0 : z0) + k * dl, a1 = a0 + dl;
+          const bot = y0 + i * dh - 0.3; // down to the soffit, so the flight reads solid from the side
+          if (r.axis === 0) this.box(a0, bot, z0, a1, top, z1, i === 0);
+          else this.box(x0, bot, a0, x1, top, a1, i === 0);
+        }
+        // sloped soffit underneath
+        const hh = (x: number, z: number) => { const t = r.axis === 0 ? (x - x0) / (x1 - x0) : (z - z0) / (z1 - z0); return y0 + rise * (r.dir === 1 ? t : 1 - t) - 0.3; };
+        const la = hh(x0, z0), lb = hh(x1, z0), lc = hh(x1, z1), ld = hh(x0, z1);
+        const nx2 = r.axis === 0 ? -(rise) / (x1 - x0) * r.dir : 0, nz2 = r.axis === 1 ? -(rise) / (z1 - z0) * r.dir : 0, l2 = Math.hypot(nx2, 1, nz2);
+        this.quad([[x0, ld, z1], [x0, la, z0], [x1, lb, z0], [x1, lc, z1]], [-nx2 / l2, -1 / l2, -nz2 / l2], 0.7);
+        return;
+      }
+    }
     // corner heights
     const h = (x: number, z: number) => { const t = r.axis === 0 ? (x - x0) / (x1 - x0) : (z - z0) / (z1 - z0); const u = r.dir === 1 ? t : 1 - t; return y0 + (y1 - y0) * u; };
     const a = h(x0, z0), b = h(x1, z0), c = h(x1, z1), d = h(x0, z1);
