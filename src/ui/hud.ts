@@ -671,7 +671,7 @@ export class Hud {
    */
   openBackpack(onDrop: (what: BackpackDrop, arg?: number | string) => boolean, onClose: () => void) {
     this.closePanel();
-    const p = el('div', 'bp');
+    const p = el('div', 'bkpk');
     (p as any).kind = 'backpack'; (p as any).onDrop = onDrop; (p as any).onClose = onClose;
     p.addEventListener('click', (e) => {
       const b = (e.target as HTMLElement).closest('[data-drop]') as HTMLElement | null; if (!b) return;

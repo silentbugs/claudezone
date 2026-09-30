@@ -174,6 +174,15 @@ function fire(sim: Sim, p: Player, w: { id: string; rarity: number; mag: number 
 function segHitPlayer(p: Player, ox: number, oy: number, oz: number, dx: number, dy: number, dz: number, len: number): { t: number; zone: number } | null {
   const prone = p.phase === Phase.Downed || p.stance === Stance.Prone;
   let best: { t: number; zone: number } | null = null;
+  if (p.phase === Phase.Freefall) {
+    // skydiving: the body lies flat, head forward (matches the drawn pose), so the hitbox does too
+    const fx = -Math.sin(p.yaw), fz = -Math.cos(p.yaw);
+    const t = segCapsule(ox, oy, oz, dx, dy, dz, len, p.x - fx * 0.95, p.y + 0.05, p.z - fz * 0.95, p.x + fx * 0.55, p.y + 0.15, p.z + fz * 0.55, 0.34);
+    if (t >= 0) best = { t, zone: 0 };
+    const th = segSphere(ox, oy, oz, dx, dy, dz, len, p.x + fx * 0.85, p.y + 0.22, p.z + fz * 0.85, 0.17);
+    if (th >= 0 && (!best || th < best.t + 0.05)) best = { t: th, zone: 1 };
+    return best;
+  }
   if (!prone) {
     const top = p.stance === Stance.Crouch ? 0.98 : 1.42;
     const t = segCapsule(ox, oy, oz, dx, dy, dz, len, p.x, p.y + 0.3, p.z, p.x, p.y + top, p.z, 0.3);
