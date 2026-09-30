@@ -56,8 +56,8 @@ test('contracts (2020): objectives inside the circle, scavenger timer extends pe
     assert.ok(flare && done, 'recon: flare went up and the capture completed'); }
   // scavenger: opening a box adds time
   { const { s, p } = mk(); const a = accept(s, p, 'scavenger'); const t0 = a.t; const ch = s.chests.find((c: any) => c.id === a.chest);
-    assert.ok(Math.hypot(ch.x - s.circle.cx, ch.z - s.circle.cz) < s.circle.r, 'box inside the circle');
-    ch.opened = true; s.tick(1 / 60); assert.ok(a.t > t0 + 60, 'timer extended after the first box'); assert.equal(a.step, 1); }
+    assert.ok(Math.hypot(ch!.x - s.circle.cx, ch!.z - s.circle.cz) < s.circle.r, 'box inside the circle');
+    ch!.opened = true; s.tick(1 / 60); assert.ok(a.t > t0 + 60, 'timer extended after the first box'); assert.equal(a.step, 1); }
   // most wanted: survive the timer
   { const { s, p } = mk(); const a = accept(s, p, 'mostwanted'); const cash = p.cash; a.t = 0.05; for (let i = 0; i < 6; i++) s.tick(1 / 60); assert.ok(p.cash >= cash + 3000, 'most wanted payout'); }
   // bounty: another squad's kill still pays

@@ -322,9 +322,23 @@ export class Match {
     const sim = this.sim, me = this.me, a = this.clock.alpha, cam = this.sm.camera;
     const meR = this.vm.interp(me, a, sim.time); // render-rate view of the local player's timers / ADS
     // spectate a squadmate when dead
+    // spectating (2020): a living squadmate first; with the squad out, the player who killed you, then whoever
+    // kills them, and so on (the nearest living player when the trail goes cold)
     if (!me.alive && me.phase === Phase.Dead) {
+      const ok = (q: typeof me | undefined) => !!q && q.alive && q.id !== me.id && q.phase !== Phase.GulagWait && q.phase !== Phase.Gulag && q.phase !== Phase.Spectate && q.phase !== Phase.Plane;
       const sp = sim.players[this.spectate];
-      if (!sp || !sp.alive || sp.squad !== me.squad) { const m = sim.players.find((q) => q.squad === me.squad && q.alive && q.id !== me.id); this.spectate = m ? m.id : -1; }
+      const mate = sim.players.find((q) => q.squad === me.squad && ok(q));
+      if (mate && (!ok(sp) || sp!.squad !== me.squad)) this.spectate = mate.id;
+      else if (!mate && !ok(sp)) {
+        let k = sp ? sp.killedBy : me.killedBy, hops = 0;
+        while (k >= 0 && !ok(sim.players[k]) && hops++ < 12) k = sim.players[k].killedBy;
+        if (k >= 0 && ok(sim.players[k])) this.spectate = k;
+        else {
+          const from = sp ?? me; let best = -1, bd = Infinity;
+          for (const q of sim.players) if (ok(q)) { const dd = Math.hypot(q.x - from.x, q.z - from.z); if (dd < bd) { bd = dd; best = q.id; } }
+          this.spectate = best;
+        }
+      }
     } else this.spectate = -1;
     const vp = this.spectate >= 0 ? sim.players[this.spectate] : me;
     const x = vp.px + (vp.x - vp.px) * a, y = vp.py + (vp.y - vp.py) * a, z = vp.pz + (vp.z - vp.pz) * a;

@@ -106,6 +106,8 @@ export class Hud {
     if (me.phase === Phase.GulagWait) {
       const left = Math.ceil((me.gulagReadyAt ?? 0) - sim.time), q = sim.gulag.queue.indexOf(me.id);
       st = left > 0 ? `GULAG<b>Your match begins in ${left}s</b>` : `GULAG<b>Waiting for an opponent${q > 0 ? ` — ${q} ahead of you` : ''}</b>`;
+    } else if (me.phase === Phase.Dead && this.specId >= 0) {
+      const q = sim.players[this.specId]; st = `SPECTATING<b>${q.name}${q.squad === me.squad ? '' : q.id === me.killedBy ? ' — your killer' : ''}</b>`;
     } else if (me.phase === Phase.Gulag) {
       const left = (me.frozenUntil ?? 0) - sim.time;
       if (left > 0) cd = String(Math.ceil(left)); else if (left > -0.8) cd = 'FIGHT';
@@ -130,6 +132,7 @@ export class Hud {
   private bountyK = -1; private bountyAt: [number, number, number] | null = null;
   private objImg = new Map<string, string>();
   private eqhm = el('div', 'eqhm'); private eqT = 0; private eqKind = '';
+  private specId = -1;
   private gstat = el('div', 'gstat'); private gcount = el('div', 'gcount');
   private ctr = el('div', 'ctr');
   private uavSnapT = -99; private uavDots: [number, number][] = [];
@@ -242,7 +245,7 @@ export class Hud {
 
   // ---------------------------------------------------------------- per frame
   update(dt: number, camYaw: number, _camPitch: number, project: (x: number, y: number, z: number) => [number, number, boolean], opts: { ads: number; scope: boolean; optic?: boolean; spectating: Player | null; mapOpen: boolean }) {
-    this.camYawV = camYaw;
+    this.camYawV = camYaw; this.specId = opts.spectating?.id ?? -1;
     this.eqT = Math.max(0, this.eqT - dt / 0.9); this.eqhm.style.opacity = this.eqT > 0 ? String(Math.min(1, this.eqT * 2)) : '0'; this.eqhm.style.transform = `translate(-50%, -50%) scale(${1 + (1 - this.eqT) * 0.15 + (this.eqT > 0.85 ? (this.eqT - 0.85) * 2 : 0)})`;
     this.gulagHud(); this.contractHud();
     const sim = this.sim, me = sim.players[this.localId], view = opts.spectating ?? me;
