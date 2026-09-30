@@ -104,6 +104,8 @@ export class Effects {
   private tracerPos = new Float32Array(1024 * 6);
   private gas: THREE.Mesh;
   private plane: THREE.Group;
+  /** aiming down sights: floating contract badges step out of the way */
+  adsHide = false;
   private lights: THREE.PointLight[] = [];
   private lightT: number[] = [];
   private itemTimer = 0;
@@ -344,8 +346,8 @@ export class Effects {
     for (const c of sim.contracts) {
       const m = this.tablets.get(c.id); if (m) m.visible = !c.taken;
       const b = this.badges.get(c.id); if (!b) continue;
-      b.sp.visible = b.beam.visible = !c.taken;
-      if (c.taken) continue;
+      b.sp.visible = b.beam.visible = !c.taken && !this.adsHide;
+      if (c.taken || this.adsHide) continue;
       const t = this.badgeT + b.ph;
       if (c.doomAt !== undefined) { const left = c.doomAt - sim.time; b.sp.visible = b.beam.visible = left > 2.5 || Math.sin(t * (40 - left * 8)) > -0.2; }
       b.sp.position.y = b.y + 1.5 + Math.sin(t * 1.8) * 0.12;

@@ -157,23 +157,38 @@ export class ViewModel {
     if (this.hbDevice) return this.hbDevice;
     const g = new THREE.Group();
     g.add(new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.03, 0.12), new THREE.MeshStandardMaterial({ color: 0x3a3e42, roughness: 0.7 })));
-    this.hbCanvas.width = this.hbCanvas.height = 128;
+    this.hbCanvas.width = this.hbCanvas.height = 256;
     this.hbTex = new THREE.CanvasTexture(this.hbCanvas); this.hbTex.colorSpace = THREE.SRGBColorSpace;
     const scr = new THREE.Mesh(new THREE.PlaneGeometry(0.06, 0.06), new THREE.MeshBasicMaterial({ map: this.hbTex })); scr.rotation.x = -Math.PI / 2; scr.position.set(0, 0.016, -0.02);
     g.add(scr); this.hbDevice = g; return g;
   }
   /** heartbeat sensor screen: enemies ahead within 40 m as blips on a scan sweep (dx: right, dz: ahead, metres) */
-  setHeartbeat(blips: [number, number][], sweep: number) {
+  /**
+   * Heartbeat sensor screen (2020): a forward fan with range rings; the scan wave sweeps out from you and each enemy
+   * dot lights up as the wave reaches it, labelled with its distance. Enemies beyond range sit on the rim in their
+   * direction. Blips are given relative to the view: dx right, dz forward (m); r = 0..1 display radius.
+   */
+  setHeartbeat(blips: { dx: number; dz: number; d: number; r: number; edge: boolean }[], sweep: number, fade: number) {
     if (!this.hbTex) return;
-    const g = this.hbCanvas.getContext('2d')!;
-    g.fillStyle = '#08200f'; g.fillRect(0, 0, 128, 128);
-    g.strokeStyle = 'rgba(90,255,130,0.35)'; g.lineWidth = 1.5;
-    for (const r of [40, 80, 120]) { g.beginPath(); g.arc(64, 124, r, Math.PI, 2 * Math.PI); g.stroke(); }
-    g.strokeStyle = 'rgba(120,255,150,0.8)'; g.lineWidth = 2; g.beginPath(); g.arc(64, 124, sweep * 120, Math.PI * 1.2, Math.PI * 1.8); g.stroke();
-    g.fillStyle = '#ff3a2a';
-    g.fillStyle = '#6aff8a'; g.shadowColor = '#6aff8a'; g.shadowBlur = 6;
-    for (const [dx, dz] of blips) { if (dz < -2 || Math.hypot(dx, dz) > 40) continue; g.beginPath(); g.arc(64 + dx * 3, 124 - dz * 3, 5, 0, Math.PI * 2); g.fill(); }
-    g.shadowBlur = 0;
+    const g = this.hbCanvas.getContext('2d')!, S = 256, cx = S / 2, cy = S - 8, R = S - 24;
+    g.fillStyle = '#061a0c'; g.fillRect(0, 0, S, S);
+    // fan: 120 degrees forward
+    const a0 = -Math.PI / 2 - Math.PI / 3, a1 = -Math.PI / 2 + Math.PI / 3;
+    g.fillStyle = 'rgba(40,120,60,0.18)'; g.beginPath(); g.moveTo(cx, cy); g.arc(cx, cy, R, a0, a1); g.closePath(); g.fill();
+    g.strokeStyle = 'rgba(90,255,130,0.35)'; g.lineWidth = 2;
+    for (const k of [1 / 3, 2 / 3, 1]) { g.beginPath(); g.arc(cx, cy, R * k, a0, a1); g.stroke(); }
+    for (const a of [a0, -Math.PI / 2, a1]) { g.beginPath(); g.moveTo(cx, cy); g.lineTo(cx + Math.cos(a) * R, cy + Math.sin(a) * R); g.stroke(); }
+    // the scan wave
+    if (sweep < 1) { g.strokeStyle = `rgba(140,255,170,${0.9 * (1 - sweep * 0.5)})`; g.lineWidth = 4; g.beginPath(); g.arc(cx, cy, Math.max(1, sweep * R), a0, a1); g.stroke(); }
+    g.font = 'bold 20px Rajdhani, sans-serif'; g.textAlign = 'center';
+    for (const b of blips) {
+      if (b.r > sweep) continue; // not reached by this scan's wave yet
+      let ang = Math.atan2(b.dx, b.dz); ang = Math.max(-Math.PI / 3, Math.min(Math.PI / 3, ang)); // outside the fan: pinned to its side
+      const rr = b.r * R, x = cx + Math.sin(ang) * rr, y = cy - Math.cos(ang) * rr, al = Math.max(0.25, 1 - fade * 0.75);
+      g.fillStyle = `rgba(106,255,138,${al})`; g.shadowColor = '#6aff8a'; g.shadowBlur = 10;
+      g.beginPath(); g.arc(x, y, b.edge ? 7 : 9, 0, Math.PI * 2); g.fill(); g.shadowBlur = 0;
+      g.fillStyle = `rgba(200,255,210,${al})`; g.fillText(`${Math.round(b.d)}m`, x, Math.min(S - 2, y + 26));
+    }
     this.hbTex.needsUpdate = true;
   }
   /** play the throw (lethal / tactical) or stim animation with the left hand */

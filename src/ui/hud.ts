@@ -427,6 +427,8 @@ export class Hud {
     }
     for (const cr of sim.crates) if (cr.squad === me.squad) tag(cr.x, cr.y + 2, cr.z, 'mk', `LOADOUT<div class="d">${Math.round(Math.hypot(cr.x - view.x, cr.z - view.z))}m</div>`);
     this.set('tags', this.tags, tg);
+    // aiming down sights (2020): objective markers, pings in the world and the contract card get out of the way
+    { const hide = opts.ads > 0.5 ? '0' : '1'; if (this.tags.style.opacity !== hide) { this.tags.style.opacity = hide; this.ctr.style.opacity = hide; } }
     this.drawMinimap(view, camYaw);
     this.jam(this.sim.jamLevel(view));
     if (opts.mapOpen) this.drawFullMap(view);
@@ -558,10 +560,10 @@ export class Hud {
     g.beginPath(); g.arc(c.cx, c.cz, Math.max(0, c.r), 0, Math.PI * 2); g.stroke(); g.setLineDash([]);
     if (!c.done && !sim.inWarmup) {
       g.strokeStyle = '#f2f2f3'; g.lineWidth = 2 * px; g.beginPath(); g.arc(c.nx, c.nz, c.nr, 0, Math.PI * 2); g.stroke();
-      // circles further ahead, revealed by recon contracts: thinner dotted rings, fainter the further out
+      // circles further ahead, revealed by recon contracts: yellow rings (2020 tac map), fainter the further out
       for (const f of sim.revealedCircles(me.squad)) {
         const k = f.i - c.phase;
-        g.strokeStyle = `rgba(255,255,255,${Math.max(0.45, 0.95 - k * 0.15)})`; g.lineWidth = 1.6 * px; g.setLineDash([3 * px, 5 * px]);
+        g.strokeStyle = `rgba(246,195,67,${Math.max(0.5, 1.05 - k * 0.15)})`; g.lineWidth = 2 * px;
         g.beginPath(); g.arc(f.x, f.z, f.r, 0, Math.PI * 2); g.stroke(); g.setLineDash([]);
       }
       // line toward the safe zone when outside it

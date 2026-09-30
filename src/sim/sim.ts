@@ -105,7 +105,7 @@ export class Sim {
   constructor(public world: WorldData, seed = 1, opts: { humans?: number; players?: number; warmup?: number; squadSize?: number; difficulty?: Difficulty } = {}) {
     this.squadSize = opts.squadSize ?? SQUAD_SIZE;
     this.rng = new Rng(seed); this.circleRng = new Rng((seed * 7919 + 13) >>> 0);
-    this.nav = (world as any).__nav ?? ((world as any).__nav = new NavGrid(world.col));
+    this.nav = (world as any).__nav ?? ((world as any).__nav = new NavGrid(world.col, new Set((world.doors ?? []).filter((d) => d.locked).map((d) => d.sid))));
     const n = opts.players ?? PLAYERS;
     for (let i = 0; i < n; i++) this.players.push(this.makePlayer(i, Math.floor(i / this.squadSize), i >= (opts.humans ?? 1)));
     this.players[0].name = 'You';
@@ -419,11 +419,11 @@ export class Sim {
         if (p.tactical && p.tactical.type !== 'heartbeat' && --p.tactical.n <= 0) p.tactical = null;
       }
     }
-    // heartbeat sensor (2020): hold the tactical key to raise it; its battery drains while it is up
+    // heartbeat sensor (2020): hold the tactical key to raise it; it never runs out
     {
       const P = p as any, hb = p.tactical?.type === 'heartbeat' && p.phase === Phase.Alive && !!(it as any).tacHeld && !((p as any).vehicle !== undefined);
       P.hbOn = hb;
-      if (hb) { P.hbBattery = (P.hbBattery ?? 40) - dt; if (P.hbBattery <= 0) { p.tactical = null; P.hbOn = false; P.hbBattery = undefined; } }
+      /* no battery: the heartbeat sensor lasts as long as you carry it */
     }
     // killstreaks (2020): pull out the tablet / radio and call it in (~1 s, weapon down), then it activates
     if (it.killstreak) { it.killstreak = false; if (p.killstreak && p.phase === Phase.Alive && p.turret < 0 && !((p as any).callT > 0)) { (p as any).callT = 1.1; (p as any).callK = p.killstreak; this.emit({ t: 'callin', p: p.id, kind: p.killstreak }); } }

@@ -300,3 +300,6 @@
 /* killcam banner */
 .hud .killcam { position: absolute; left: 50%; top: 9%; transform: translateX(-50%); display: none; z-index: 41; text-align: center; color: #ff5a4a; font-weight: 800; letter-spacing: 0.3em; font-size: calc(var(--u) * 1.4); text-shadow: 0 2px 6px #000; }
 .hud .killcam b { display: block; color: #fff; letter-spacing: 0.04em; font-size: calc(var(--u) * 1.2); }
+
+/* ADS fades world markers and the contract card (opacity set from hud.ts) */
+.hud .tags, .hud .ctr { transition: opacity 0.15s linear; }

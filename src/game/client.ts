@@ -19,7 +19,7 @@ import { VehicleMeshes } from '../render/vehicles';
 import { LootMeshes } from '../render/loot';
 import { vehicleOf, VEHICLES } from '../sim/vehicles';
 import { Hud } from '../ui/hud';
-import { audio } from '../audio/audio';
+import { audio, RECON_BAR } from '../audio/audio';
 import type { WorldData } from '../world/mapgen';
 import { clamp, wrapAngle } from '../core/math';
 
@@ -140,16 +140,23 @@ export class Match {
   }
   private post: { t: number; killer: number; x: number; y: number; z: number; end: number; yaw: number; pitch: number; frames: { s: Float32Array; w: any[] }[] } | null = null;
   /** copy the last 5 s out of the ring at the moment of death (the ring keeps recording while the death cam plays) */
-  private snapshotReplay() { const out: { s: Float32Array; w: any[] }[] = []; const n = Math.min(this.recN, 60 * Match.KC); for (let i = this.recN - n; i < this.recN; i++) { const r = this.rec[i % Match.REC]; out.push({ s: r.s.slice(), w: r.w.slice() }); } return out; }
+  private snapshotReplay() { const out: { s: Float32Array; w: any[] }[] = []; const n = Math.min(this.recN, 60 * Match.KC_PRE); for (let i = this.recN - n; i < this.recN; i++) { const r = this.rec[i % Match.REC]; out.push({ s: r.s.slice(), w: r.w.slice() }); } return out; }
   private postMode: '' | 'deathcam' | 'replay' = '';
-  private static DEATH = 1.4; private static KC = 5;
+  /** killcam: KC_PRE s before the kill and KC_POST s after it, so the kill itself always plays out in full */
+  private static DEATH = 1.4; private static KC_PRE = 4.5; private static KC_POST = 1.5; private static KC = Match.KC_PRE + Match.KC_POST;
+  /** the frames after the kill are still being recorded during the death cam; append them when the killcam starts */
+  private extendReplay(p: NonNullable<Match['post']>) {
+    if ((p as any).extended) return; (p as any).extended = true; (p as any).deathIdx = p.frames.length;
+    const upto = Math.min(this.recN, p.end + Math.round(60 * Match.KC_POST));
+    for (let i = p.end; i < upto; i++) { const r = this.rec[i % Match.REC]; p.frames.push({ s: r.s.slice(), w: r.w.slice() }); }
+  }
   private postStep(dt: number): '' | 'deathcam' | 'replay' {
     const p = this.post; this.postMode = '';
     if (!p) { this.setKillcamLabel(''); return ''; }
     p.t += dt;
     const D = Match.DEATH, K = Match.KC, haveReplay = p.killer >= 0 && p.killer !== this.me.id && p.frames.length >= 60 * 2;
     if (p.t < D) { this.postMode = 'deathcam'; if (p.t > D - 0.35) this.fadeK = Math.max(this.fadeK, (p.t - (D - 0.35)) / 0.35); }
-    else if (haveReplay && p.t < D + K) { this.postMode = 'replay'; const u = p.t - D; this.fadeK = u < 0.35 ? 1 - u / 0.35 : u > K - 0.35 ? (u - (K - 0.35)) / 0.35 : 0; }
+    else if (haveReplay && p.t < D + K) { this.extendReplay(p); this.postMode = 'replay'; const u = p.t - D; this.fadeK = u < 0.35 ? 1 - u / 0.35 : u > K - 0.35 ? (u - (K - 0.35)) / 0.35 : 0; }
     else { this.post = null; this.fadeK = 1; this.fadeTo(0, 0.6, 0); }
     this.setKillcamLabel(this.postMode === 'replay' ? `KILLCAM<b>${this.sim.players[p.killer].name}</b>` : '');
     return this.postMode;
@@ -159,6 +166,8 @@ export class Match {
     const p = this.post!, K = Match.KC, F = Match.F;
     const n = p.frames.length, idx = Math.min(n - 1, Math.max(0, Math.floor(n - 60 * K + (p.t - Match.DEATH) * 60)));
     const r = p.frames[idx]; if (!r) return () => {};
+    // past the kill: your body drops where you fell (you yourself are already on the Gulag balcony in the recording)
+    if (idx >= ((p as any).deathIdx ?? Infinity) && !(p as any).corpse) { (p as any).corpse = true; this.soldiers.addCorpse(p.x, p.y, p.z, p.yaw, this.me.squad, this.sim.time, false); }
     const saved: any[] = [];
     this.sim.players.forEach((q: any, i) => {
       const o = i * F;
@@ -182,7 +191,7 @@ export class Match {
     if (!this.kcEl) { this.kcEl = document.createElement('div'); this.kcEl.className = 'killcam'; this.hud.root.appendChild(this.kcEl); }
     if (this.kcEl.innerHTML !== html) this.kcEl.innerHTML = html; this.kcEl.style.display = html ? 'block' : 'none';
   } private reconT = 0; private pauseTime = 0;
-  private hbT = 0; private hbBlips: [number, number][] = []; private hbWorld: [number, number][] = [];
+  private hbT = 0; private hbWorld: [number, number][] = []; private hbPinged = new Set<number>();
   private tugT = 0; private lastAirPhase = -1; private chuteRoll = 0;
   /** current ADS magnification, eased so a zoom toggle or optic swap doesn't snap */
   zoomNow = 1;
@@ -568,11 +577,11 @@ export class Match {
           this.reconT -= dt;
           if (this.reconT <= 0) {
             // same tempo throughout; each layer fades in over its own stretch of the upload, so it keeps building
-            this.reconT += 1; if (this.reconT <= 0) this.reconT = 1;
+            this.reconT += RECON_BAR; if (this.reconT <= 0) this.reconT = RECON_BAR;
             const k = Math.min(1, (ac!.progress ?? 0) / 25), ramp = (a: number, b: number) => Math.max(0, Math.min(1, (k - a) / (b - a)));
-            audio.play('reconThud', { ui: true, vol: 0.85 });
-            audio.play('reconStab', { ui: true, vol: 0.2 + 0.8 * ramp(0, 0.35) });
-            for (const [name, a, b, v] of [['reconPulse', 0.15, 0.55, 0.8], ['reconHat', 0.35, 0.75, 0.55], ['reconPad', 0.55, 0.95, 0.7]] as const) { const g = ramp(a, b); if (g > 0.02) audio.play(name, { ui: true, vol: v * g }); }
+            audio.play('reconThud', { ui: true, vol: 0.85, exact: true });
+            audio.play('reconStab', { ui: true, vol: 0.2 + 0.8 * ramp(0, 0.35), exact: true });
+            for (const [name, a, b, v] of [['reconPulse', 0.15, 0.55, 0.8], ['reconHat', 0.35, 0.75, 0.55], ['reconPad', 0.55, 0.95, 0.7]] as const) { const g = ramp(a, b); if (g > 0.02) audio.play(name, { ui: true, vol: v * g, exact: true }); }
           }
         } else this.reconT = 0; }
       // unopened supply boxes hum; louder as you get close, from the box's position
@@ -582,19 +591,24 @@ export class Match {
         for (const c of sim.chests) if (!c.opened) { const dd = Math.hypot(c.x - me.x, c.y - me.y, c.z - me.z); if (dd < bd) { bd = dd; best = c; } }
         if (best) audio.play('chestHum', { x: best.x, y: best.y + 0.4, z: best.z, range: 12, vol: 0.12 + 0.5 * (1 - bd / 30) ** 2 });
       }
-      // heartbeat sensor: enemies in front within 40 m, refreshed every half second (2020)
+      // heartbeat sensor (2020): a scan every 1.5 s; its wave takes ~0.9 s to reach the rim and each enemy pings once
+      // as the wave reaches its dot (silent otherwise). Blips stay where they were scanned, so they swing round the
+      // screen as you move and turn. Out of range (up to 150 m) they sit on the rim in their direction
       if ((me as any).hbOn) {
-        // a scan every 1.5 s records where nearby enemies are; the blips then stay put in the world, so they
-        // swing round the screen as you move and turn
+        const RANGE = 45, FAR = 150, SCAN = 1.5, WAVE = 0.9;
         this.hbT -= dt;
         if (this.hbT <= 0) {
-          this.hbT = 1.5; this.hbWorld = [];
-          for (const q of sim.players) if (q.alive && q.squad !== me.squad && (q.phase === Phase.Alive || q.phase === Phase.Downed) && Math.hypot(q.x - me.x, q.z - me.z) < 45) this.hbWorld.push([q.x, q.z]);
-          audio.play('beep', { ui: true, vol: 0.12, rate: 0.8 });
+          this.hbT = SCAN; this.hbWorld = []; this.hbPinged.clear();
+          for (const q of sim.players) if (q.alive && q.squad !== me.squad && (q.phase === Phase.Alive || q.phase === Phase.Downed) && Math.hypot(q.x - me.x, q.z - me.z) < FAR) this.hbWorld.push([q.x, q.z]);
         }
+        const age = SCAN - this.hbT, sweep = Math.min(1, age / WAVE);
         const fx = -Math.sin(this.camYaw), fz = -Math.cos(this.camYaw), rx = Math.cos(this.camYaw), rz = -Math.sin(this.camYaw);
-        this.hbBlips = this.hbWorld.map(([wx, wz]) => { const dx = wx - me.x, dz = wz - me.z; return [dx * rx + dz * rz, dx * fx + dz * fz] as [number, number]; });
-        this.vm.setHeartbeat(this.hbBlips, 1 - this.hbT / 1.5);
+        const blips = this.hbWorld.map(([wx, wz], i) => {
+          const dx = wx - me.x, dz = wz - me.z, d = Math.hypot(dx, dz), r = Math.min(1, d / RANGE);
+          if (r <= sweep && !this.hbPinged.has(i) && Math.abs(Math.atan2(dx * rx + dz * rz, dx * fx + dz * fz)) < Math.PI / 2) { this.hbPinged.add(i); audio.play('hbPing', { ui: true, vol: d > RANGE ? 0.25 : 0.5, exact: true }); }
+          return { dx: dx * rx + dz * rz, dz: dx * fx + dz * fz, d, r, edge: d > RANGE };
+        }).filter((b) => b.dz > -2);
+        this.vm.setHeartbeat(blips, sweep, Math.max(0, (age - WAVE) / (SCAN - WAVE)));
       } else this.hbT = 0;
       this.vm.update(meR, dt, this.lastMouse.dx, this.lastMouse.dy, Math.hypot(me.vx, me.vz), me.sprinting);
       this.vm.render(this.sm.renderer);
@@ -602,6 +616,7 @@ export class Match {
     // HUD
     const proj = new THREE.Vector3();
     const project = (px: number, py: number, pz: number): [number, number, boolean] => { proj.set(px, py, pz).project(cam); return [(proj.x * 0.5 + 0.5) * innerWidth, (-proj.y * 0.5 + 0.5) * innerHeight, proj.z < 1 && Math.abs(proj.x) < 1.1 && Math.abs(proj.y) < 1.1]; };
+    this.fx.adsHide = me.ads > 0.5 && this.spectate < 0;
     this.hud.update(dt, this.spectate >= 0 ? vp.yaw : this.camYaw, pitch, project, { ads: me.ads, scope: !!def?.scope, optic: this.vm.optic, spectating: this.postMode === 'replay' ? sim.players[this.post!.killer] : this.spectate >= 0 ? vp : null, mapOpen: this.mapOpen });
     void wrapAngle;
   }

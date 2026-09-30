@@ -40,7 +40,7 @@ export class BotBrain {
   roofT = 0;
   tx2 = 0; tz2 = 0; driveStuck = 0;
   failed = new Map<number, number>();
-  path: [number, number][] | null = null; pathI = 0; pathGX = 0; pathGZ = 0; replan = false; pathCd = 0;
+  path: [number, number][] | null = null; pathI = 0; pathGX = 0; pathGZ = 0; replan = false; pathCd = 0; progT = 0; progD = 0; stalls = 0;
   chestId = -1; chestT = 0;
   /** play style: how the bot spends a match (what it goes for and how) */
   style: 'aggressive' | 'contractor' | 'looter' | 'camper';
@@ -89,7 +89,7 @@ function moveToward(sim: Sim, b: BotBrain, p: Player, x: number, z: number, run:
   // plan with the nav grid when the straight line is blocked (re-plan on a new goal or when stuck)
   const nav = sim.nav;
   if (dTot > 12 && (Math.hypot(b.pathGX - x, b.pathGZ - z) > 15 || b.replan)) {
-    b.replan = false; b.pathGX = x; b.pathGZ = z; b.path = null; b.pathI = 0;
+    b.replan = false; b.pathGX = x; b.pathGZ = z; b.path = null; b.pathI = 0; b.progT = 0; b.progD = dTot;
     if (!nav.los(p.x, p.z, x, z) && sim.time >= b.pathCd) {
       // a few searches per tick across all bots: when gunfire makes a crowd re-target at once, the rest wait a tick
       // (walking straight meanwhile) instead of stacking dozens of A* runs into one frame
@@ -113,7 +113,17 @@ function moveToward(sim: Sim, b: BotBrain, p: Player, x: number, z: number, run:
     const moved = Math.hypot(p.x - b.lastX, p.z - b.lastZ);
     b.lastX = p.x; b.lastZ = p.z;
     if (moved < 0.02 && p.onGround) b.stuckT += dt; else b.stuckT = Math.max(0, b.stuckT - dt);
-    if (b.stuckT > 0.8) { b.stuckT = 0; b.detourT = 0.9 + sim.rng.next(); b.detourA = (sim.rng.chance(0.5) ? 1 : -1) * (0.9 + sim.rng.next() * 0.8); it.jump = true; b.replan = true; b.pathCd = 0; }
+    // no real progress toward the goal for 2 s (jittering against a wall or fence, sliding on a steep bank) also
+    // counts as stuck - the speed check alone misses that, and bots used to die in the gas pressed against a fence
+    b.progT += dt;
+    if (b.progT > 2) {
+      if (dTot > 4 && b.progD - dTot < 1.5) { b.stalls++; b.stuckT = 1; if (b.path && b.pathI < b.path.length - 1) b.pathI++; } else b.stalls = 0;
+      b.progT = 0; b.progD = dTot;
+    }
+    if (b.stuckT > 0.8) {
+      const big = b.stalls >= 2; /* repeated: a longer, wider detour */
+      openDoorNear(sim, p);
+      b.stuckT = 0; b.detourT = (big ? 1.8 : 0.9) + sim.rng.next(); b.detourA = (sim.rng.chance(0.5) ? 1 : -1) * (big ? 1.4 + sim.rng.next() * 0.6 : 0.9 + sim.rng.next() * 0.8); it.jump = true; b.replan = true; b.pathCd = 0; }
   }
   // don't walk off drops that would hurt: probe the ground two metres ahead
   if (p.onGround && b.detourT <= 0) {
@@ -127,6 +137,16 @@ function moveToward(sim: Sim, b: BotBrain, p: Player, x: number, z: number, run:
   void d;
   if (it.sprint && sim.rng.chance(0.004)) (it as any).tac = true;
   return false;
+}
+/** A stuck bot next to a closed door opens it with Use (walking into a door only pushes it when head-on). */
+const doorBuf: import('../world/collision').Structure[] = [];
+function openDoorNear(sim: Sim, p: Player) {
+  const doors = sim.doors; if (!doors) return;
+  for (const st of sim.world.col.near(p.x, p.z, 2.4, doorBuf)) {
+    if (st.kind !== 'door' || Math.abs(st.y - p.y) > 1.5) continue;
+    const i = doors.byStructure.get(st.id);
+    if (i !== undefined && Math.abs(doors.target[i]) < 0.15 && !sim.world.doors[i].locked) { doors.interact(i, p); return; }
+  }
 }
 const lerpYaw = (a: number, b: number, t: number) => a + wrapAngle(b - a) * t;
 

@@ -16,7 +16,7 @@ export type SoundName =
   | 'hit' | 'hitArmor' | 'armorBreak' | 'headshot' | 'kill' | 'down' | 'selfArmorBreak' | 'bodyHit'
   | 'plate' | 'magOut' | 'magIn' | 'bolt' | 'swap' | 'dry' | 'melee' | 'throw' | 'pin'
   | 'step_dirt' | 'step_concrete' | 'step_metal' | 'step_wood' | 'land' | 'jump' | 'slide' | 'gear'
-  | 'flareLaunch' | 'reconTick' | 'reconThud' | 'reconStab' | 'reconPulse' | 'reconHat' | 'reconPad' | 'vehicleCrash' | 'chestHum' | 'jet' | 'callin' | 'contractStart' | 'contractDone' | 'contractStep' | 'pickup' | 'cash' | 'chute' | 'chuteCut' | 'explosion' | 'explosionFar' | 'whiz' | 'impact' | 'impactMetal' | 'impactWood' | 'impactGlass' | 'impactWater'
+  | 'flareLaunch' | 'reconTick' | 'hbPing' | 'reconThud' | 'reconStab' | 'reconPulse' | 'reconHat' | 'reconPad' | 'vehicleCrash' | 'chestHum' | 'jet' | 'callin' | 'contractStart' | 'contractDone' | 'contractStep' | 'pickup' | 'cash' | 'chute' | 'chuteCut' | 'explosion' | 'explosionFar' | 'whiz' | 'impact' | 'impactMetal' | 'impactWood' | 'impactGlass' | 'impactWater'
   | 'musicInfil' | 'musicVictory' | 'musicDefeat'
   | 'uiOpen' | 'uiHover' | 'uiBuy' | 'uiDeny' | 'downed' | 'cough' | 'heartbeat' | 'breath' | 'doorOpen' | 'doorClose' | 'doorSlam' | 'beep' | 'revive' | 'crate' | 'stinger' | 'flag' | 'rock';
 
@@ -24,6 +24,9 @@ type Loop = 'engine' | 'wind' | 'gas' | 'chute' | 'vehicle' | 'heli' | 'tinnitus
 
 /** Audible radius (m) of an unsuppressed shot per weapon class. */
 const GUN_RANGE: Record<string, number> = { pistol: 150, smg: 200, shotgun: 220, ar: 300, lmg: 330, marksman: 380, sniper: 550, launcher: 400 };
+
+/** Recon capture music bar length (s). */
+export const RECON_BAR = 1.3;
 
 export class Audio {
   ctx: AudioContext | null = null;
@@ -79,13 +82,13 @@ export class Audio {
   }
 
   /** Play a sound; positioned sounds are HRTF-panned, air-absorbed and (optionally) delayed by distance. */
-  play(name: SoundName, opts: { x?: number; y?: number; z?: number; vol?: number; rate?: number; range?: number; maxDist?: number; delay?: boolean; ui?: boolean; music?: boolean; throttle?: number; key?: string } = {}) {
+  play(name: SoundName, opts: { x?: number; y?: number; z?: number; vol?: number; rate?: number; range?: number; maxDist?: number; delay?: boolean; ui?: boolean; music?: boolean; throttle?: number; key?: string; /** no random pitch variation (music) */ exact?: boolean } = {}) {
     const ctx = this.ctx; if (!ctx || ctx.state !== 'running') return;
     const list = this.buffers.get(name); if (!list) return;
     if (opts.throttle) { const k = opts.key ?? name + (opts.x ?? ''); const l = this.last.get(k) ?? 0; if (ctx.currentTime - l < opts.throttle) return; this.last.set(k, ctx.currentTime); }
     const buf = list[(Math.random() * list.length) | 0];
     const src = ctx.createBufferSource(); src.buffer = buf;
-    src.playbackRate.value = (opts.rate ?? 1) * (0.97 + Math.random() * 0.06);
+    src.playbackRate.value = (opts.rate ?? 1) * (opts.exact ? 1 : 0.97 + Math.random() * 0.06);
     const g = ctx.createGain(); g.gain.value = opts.vol ?? 1;
     src.connect(g);
     let when = ctx.currentTime;
@@ -419,14 +422,17 @@ export class Audio {
     // recon capture: the repeating data-upload chirp while the zone is being held
     // recon capture: a deep rhythmic thud (a kick-drum like thump: falling low sine + a soft low-passed knock)
     this.add('reconTick', tone(0.5, (t) => { const f = 48 + 70 * Math.exp(-t * 28); return Math.sin(2 * Math.PI * f * t) * Math.exp(-t * 7.5) * (t < 0.004 ? t / 0.004 : 1) * 0.95; }).mix(N(0.08, 4242).filter('lp', 420).env((t) => Math.exp(-t * 45)), 0.45));
-    // recon capture music (2020): a fixed-tempo 1 s bar in five layers played together; the client fades the upper
-    // layers in as the upload progresses, so the cue starts as a bare thud and builds to a full, dense texture
-    const stab = (t: number, t0: number, f: number, acc: number) => { const u = t - t0; if (u < 0 || u > 0.1) return 0; let v = 0; for (let k = 1; k <= 6; k++) v += Math.sin(2 * Math.PI * f * k * u + k) / k; return v * Math.exp(-u * 38) * Math.min(1, u / 0.003) * acc * 0.3; };
-    this.add('reconThud', tone(1.0, (t) => { let v = 0; for (const [t0, a] of [[0, 0.85], [0.5, 0.7]]) { const u = t - t0; if (u >= 0 && u < 0.45) v += Math.sin(2 * Math.PI * (50 + 70 * Math.exp(-u * 28)) * u) * Math.exp(-u * 8) * Math.min(1, u / 0.004) * a; } return v; }));
-    this.add('reconStab', tone(1.0, (t) => { let v = 0; for (let i = 0; i < 3; i++) { v += stab(t, i * 0.11, 220, i === 0 ? 1 : 0.75); v += stab(t, 0.5 + i * 0.11, 247, i === 0 ? 1 : 0.75); } return v; }));
-    this.add('reconPulse', tone(1.0, (t) => { const u = t % 0.125, f = t < 0.5 ? 55 : 61.7; let v = 0; for (let k = 1; k <= 5; k++) v += Math.sin(2 * Math.PI * f * k * t) / k; return v * Math.exp(-u * 22) * Math.min(1, u / 0.004) * 0.3; }));
-    this.add('reconHat', N(1.0, 6060).filter('bp', 7500, 1.2).env((t) => { const u = t % 0.0625, acc = Math.floor(t / 0.0625) % 4 === 2 ? 1 : 0.55; return Math.exp(-u * 90) * acc * 0.9; }));
-    this.add('reconPad', tone(1.0, (t) => { const trem = 0.6 + 0.4 * Math.sin(2 * Math.PI * 12 * t); return (Math.sin(2 * Math.PI * 440 * t) * 0.5 + Math.sin(2 * Math.PI * 466.2 * t) * 0.35 + Math.sin(2 * Math.PI * 659.3 * t) * 0.2) * trem * 0.22 * Math.min(1, t / 0.02, (1 - t) / 0.02); }));
+    // recon capture music (2020): a steady, unhurried 1.3 s bar (~92 bpm) at one pitch throughout, in five layers played
+    // together - the client fades the upper layers in as the upload progresses, so it starts as a bare thud and builds
+    const BAR = RECON_BAR, H = BAR / 2;
+    const stab = (t: number, t0: number, f: number, acc: number) => { const u = t - t0; if (u < 0 || u > 0.12) return 0; let v = 0; for (let k = 1; k <= 6; k++) v += Math.sin(2 * Math.PI * f * k * u + k) / k; return v * Math.exp(-u * 32) * Math.min(1, u / 0.003) * acc * 0.3; };
+    this.add('reconThud', tone(BAR, (t) => { let v = 0; for (const [t0, a] of [[0, 0.85], [H, 0.7]]) { const u = t - t0; if (u >= 0 && u < 0.5) v += Math.sin(2 * Math.PI * (50 + 70 * Math.exp(-u * 28)) * u) * Math.exp(-u * 7.5) * Math.min(1, u / 0.004) * a; } return v; }));
+    this.add('reconStab', tone(BAR, (t) => { let v = 0; for (let i = 0; i < 3; i++) { v += stab(t, i * 0.14, 220, i === 0 ? 1 : 0.75); v += stab(t, H + i * 0.14, 220, i === 0 ? 1 : 0.75); } return v; }));
+    this.add('reconPulse', tone(BAR, (t) => { const u = t % (BAR / 8); let v = 0; for (let k = 1; k <= 5; k++) v += Math.sin(2 * Math.PI * 55 * k * t) / k; return v * Math.exp(-u * 18) * Math.min(1, u / 0.004) * 0.3; }));
+    this.add('reconHat', N(BAR, 6060).filter('bp', 7500, 1.2).env((t) => { const q = BAR / 16, u = t % q, acc = Math.floor(t / q) % 4 === 2 ? 1 : 0.55; return Math.exp(-u * 80) * acc * 0.9; }));
+    this.add('reconPad', tone(BAR, (t) => { const trem = 0.6 + 0.4 * Math.sin(2 * Math.PI * 9 * t); return (Math.sin(2 * Math.PI * 440 * t) * 0.5 + Math.sin(2 * Math.PI * 466.2 * t) * 0.35 + Math.sin(2 * Math.PI * 659.3 * t) * 0.2) * trem * 0.22 * Math.min(1, t / 0.02, (BAR - t) / 0.02); }));
+    // heartbeat sensor contact: a soft electronic blip
+    this.add('hbPing', tone(0.25, (t) => (Math.sin(2 * Math.PI * 1480 * t) * 0.6 + Math.sin(2 * Math.PI * 2960 * t) * 0.15) * Math.min(1, t / 0.004) * Math.exp(-t * 22)));
     // vehicle crash: a heavy body thump, crunching sheet metal and a short metallic ring
     const vcrunch = (sd: number) => tone(0.9, (t) => Math.sin(2 * Math.PI * (70 + 60 * Math.exp(-t * 20)) * t) * Math.exp(-t * 9) * 0.9 + (Math.sin(2 * Math.PI * 610 * t) * 0.25 + Math.sin(2 * Math.PI * 1370 * t) * 0.15) * Math.exp(-t * 7))
       .mix(N(0.5, sd).filter('lp', 2600).env((t) => Math.min(1, t * 400) * (Math.exp(-t * 16) + 0.35 * Math.exp(-Math.pow((t - 0.12) / 0.05, 2)))), 0.9)
