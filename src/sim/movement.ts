@@ -197,7 +197,9 @@ function ground(sim: Sim, p: Player, dt: number) {
     else {
       // pop the parachute when falling from a height (rooftops, cliffs, helicopters)
       const agl = p.y - col.groundAt(p.x, p.z, p.y, 0.3);
-      if (p.vy < -4 && agl > 14) { p.phase = Phase.Chute; p.vy = Math.max(p.vy, -12); sim.emit({ t: 'chute', p: p.id }); return; }
+      // any drop that would hurt (off a rooftop, a cliff) can be parachuted, given a few metres of air to open in
+      const drop = p.fallStartY - (p.y - agl);
+      if (p.vy < -1 && agl > 4.5 && drop > MOVE.fallSafe) { p.phase = Phase.Chute; p.vy = Math.max(p.vy, -12); sim.emit({ t: 'chute', p: p.id }); return; }
     }
   }
   else if (!p.onGround && !p.swimming && !downed && it.mz > 0.3 && ((p as any).jumpBuf ?? 0) > sim.time && tryMantle(sim, p)) { (p as any).jumpBuf = 0; return; }

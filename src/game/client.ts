@@ -160,7 +160,13 @@ export class Match {
       if (ui.ping) {
         const q = this.sim.pingTarget(this.me);
         if (q) this.sim.pingEnemy(this.me, q);
-        else { const [x, , z] = this.sim.aimPoint(this.me, 800); this.hud.pings = [{ x, z, t: 999 }]; (this.me as any).ping = { x, z }; audio.play('beep', { vol: 0.3 }); }
+        else {
+          const [x, , z] = this.sim.aimPoint(this.me, 800), cur = (this.me as any).ping as { x: number; z: number } | undefined;
+          // pinging your own marker again removes it (2020)
+          const far = Math.hypot(x - this.me.x, z - this.me.z);
+          if (cur && Math.hypot(x - cur.x, z - cur.z) < Math.max(6, far * 0.06)) { this.hud.pings = []; (this.me as any).ping = undefined; audio.play('beep', { vol: 0.25, rate: 0.7 }); }
+          else { this.hud.pings = [{ x, z, t: 999 }]; (this.me as any).ping = { x, z }; audio.play('beep', { vol: 0.3 }); }
+        }
       }
     } else inp.endFrame();
     this.fpsAcc += dt; this.fpsN++; if (this.fpsAcc > 0.5) { this.fpsEl.textContent = this.settings.showFps ? `${Math.round(this.fpsN / this.fpsAcc)} FPS` : ''; this.fpsAcc = 0; this.fpsN = 0; }

@@ -78,7 +78,7 @@ export class Sim {
   aliveCount = PLAYERS;
   over = false; winner = -1;
   /** squad UAVs: the scan area follows whoever called it in */
-  squadUav = new Map<number, { until: number; x: number; z: number; by?: number }>();
+  squadUav = new Map<number, { until: number; x: number; z: number; by?: number; level?: number }>();
   /** active Counter UAVs: enemies within COUNTER_UAV_R have their minimap scrambled */
   counterUavs: { squad: number; x: number; z: number; until: number }[] = [];
   /** enemy pings ("enemy spotted"): a red marker where the enemy was, shared with the squad for a few seconds */
@@ -654,7 +654,11 @@ export class Sim {
   }
   useKillstreak(p: Player, tx?: number, tz?: number) {
     const k = p.killstreak!; p.killstreak = null;
-    if (k === 'uav') { this.squadUav.set(p.squad, { until: this.time + 40, x: p.x, z: p.z, by: p.id }); this.emit({ t: 'uav', squad: p.squad }); return; }
+    if (k === 'uav') {
+      // stacking: a second UAV while one is up sweeps faster and wider; a third is an Advanced UAV (live arrows, whole map)
+      const cur = this.squadUav.get(p.squad), level = cur && cur.until > this.time ? Math.min(3, (cur.level ?? 1) + 1) : 1;
+      this.squadUav.set(p.squad, { until: this.time + 40, x: p.x, z: p.z, by: p.id, level }); this.emit({ t: 'uav', squad: p.squad }); return;
+    }
     if (k === 'cuav') { this.counterUavs.push({ squad: p.squad, x: p.x, z: p.z, until: this.time + 40 }); this.emit({ t: 'cuav', squad: p.squad }); return; }
     if (k === 'turret') { this.deployTurret(p); return; }
     let [x, , z] = this.aimPoint(p);
@@ -855,11 +859,14 @@ export class Sim {
     }
     this.active = this.active.filter((a) => a.t > 0);
   }
+  /** 2020: a bounty pays out whenever its target dies, whoever made the kill (another squad, the gas, a fall) */
   private checkBounty(v: Player, attacker: number) {
-    if (attacker < 0) return;
-    const att = this.players[attacker];
-    const a = this.active.find((x) => x.kind === 'bounty' && x.target === v.id && x.squad === att.squad);
-    if (a) { this.reward(a, CONTRACT.bounty.reward); a.t = -2; this.emit({ t: 'contract', p: att.id, kind: 'bounty', msg: 'done' }); }
+    void attacker;
+    for (const a of this.active) if (a.kind === 'bounty' && a.target === v.id && a.t > 0) {
+      this.reward(a, CONTRACT.bounty.reward); a.t = -2;
+      const q = this.players.find((p) => p.squad === a.squad) ?? v;
+      this.emit({ t: 'contract', p: q.id, kind: 'bounty', msg: 'done' });
+    }
   }
   private reward(a: ActiveContract, cash: number) {
     for (const q of this.players) if (q.squad === a.squad && q.alive) q.cash += cash;

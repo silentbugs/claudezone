@@ -259,3 +259,10 @@
 .hud .bp .bpk { background: rgba(20,22,24,0.7); padding: calc(var(--px) * 10); display: flex; flex-direction: column; gap: 4px; } .hud .bp .bpk b { color: #ffda63; } .hud .bp .bpk.none { color: #888; }
 .hud .bp .bph { margin-top: calc(var(--px) * 20); color: #999; font-size: calc(var(--px) * 16); display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 @media (max-aspect-ratio: 4/3) { .hud .bp { grid-template-columns: 1fr; overflow-y: auto; padding: 60px 16px; } }
+/* active contract objective (2020: yellow, unmissable) */
+.hud .pings i.obj { width: calc(var(--u) * 1.2); height: calc(var(--u) * 1.2); background: #f6c343; border: 2px solid #1a1a1a; top: 0; }
+.hud .tag.obj { color: #f6c343; font-weight: 700; text-shadow: 0 0 4px #000, 0 1px 2px #000; }
+.hud .tag.obj img { display: block; width: calc(var(--u) * 3.2); height: calc(var(--u) * 3.2); margin: 0 auto 2px; filter: drop-shadow(0 0 6px rgba(246,195,67,0.9)); }
+.hud .tag.obj b { display: block; font-size: calc(var(--u) * 1.05); letter-spacing: 0.08em; }
+.hud .tag.obj .d { color: #fff; }
+.hud .tag.obj.edge { transform: translate(-50%, -50%); opacity: 0.95; }

@@ -61,7 +61,8 @@ export const STREAK_ICON: Record<string, string> = { uav: 'uav', cuav: 'cuav', c
 
 /** Contract badge (canvas, 128 px) for the floating world marker and the maps: coloured disc + glyph per type. */
 const badgeCache = new Map<string, HTMLCanvasElement>();
-export const CONTRACT_COLOR: Record<string, string> = { bounty: '#e8503a', scavenger: '#3aa0e8', recon: '#f0b830' };
+// 2020: every contract is yellow; the glyph tells them apart
+export const CONTRACT_COLOR: Record<string, string> = { bounty: '#f6c343', scavenger: '#f6c343', recon: '#f6c343' };
 export function contractBadge(kind: string): HTMLCanvasElement {
   let c = badgeCache.get(kind); if (c) return c;
   c = document.createElement('canvas'); c.width = c.height = 128; const g = c.getContext('2d')!;
@@ -83,4 +84,38 @@ export function contractBadge(kind: string): HTMLCanvasElement {
     g.beginPath(); g.moveTo(-15, -30); g.lineTo(26, -30); g.lineTo(16, -17); g.lineTo(26, -4); g.lineTo(-15, -4); g.closePath(); g.fill();
   }
   badgeCache.set(kind, c); return c;
+}
+
+/**
+ * Top-down vehicle icon for the maps (2020 style: a white silhouette of the vehicle in a dark outline;
+ * tinted blue when your squad is in it, red when enemies are). Drawn pointing up (-z), 64 px.
+ */
+const vehCache = new Map<string, HTMLCanvasElement>();
+export function vehicleIcon(type: string, tint: string): HTMLCanvasElement {
+  const key = type + tint; let c = vehCache.get(key); if (c) return c;
+  c = document.createElement('canvas'); c.width = c.height = 64; const g = c.getContext('2d')!;
+  g.translate(32, 32); g.lineJoin = 'round';
+  const body = (path: () => void) => { g.beginPath(); path(); g.lineWidth = 6; g.strokeStyle = 'rgba(10,12,14,0.9)'; g.stroke(); g.fillStyle = tint; g.fill(); };
+  const rr = (x: number, y: number, w: number, h: number, r: number) => { g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); };
+  const dark = 'rgba(10,12,14,0.75)';
+  if (type === 'heli') {
+    body(() => { g.ellipse(0, -8, 9, 14, 0, 0, Math.PI * 2); g.moveTo(3, 4); g.lineTo(2, 26); g.lineTo(-2, 26); g.lineTo(-3, 4); g.closePath(); g.rect(-8, 22, 16, 4); });
+    g.strokeStyle = tint; g.lineWidth = 2.5; g.beginPath(); g.arc(0, -8, 24, 0, Math.PI * 2); g.stroke(); // rotor disc
+    g.fillStyle = dark; g.beginPath(); g.ellipse(0, -15, 5, 5, 0, 0, Math.PI * 2); g.fill();
+  } else if (type === 'truck') {
+    body(() => { rr(-10, -28, 20, 13, 3); rr(-11, -13, 22, 41, 2); });
+    g.fillStyle = dark; g.fillRect(-7, -25, 14, 4); for (let y = -9; y < 26; y += 7) g.fillRect(-8, y, 16, 1.5);
+  } else if (type === 'suv') {
+    body(() => rr(-10, -22, 20, 44, 6));
+    g.fillStyle = dark; g.fillRect(-7, -14, 14, 6); g.fillRect(-7, 10, 14, 5); g.fillRect(-8, -6, 2, 14); g.fillRect(6, -6, 2, 14);
+  } else if (type === 'rover') {
+    body(() => { rr(-11, -20, 22, 40, 4); });
+    g.fillStyle = dark; g.fillRect(-11, -13, 22, 3); g.fillRect(-11, 5, 22, 3); g.fillRect(-8, -9, 16, 12);
+    g.fillStyle = tint; for (const [x, y] of [[-13, -15], [13, -15], [-13, 13], [13, 13]]) { g.beginPath(); g.ellipse(x, y, 3, 5, 0, 0, Math.PI * 2); g.fill(); }
+  } else { // atv
+    body(() => { rr(-8, -16, 16, 32, 5); });
+    g.fillStyle = dark; g.fillRect(-12, -12, 24, 3); g.fillRect(-3, -4, 6, 12);
+    g.fillStyle = tint; for (const [x, y] of [[-12, -11], [12, -11], [-12, 12], [12, 12]]) { g.beginPath(); g.ellipse(x, y, 3.5, 5, 0, 0, Math.PI * 2); g.fill(); }
+  }
+  vehCache.set(key, c); return c;
 }
