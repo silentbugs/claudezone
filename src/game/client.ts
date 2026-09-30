@@ -559,9 +559,9 @@ export class Match {
     }
     if (fp && this.spectate < 0 && !this.debugCam && !this.postMode) {
       this.vm.simTime = sim.time;
-      // recon capture: the upload chirp repeats while your squad holds the zone, quicker as it nears completion
+      // recon capture: a deep thud pulses while your squad holds the zone, quicker as it nears completion
       { const ac = sim.active.find((q) => q.squad === me.squad && q.kind === 'recon'); const inside = ac && ac.flare && sim.players.some((q) => q.squad === me.squad && q.phase === Phase.Alive && Math.hypot(q.x - ac.zx!, q.z - ac.zz!) < 9);
-        if (inside) { this.reconT -= dt; if (this.reconT <= 0) { const k = Math.min(1, (ac!.progress ?? 0) / 25); this.reconT = 0.9 - 0.55 * k; audio.play('reconTick', { ui: true, vol: 0.5, rate: 1 + 0.25 * k }); } } else this.reconT = 0; }
+        if (inside) { this.reconT -= dt; if (this.reconT <= 0) { const k = Math.min(1, (ac!.progress ?? 0) / 25); this.reconT = 1.05 - 0.55 * k; audio.play('reconTick', { ui: true, vol: 0.8 }); } } else this.reconT = 0; }
       // unopened supply boxes hum; louder as you get close, from the box's position
       this.humT -= dt;
       if (this.humT <= 0) {

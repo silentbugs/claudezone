@@ -417,7 +417,8 @@ export class Audio {
       .mix(tone(0.25, (t) => Math.sin(2 * Math.PI * (90 - t * 120) * t) * Math.exp(-t * 14) * 0.9), 1)
       .mix(N(1.2, 9912).filter('hp', 3000).env((t) => Math.exp(-t * 3) * (0.5 + 0.5 * Math.sin(t * 90))), 0.5, 2.4));
     // recon capture: the repeating data-upload chirp while the zone is being held
-    this.add('reconTick', tone(0.22, (t) => (Math.sin(2 * Math.PI * 1480 * t) * (t < 0.06 ? 1 : 0) + Math.sin(2 * Math.PI * 1980 * t) * (t > 0.09 && t < 0.15 ? 1 : 0)) * 0.35 * Math.exp(-t * 4)));
+    // recon capture: a deep rhythmic thud (a kick-drum like thump: falling low sine + a soft low-passed knock)
+    this.add('reconTick', tone(0.5, (t) => { const f = 48 + 70 * Math.exp(-t * 28); return Math.sin(2 * Math.PI * f * t) * Math.exp(-t * 7.5) * (t < 0.004 ? t / 0.004 : 1) * 0.95; }).mix(N(0.08, 4242).filter('lp', 420).env((t) => Math.exp(-t * 45)), 0.45));
     this.add('chestHum', tone(1.4, (t) => { const env = Math.sin(Math.PI * Math.min(1, t / 1.4)); return (Math.sin(2 * Math.PI * 196 * t) * 0.35 + Math.sin(2 * Math.PI * 294 * t + Math.sin(t * 9) * 0.6) * 0.25 + Math.sin(2 * Math.PI * 1175 * t) * 0.08 * Math.exp(-t * 3)) * env * 0.7; }));
     this.add('jet', N(4, 4321).filter('lp', 900).env((t) => Math.exp(-Math.pow((t - 1.6) / 0.7, 2)) * 1.3).mix(tone(4, (t) => Math.sin(2 * Math.PI * (1500 - t * 260) * t) * 0.06 * Math.exp(-Math.pow((t - 1.5) / 0.6, 2))), 1));
     this.add('callin', tone(0.5, (t) => (Math.sin(2 * Math.PI * 1760 * t) * (t < 0.08 ? 1 : 0) + Math.sin(2 * Math.PI * 1320 * t) * (t > 0.12 && t < 0.2 ? 1 : 0)) * 0.3).mix(N(0.3, 77).filter('bp', 2500, 0.5).env((t) => Math.exp(-t * 20) * 0.15), 1));
