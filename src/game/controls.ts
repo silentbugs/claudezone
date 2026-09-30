@@ -80,6 +80,7 @@ export class Controls {
     it.swap = P.swap; it.slot = P.slot; it.lethal = P.lethal; it.tactical = P.tactical; it.killstreak = P.killstreak;
     (it as any).slideHold = s.slideMode === 'hold'; (it as any).crouchHoldMode = s.crouchMode === 'hold'; (it as any).crouchHeld = this.down('crouch');
     (it as any).fieldUpgrade = P.fieldUpgrade; (it as any).melee = P.melee;
+    (it as any).tacHeld = this.down('tactical'); // heartbeat sensor: held up while the key is down
     it.fire = this.down('fire');
     it.ads = s.adsMode === 'toggle' ? this.adsToggled : this.down('ads');
     if (p.reloadT > 0 && s.adsMode === 'toggle') { /* keep toggle through reloads, as in MW */ }

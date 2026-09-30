@@ -41,7 +41,7 @@ export function weaponTick(sim: Sim, p: Player, dt: number) {
   if (p.stunT > 0) p.stunT -= dt;
   // swapping
   if (p.swapT > 0) { p.swapT -= dt; return; }
-  if (((p as any).callT ?? 0) > 0) { p.ads = Math.max(0, p.ads - dt * 6); return; } // calling in a killstreak: tablet out, no firing
+  if (((p as any).callT ?? 0) > 0 || (p as any).hbOn || (p.tactical?.type === 'heartbeat' && (it as any).tacHeld)) { p.ads = Math.max(0, p.ads - dt * 6); return; } // tablet / heartbeat sensor in hand // calling in a killstreak: tablet out, no firing
   if (((p as any).ladder ?? -1) >= 0 || ((p as any).asc ?? -1) >= 0) { p.ads = Math.max(0, p.ads - dt * 6); return; } // hands on the ladder
   const wantSlot = it.swap ? (p.cur === 0 ? 1 : 0) : it.slot ? it.slot - 1 : -1;
   it.swap = false; it.slot = 0;

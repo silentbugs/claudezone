@@ -171,7 +171,9 @@ export class ViewModel {
     for (const r of [40, 80, 120]) { g.beginPath(); g.arc(64, 124, r, Math.PI, 2 * Math.PI); g.stroke(); }
     g.strokeStyle = 'rgba(120,255,150,0.8)'; g.lineWidth = 2; g.beginPath(); g.arc(64, 124, sweep * 120, Math.PI * 1.2, Math.PI * 1.8); g.stroke();
     g.fillStyle = '#ff3a2a';
-    for (const [dx, dz] of blips) { g.beginPath(); g.arc(64 + dx * 3, 124 - dz * 3, 5, 0, Math.PI * 2); g.fill(); }
+    g.fillStyle = '#6aff8a'; g.shadowColor = '#6aff8a'; g.shadowBlur = 6;
+    for (const [dx, dz] of blips) { if (dz < -2 || Math.hypot(dx, dz) > 40) continue; g.beginPath(); g.arc(64 + dx * 3, 124 - dz * 3, 5, 0, Math.PI * 2); g.fill(); }
+    g.shadowBlur = 0;
     this.hbTex.needsUpdate = true;
   }
   /** play the throw (lethal / tactical) or stim animation with the left hand */
@@ -385,7 +387,7 @@ export class ViewModel {
     }
     // equipment hand: throw arc, stim jab, heartbeat sensor held up
     {
-      const hbOn = ((p as any).heartbeatUntil ?? 0) > this.simTime;
+      const hbOn = !!(p as any).hbOn;
       if (this.handKind && this.handT < this.handDur) {
         this.handT += dt; const u = Math.min(1, this.handT / this.handDur);
         this.hand.visible = true;

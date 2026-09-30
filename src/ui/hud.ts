@@ -98,6 +98,13 @@ export class Hud {
       h = `<img src="${img}"><div><b>${name.toUpperCase()}</b><span class="t${t <= 30 ? ' low' : ''}">${tt}</span><div class="o">${obj}</div>${prog >= 0 ? `<i><u style="width:${(prog * 100).toFixed(0)}%"></u></i>` : ''}</div>`;
     }
     this.set('ctr', this.ctr, h); this.ctr.style.display = h ? 'flex' : 'none';
+    // a bounty on you: the threat level (how close the hunting squad is)
+    let th = '';
+    for (const a of sim.active) if (a.kind === 'bounty' && a.target === me.id && me.alive) {
+      const d = this.hunterDist(a.squad, me), lv = d < 75 ? 'HIGH' : d < 200 ? 'MEDIUM' : 'LOW';
+      th = `BOUNTY ON YOU<b class="${lv.toLowerCase()}">THREAT: ${lv}</b>`;
+    }
+    this.set('threat', this.threat, th); this.threat.style.display = th ? 'block' : 'none';
   }
   /** Gulag (2020): balcony wait with your match countdown / queue place, then a big countdown before the fight */
   private gulagHud() {
@@ -124,17 +131,21 @@ export class Hud {
     if (ac.kind === 'mostwanted') return null;
     const t = sim.players[ac.target!];
     if (!t) return null;
-    // bounty: the target's area, refreshed every 10 s like the 2020 marker (a circle, not the exact spot)
-    const k = Math.floor(sim.time / 10);
-    if (this.bountyK !== k || !this.bountyAt) { this.bountyK = k; const a = (k * 2.4) % 6.28; this.bountyAt = [t.x + Math.cos(a) * 45, t.y, t.z + Math.sin(a) * 45]; }
-    return { x: this.bountyAt[0], y: this.bountyAt[1], z: this.bountyAt[2], kind: 'bounty', label: 'BOUNTY', area: 110 };
+    // bounty (2020): a big search circle round the target's rough position; once the hunters are inside it, a
+    // tighter circle (the target's threat goes LOW -> MEDIUM -> HIGH as the hunters close in)
+    const dh = this.hunterDist(ac.squad, t), stage = dh < 200 ? 1 : 0, R = stage ? 75 : 200, off = stage ? 35 : 110, per = stage ? 5 : 10;
+    const k = Math.floor(sim.time / per) * 2 + stage;
+    if (this.bountyK !== k || !this.bountyAt) { this.bountyK = k; const a = (k * 2.4) % 6.28, rr = off * (0.4 + 0.6 * ((k * 0.37) % 1)); this.bountyAt = [t.x + Math.cos(a) * rr, t.y, t.z + Math.sin(a) * rr]; }
+    return { x: this.bountyAt[0], y: this.bountyAt[1], z: this.bountyAt[2], kind: 'bounty', label: 'BOUNTY', area: R };
   }
+  /** nearest living member of a squad to a player */
+  private hunterDist(squad: number, t: Player) { let d = Infinity; for (const q of this.sim.players) if (q.squad === squad && q.alive && (q.phase === Phase.Alive || q.phase === Phase.Downed)) d = Math.min(d, Math.hypot(q.x - t.x, q.z - t.z)); return d; }
   private bountyK = -1; private bountyAt: [number, number, number] | null = null;
   private objImg = new Map<string, string>();
   private eqhm = el('div', 'eqhm'); private eqT = 0; private eqKind = '';
   private specId = -1;
   private gstat = el('div', 'gstat'); private gcount = el('div', 'gcount');
-  private ctr = el('div', 'ctr');
+  private ctr = el('div', 'ctr'); private threat = el('div', 'threat');
   private uavSnapT = -99; private uavDots: [number, number][] = [];
   private dmgArcs: { a: number; t: number; e: HTMLElement }[] = [];
   private last: Record<string, string> = {};
@@ -172,7 +183,7 @@ export class Hud {
       if (me.ping && Math.hypot(me.ping.x - x, me.ping.z - z) < 14 * v.span / this.fmCanvas.width * 2) { this.pings = []; me.ping = undefined; return; }
       this.pings = [{ x, z, t: 999 }]; me.ping = { x, z };
     });
-    this.root.append(this.ctr, this.eqhm, this.gstat, this.gcount, this.low, this.hurtEl, this.breakEl, this.vig, this.scope, mmw, this.circ, this.compass, this.cpings, this.heading, this.loc, this.counters, this.feed, this.squad, this.inv, this.fu, this.weap, this.xh, this.hm, this.tags, this.lcard, this.hold, this.prog, this.ctx, this.alt, this.banner, this.note, this.dmg, this.flash, this.dot, this.fullmap);
+    this.root.append(this.ctr, this.threat, this.eqhm, this.gstat, this.gcount, this.low, this.hurtEl, this.breakEl, this.vig, this.scope, mmw, this.circ, this.compass, this.cpings, this.heading, this.loc, this.counters, this.feed, this.squad, this.inv, this.fu, this.weap, this.xh, this.hm, this.tags, this.lcard, this.hold, this.prog, this.ctx, this.alt, this.banner, this.note, this.dmg, this.flash, this.dot, this.fullmap);
     this.buildCompass();
   }
 

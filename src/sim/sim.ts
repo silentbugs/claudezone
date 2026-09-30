@@ -405,10 +405,16 @@ export class Sim {
       if (p.phase === Phase.GulagWait) throwItem(this, p, 'rock');
       else if (p.tactical && p.tactical.n > 0) {
         if (p.tactical.type === 'stim') { (p as any).stimUntil = this.time + 1.2; p.tacCooldown = 0; this.emit({ t: 'stim', p: p.id }); }
-        else if (p.tactical.type === 'heartbeat') { (p as any).heartbeatUntil = this.time + 12; }
+        else if (p.tactical.type === 'heartbeat') { /* held up while the key is down (below), not used up by a press */ }
         else throwItem(this, p, p.tactical.type);
-        if (--p.tactical.n <= 0) p.tactical = null;
+        if (p.tactical && p.tactical.type !== 'heartbeat' && --p.tactical.n <= 0) p.tactical = null;
       }
+    }
+    // heartbeat sensor (2020): hold the tactical key to raise it; its battery drains while it is up
+    {
+      const P = p as any, hb = p.tactical?.type === 'heartbeat' && p.phase === Phase.Alive && !!(it as any).tacHeld && !((p as any).vehicle !== undefined);
+      P.hbOn = hb;
+      if (hb) { P.hbBattery = (P.hbBattery ?? 40) - dt; if (P.hbBattery <= 0) { p.tactical = null; P.hbOn = false; P.hbBattery = undefined; } }
     }
     // killstreaks (2020): pull out the tablet / radio and call it in (~1 s, weapon down), then it activates
     if (it.killstreak) { it.killstreak = false; if (p.killstreak && p.phase === Phase.Alive && p.turret < 0 && !((p as any).callT > 0)) { (p as any).callT = 1.1; (p as any).callK = p.killstreak; this.emit({ t: 'callin', p: p.id, kind: p.killstreak }); } }

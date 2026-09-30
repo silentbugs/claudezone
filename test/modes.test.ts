@@ -66,3 +66,13 @@ test('contracts (2020): objectives inside the circle, scavenger timer extends pe
     const other: any = s.players.find((q: any) => q.squad !== p.squad && q.squad !== tgt.squad); (s as any).kill(tgt, other.id, 'm4', false, false);
     assert.ok(p.cash >= cash + 1000, 'bounty paid when someone else killed the target'); }
 });
+
+test('heartbeat sensor: held up while the key is down (no firing), battery drains, lowered on release', () => {
+  const s = new Sim(world, 1, { humans: 1 }); s.time = 120;
+  const p: any = s.players[0]; Object.assign(p, { phase: 4, alive: true, bot: false }); p.x = s.circle.cx; p.z = s.circle.cz; p.y = world.hf.at(p.x, p.z);
+  p.tactical = { type: 'heartbeat', n: 1 }; p.weapons = [{ id: 'm4', rarity: 0, mag: 30 }, null]; p.cur = 0;
+  let shots = 0;
+  for (let i = 0; i < 120; i++) { p.intent.tacHeld = true; p.intent.fire = true; s.tick(1 / 60); shots += s.events.filter((e: any) => e.t === 'shot').length; s.events.length = 0; }
+  assert.ok(p.hbOn, 'sensor up while held'); assert.equal(shots, 0, 'no firing with the sensor up'); assert.ok(p.hbBattery < 39, 'battery drains');
+  p.intent.tacHeld = false; s.tick(1 / 60); assert.ok(!p.hbOn, 'lowered on release'); assert.ok(p.tactical, 'still carried');
+});

@@ -119,7 +119,7 @@ export class Match {
   /** 2020 variable zoom: scoped weapons toggle between two magnifications while aiming */
   scopeLevel = 0;
   private humT = 0; private pauseTime = 0;
-  private hbT = 0; private hbBlips: [number, number][] = [];
+  private hbT = 0; private hbBlips: [number, number][] = []; private hbWorld: [number, number][] = [];
   private tugT = 0; private lastAirPhase = -1; private chuteRoll = 0;
   /** current ADS magnification, eased so a zoom toggle or optic swap doesn't snap */
   zoomNow = 1;
@@ -473,15 +473,19 @@ export class Match {
         if (best) audio.play('chestHum', { x: best.x, y: best.y + 0.4, z: best.z, range: 12, vol: 0.12 + 0.5 * (1 - bd / 30) ** 2 });
       }
       // heartbeat sensor: enemies in front within 40 m, refreshed every half second (2020)
-      if (((me as any).heartbeatUntil ?? 0) > sim.time) {
+      if ((me as any).hbOn) {
+        // a scan every 1.5 s records where nearby enemies are; the blips then stay put in the world, so they
+        // swing round the screen as you move and turn
         this.hbT -= dt;
         if (this.hbT <= 0) {
-          this.hbT = 0.5; const fx = -Math.sin(this.camYaw), fz = -Math.cos(this.camYaw), rx = Math.cos(this.camYaw), rz = -Math.sin(this.camYaw);
-          this.hbBlips = [];
-          for (const q of sim.players) if (q.alive && q.squad !== me.squad && (q.phase === Phase.Alive || q.phase === Phase.Downed)) { const dx = q.x - me.x, dz = q.z - me.z, ahead = dx * fx + dz * fz, side = dx * rx + dz * rz; if (ahead > 0 && Math.hypot(ahead, side) < 40) this.hbBlips.push([side, ahead]); }
+          this.hbT = 1.5; this.hbWorld = [];
+          for (const q of sim.players) if (q.alive && q.squad !== me.squad && (q.phase === Phase.Alive || q.phase === Phase.Downed) && Math.hypot(q.x - me.x, q.z - me.z) < 45) this.hbWorld.push([q.x, q.z]);
+          audio.play('beep', { ui: true, vol: 0.12, rate: 0.8 });
         }
-        this.vm.setHeartbeat(this.hbBlips, 1 - this.hbT / 0.5);
-      }
+        const fx = -Math.sin(this.camYaw), fz = -Math.cos(this.camYaw), rx = Math.cos(this.camYaw), rz = -Math.sin(this.camYaw);
+        this.hbBlips = this.hbWorld.map(([wx, wz]) => { const dx = wx - me.x, dz = wz - me.z; return [dx * rx + dz * rz, dx * fx + dz * fz] as [number, number]; });
+        this.vm.setHeartbeat(this.hbBlips, 1 - this.hbT / 1.5);
+      } else this.hbT = 0;
       this.vm.update(meR, dt, this.lastMouse.dx, this.lastMouse.dy, Math.hypot(me.vx, me.vz), me.sprinting);
       this.vm.render(this.sm.renderer);
     }
