@@ -138,3 +138,18 @@ test('recon (2020): each completed recon reveals one more future circle; untaken
   assert.ok(k.taken && k.gone, 'destroyed a few seconds later');
   assert.ok(s.events.some((e: any) => e.t === 'contractGone'));
 });
+
+test('vehicles: ramming walls barely scratches them (gunfire is what wrecks a vehicle)', async () => {
+  const { updateVehicles, makeVehicle, VEHICLES } = await import('../src/sim/vehicles');
+  // flat stub world with a wall across x = 1030
+  const col = { groundAt: () => 0, waterAt: () => -99, pushOut: (x: number, _y: number, z: number, _h: number, r: number, _s: number, out: any) => { out.hit = x + r > 1030; out.x = Math.min(x, 1030 - r); out.z = z; } };
+  const v: any = makeVehicle(0, 'atv', 1000, 0, 1000, -Math.PI / 2); // facing +x
+  const p: any = { id: 0, alive: true, phase: 4, vehicle: 0, intent: { mz: 1, mx: 0 } };
+  v.seats[0] = 0;
+  const sim: any = { vehicles: [v], players: [p], world: { col, hf: { size: 4000 } }, playersNear: () => [], damage() {}, emit() {} };
+  let crashes = 0; sim.emit = (e: any) => { if (e.t === 'vcrash') crashes++; };
+  for (let k = 0; k < 10; k++) { v.x = 1000; v.vx = v.vz = 0; for (let i = 0; i < 180; i++) updateVehicles(sim, 1 / 60); }
+  console.log('after 10 wall rams: health', v.health.toFixed(0), '/', VEHICLES.atv.health, 'crashes', crashes);
+  assert.ok(crashes >= 10, 'it did hit the wall');
+  assert.ok(v.alive && v.health > VEHICLES.atv.health * 0.8, 'still in good shape after ten rams');
+});

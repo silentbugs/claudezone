@@ -120,7 +120,7 @@ export function updateVehicles(sim: Sim, dt: number) {
       }
       if (hitAny && v.speed > 6) {
         const impact = v.speed;
-        v.health -= impact * impact * 0.9; crash(sim, v, impact);
+        crash(sim, v, impact);
         v.vx *= -0.25; v.vz *= -0.25;
         for (const id of v.seats) if (id >= 0 && impact > 18) sim.damage(sim.players[id], (impact - 18) * 6, -1, 'crash', false, true);
       }
@@ -129,7 +129,7 @@ export function updateVehicles(sim: Sim, dt: number) {
       const wh = (lx: number, lz: number) => col.groundAt(v.x + lx * c + lz * s, v.z - lx * s + lz * c, v.y + 1.2, 0.3);
       const fl = wh(-hw, -hl), fr = wh(hw, -hl), bl = wh(-hw, hl), br = wh(hw, hl);
       const gy = (fl + fr + bl + br) / 4;
-      if (v.y > gy + 0.05) { v.vy -= 20 * dt; v.y += v.vy * dt; if (v.y < gy) { if (v.vy < -14) { v.health -= (-v.vy - 14) * 40; crash(sim, v, -v.vy); } v.y = gy; v.vy = 0; } }
+      if (v.y > gy + 0.05) { v.vy -= 20 * dt; v.y += v.vy * dt; if (v.y < gy) { if (v.vy < -14) crash(sim, v, -v.vy); v.y = gy; v.vy = 0; } }
       else { v.y = gy; v.vy = Math.max(0, (gy - v.py) / dt) * 0.5; }
       v.pitch += (Math.atan2(((fl + fr) - (bl + br)) / 2, hl * 2) - v.pitch) * Math.min(1, dt * 8);
       v.roll += (Math.atan2(((fr + br) - (fl + bl)) / 2, hw * 2) - v.roll) * Math.min(1, dt * 8);
@@ -193,22 +193,28 @@ function heli(sim: Sim, v: Vehicle, d: VehicleDef, driver: Player | null, dt: nu
   const g2 = col.groundAt(v.x, v.z, v.y + 2, 2);
   if (v.y < g2) {
     if (abandoned && v.vy < -8) v.health = 0; // crashes and blows up on whatever it hits (ground, roof, vehicle)
-    else if (v.vy < -10 || v.speed > 20) { v.health -= (Math.abs(v.vy) + v.speed) * 30; crash(sim, v, Math.abs(v.vy) + v.speed); }
+    else if (v.vy < -10 || v.speed > 20) crash(sim, v, Math.abs(v.vy) + v.speed);
     v.y = g2; v.vy = 0; v.vx *= 0.5; v.vz *= 0.5;
     if (!driver && v.health > 0) { (v as any).lastDriver = undefined; (v as any).falling = false; } // (a crash keeps the pilot for the kill credit)
   }
   // rotor strikes on structures
   // rotor / body strikes on buildings: pushed clear, damage only from a real impact (not brushing a tree or landing by a wall)
   col.pushOut(v.x, v.y + 0.3, v.z, d.hgt - 0.3, 3.2, 0.2, push);
-  if (push.hit) { if (abandoned && Math.hypot(v.speed, v.vy) > 12) v.health = 0; else if (v.speed > 6) { v.health -= v.speed * 25 * dt; crash(sim, v, v.speed); } v.x = push.x; v.z = push.z; v.vx *= 0.5; v.vz *= 0.5; }
+  if (push.hit) { if (abandoned && Math.hypot(v.speed, v.vy) > 12) v.health = 0; else if (v.speed > 6) crash(sim, v, v.speed); v.x = push.x; v.z = push.z; v.vx *= 0.5; v.vz *= 0.5; }
 }
 
 /** Damage below this fraction of max health sets the vehicle on fire. */
 export const VEHICLE_FIRE = 0.2;
-/** A hit that dents the vehicle: crunch sound + debris (throttled so scraping along a wall isn't a machine gun). */
+/**
+ * A hit that dents the vehicle: crunch sound + debris (throttled so scraping along a wall isn't a machine gun).
+ * Vehicles are wrecked by gunfire and explosives; running into things barely scratches them (~1 % of health for a
+ * hard hit, never more than 2 %).
+ */
 function crash(sim: Sim, v: Vehicle, impact: number) {
   if ((v as any).crashCd > 0 || v.health <= 0) return;
   (v as any).crashCd = 0.35;
+  const max = VEHICLES[v.type].health;
+  v.health -= Math.min(max * 0.02, max * 0.001 * Math.max(0, impact - 6));
   sim.emit({ t: 'vcrash', x: v.x, y: v.y + 0.8, z: v.z, impact });
 }
 function destroy(sim: Sim, v: Vehicle) {
