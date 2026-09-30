@@ -771,6 +771,7 @@ export class Sim {
   fightOf(id: number) { return this.gulag.fights.find((f) => f.a === id || f.b === id) ?? null; }
   private updateGulag(dt: number) {
     const g = this.gulag;
+    for (const p of this.players) if ((p as any).redeployAt !== undefined && this.time >= (p as any).redeployAt) { (p as any).redeployAt = undefined; if (p.alive && p.phase === Phase.Gulag) this.redeploy(p); }
     g.queue = g.queue.filter((id) => this.players[id].phase === Phase.GulagWait);
     // start fights in free arenas
     const ready = () => g.queue.filter((id) => ((this.players[id] as any).gulagReadyAt ?? 0) <= this.time);
@@ -822,7 +823,8 @@ export class Sim {
     const loser = this.players[loserId], win = this.players[winId];
     loser.phase = Phase.Dead; loser.alive = false; loser.weapons = [null, null];
     this.emit({ t: 'gulag', p: loserId, msg: 'lose' });
-    if (win) { this.emit({ t: 'gulag', p: winId, msg: 'win' }); this.redeploy(win); }
+    // a moment to take the win in (held in place, screen fades) before the redeploy
+    if (win) { this.emit({ t: 'gulag', p: winId, msg: 'win' }); (win as any).frozenUntil = this.time + 2.5; (win as any).redeployAt = this.time + 2.5; }
     this.aliveCount = this.players.filter((q) => q.alive).length;
   }
 

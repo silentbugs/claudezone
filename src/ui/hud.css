@@ -286,3 +286,6 @@
 .hud .threat { position: absolute; left: calc(var(--px) * 100); top: calc(var(--px) * 300); display: none; color: #e8e8e0; font-size: calc(var(--px) * 18); letter-spacing: 0.08em; text-shadow: 0 1px 2px #000; }
 .hud .threat b { display: block; font-size: calc(var(--px) * 24); letter-spacing: 0.04em; }
 .hud .threat b.low { color: #7be07b; } .hud .threat b.medium { color: #f6c343; } .hud .threat b.high { color: #ff4a3a; }
+/* killcam banner */
+.hud .killcam { position: absolute; left: 50%; top: 9%; transform: translateX(-50%); display: none; z-index: 41; text-align: center; color: #ff5a4a; font-weight: 800; letter-spacing: 0.3em; font-size: calc(var(--u) * 1.4); text-shadow: 0 2px 6px #000; }
+.hud .killcam b { display: block; color: #fff; letter-spacing: 0.04em; font-size: calc(var(--u) * 1.2); }

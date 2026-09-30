@@ -67,7 +67,9 @@ async function boot() {
       document.exitPointerLock?.();
       input.inGame = false; input.unlockKeyboard();
       const e = document.createElement('div'); e.className = 'endscr';
-      e.innerHTML = `<div class="big ${won ? 'win' : ''}">${won ? 'WARZONE VICTORY' : `#${place}`}</div><div class="stats"><div><b>${me.kills}</b>Kills</div><div><b>${Math.round(me.damage)}</b>Damage</div><div><b>${Math.floor(match!.sim.time / 60)}:${String(Math.floor(match!.sim.time % 60)).padStart(2, '0')}</b>Time</div></div><button data-a="again">Play again</button><button data-a="menu">Main menu</button>`;
+      e.innerHTML = `<div class="big ${won ? 'win' : ''}">${won ? 'WARZONE VICTORY' : `#${place}`}</div><div class="stats"><div><b>${me.kills}</b>Kills</div><div><b>${Math.round(me.damage)}</b>Damage</div><div><b>${Math.floor(match!.sim.time / 60)}:${String(Math.floor(match!.sim.time % 60)).padStart(2, '0')}</b>Time</div></div>${!won && !match!.sim.over ? '<button data-a="spectate">Spectate</button>' : ''}<button data-a="again">Play again</button><button data-a="menu">Main menu</button>`;
+      // eliminated while the match goes on: keep watching (first person, following your killer's chain)
+      e.querySelector('[data-a=spectate]')?.addEventListener('click', () => { e.remove(); match!.resumeSpectating(); input.inGame = true; if (settings.fullscreen) input.lockKeyboard(); input.lock(); });
       e.querySelector('[data-a=again]')!.addEventListener('click', () => { e.remove(); match!.dispose(); match = null; try { sessionStorage.setItem('vd-autostart', '1'); } catch { /* */ } location.reload(); });
       e.querySelector('[data-a=menu]')!.addEventListener('click', () => { e.remove(); match!.dispose(); match = null; showMenu(); });
       ui.appendChild(e);

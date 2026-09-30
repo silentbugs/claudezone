@@ -118,7 +118,69 @@ export class Match {
 
   /** 2020 variable zoom: scoped weapons toggle between two magnifications while aiming */
   scopeLevel = 0;
-  private humT = 0; private reconT = 0; private pauseTime = 0;
+  /** eliminated but still watching (end screen dismissed with Spectate); the final result still shows at the end */
+  spectatingOn = false;
+  resumeSpectating() { this.spectatingOn = true; (this as any).done = false; }
+  private humT = 0;
+  private spYaw = 0; private spPitch = 0;
+  // ---- replay recorder: every player's pose for the last 7 s (one frame per sim tick)
+  private static REC = 420; private static F = 11;
+  private rec: { s: Float32Array; w: ({ id: string; rarity: number; mag: number } | null)[] }[] = [];
+  private recN = 0; // ticks recorded so far (ring index = recN % REC)
+  private recordTick() {
+    const n = this.sim.players.length, F = Match.F, slot = this.recN % Match.REC;
+    let r = this.rec[slot]; if (!r) { r = { s: new Float32Array(n * F), w: new Array(n).fill(null) }; this.rec[slot] = r; }
+    for (let i = 0; i < n; i++) {
+      const p = this.sim.players[i], o = i * F;
+      r.s[o] = p.x; r.s[o + 1] = p.y; r.s[o + 2] = p.z; r.s[o + 3] = p.yaw; r.s[o + 4] = p.pitch; r.s[o + 5] = p.phase; r.s[o + 6] = p.stance; r.s[o + 7] = p.ads; r.s[o + 8] = p.alive ? 1 : 0; r.s[o + 9] = p.vx; r.s[o + 10] = p.vz;
+      r.w[i] = p.weapons[p.cur] ?? null;
+    }
+    this.recN++;
+  }
+  private post: { t: number; killer: number; x: number; y: number; z: number; end: number; yaw: number; pitch: number; frames: { s: Float32Array; w: any[] }[] } | null = null;
+  /** copy the last 5 s out of the ring at the moment of death (the ring keeps recording while the death cam plays) */
+  private snapshotReplay() { const out: { s: Float32Array; w: any[] }[] = []; const n = Math.min(this.recN, 60 * Match.KC); for (let i = this.recN - n; i < this.recN; i++) { const r = this.rec[i % Match.REC]; out.push({ s: r.s.slice(), w: r.w.slice() }); } return out; }
+  private postMode: '' | 'deathcam' | 'replay' = '';
+  private static DEATH = 1.4; private static KC = 5;
+  private postStep(dt: number): '' | 'deathcam' | 'replay' {
+    const p = this.post; this.postMode = '';
+    if (!p) { this.setKillcamLabel(''); return ''; }
+    p.t += dt;
+    const D = Match.DEATH, K = Match.KC, haveReplay = p.killer >= 0 && p.killer !== this.me.id && p.frames.length >= 60 * 2;
+    if (p.t < D) { this.postMode = 'deathcam'; if (p.t > D - 0.35) this.fadeK = Math.max(this.fadeK, (p.t - (D - 0.35)) / 0.35); }
+    else if (haveReplay && p.t < D + K) { this.postMode = 'replay'; const u = p.t - D; this.fadeK = u < 0.35 ? 1 - u / 0.35 : u > K - 0.35 ? (u - (K - 0.35)) / 0.35 : 0; }
+    else { this.post = null; this.fadeK = 1; this.fadeTo(0, 0.6, 0); }
+    this.setKillcamLabel(this.postMode === 'replay' ? `KILLCAM<b>${this.sim.players[p.killer].name}</b>` : '');
+    return this.postMode;
+  }
+  /** Put every player where they were at the replay instant; returns a function that puts them back. */
+  private applyReplay(): () => void {
+    const p = this.post!, K = Match.KC, F = Match.F;
+    const n = p.frames.length, idx = Math.min(n - 1, Math.max(0, Math.floor(n - 60 * K + (p.t - Match.DEATH) * 60)));
+    const r = p.frames[idx]; if (!r) return () => {};
+    const saved: any[] = [];
+    this.sim.players.forEach((q: any, i) => {
+      const o = i * F;
+      saved.push([q.x, q.y, q.z, q.px, q.py, q.pz, q.yaw, q.pyaw, q.pitch, q.phase, q.stance, q.ads, q.alive, q.vx, q.vz, q.weapons, q.cur]);
+      q.x = q.px = r.s[o]; q.y = q.py = r.s[o + 1]; q.z = q.pz = r.s[o + 2]; q.yaw = q.pyaw = r.s[o + 3]; q.pitch = r.s[o + 4]; q.phase = r.s[o + 5]; q.stance = r.s[o + 6]; q.ads = r.s[o + 7]; q.alive = r.s[o + 8] > 0.5; q.vx = r.s[o + 9]; q.vz = r.s[o + 10];
+      q.weapons = [r.w[i], null]; q.cur = 0;
+    });
+    return () => this.sim.players.forEach((q: any, i) => { const v = saved[i]; [q.x, q.y, q.z, q.px, q.py, q.pz, q.yaw, q.pyaw, q.pitch, q.phase, q.stance, q.ads, q.alive, q.vx, q.vz, q.weapons, q.cur] = v; });
+  }
+  // ---- full-screen fade (deaths, killcam cuts, Gulag win -> redeploy)
+  private fadeEl: HTMLElement | null = null; private kcEl: HTMLElement | null = null;
+  private fadeK = 0; private fadeTarget = 0; private fadeRate = 1; private fadeDelay = 0;
+  private fadeTo(target: number, seconds: number, delay: number) { this.fadeTarget = target; this.fadeRate = 1 / Math.max(0.05, seconds); this.fadeDelay = delay; }
+  private fadeUpdate(dt: number) {
+    if (!this.fadeEl) { this.fadeEl = document.createElement('div'); this.fadeEl.style.cssText = 'position:absolute;inset:0;background:#000;pointer-events:none;opacity:0;z-index:40'; this.hud.root.appendChild(this.fadeEl); }
+    if (this.fadeDelay > 0) this.fadeDelay -= dt;
+    else if (this.fadeK !== this.fadeTarget && !this.postMode) { const st = this.fadeRate * dt; this.fadeK += Math.sign(this.fadeTarget - this.fadeK) * Math.min(st, Math.abs(this.fadeTarget - this.fadeK)); }
+    this.fadeEl.style.opacity = this.fadeK.toFixed(3);
+  }
+  private setKillcamLabel(html: string) {
+    if (!this.kcEl) { this.kcEl = document.createElement('div'); this.kcEl.className = 'killcam'; this.hud.root.appendChild(this.kcEl); }
+    if (this.kcEl.innerHTML !== html) this.kcEl.innerHTML = html; this.kcEl.style.display = html ? 'block' : 'none';
+  } private reconT = 0; private pauseTime = 0;
   private hbT = 0; private hbBlips: [number, number][] = []; private hbWorld: [number, number][] = [];
   private tugT = 0; private lastAirPhase = -1; private chuteRoll = 0;
   /** current ADS magnification, eased so a zoom toggle or optic swap doesn't snap */
@@ -184,14 +246,15 @@ export class Match {
       this.clock.advance(dt, (step) => {
         this.fillIntent();
         this.sim.tick(step);
+        this.recordTick();
         for (const e of this.sim.events) this.handleEvent(e);
         this.sim.events.length = 0;
       });
     }
     this.render(dt, time);
     if (this.sim.over && !this.done) { this.done = true; const me = this.me; setTimeout(() => this.onEnd(this.sim.winner === me.squad, this.placement(), me), 2500); }
-    if (!this.me.alive && !this.done && this.me.phase === Phase.Dead && !this.sim.players.some((q) => q.squad === this.me.squad && q.alive)) {
-      this.done = true; setTimeout(() => this.onEnd(false, this.placement(), this.me), 3500);
+    if (!this.me.alive && !this.done && !this.spectatingOn && this.me.phase === Phase.Dead && !this.sim.players.some((q) => q.squad === this.me.squad && q.alive)) {
+      this.done = true; setTimeout(() => this.onEnd(false, this.placement(), this.me), this.post ? 7500 : 3500);
     }
   }
   private placement() { return this.sim.over && this.sim.winner === this.me.squad ? 1 : this.sim.squadsLeft() + 1; }
@@ -225,6 +288,7 @@ export class Match {
     switch (e.t) {
       case 'kill': {
         const v = sim.players[e.victim];
+        if (e.victim === this.me.id && !sim.inWarmup) this.post = { t: 0, killer: e.attacker, x: e.x ?? v.x, y: e.y ?? v.y, z: e.z ?? v.z, end: this.recN, yaw: this.camYaw, pitch: this.camPitch, frames: this.snapshotReplay() };
         if (e.victim !== this.viewId() && e.x !== undefined && d(e.x, e.y!, e.z!) < 90 && v.phase !== Phase.Gulag) this.soldiers.addCorpse(e.x, e.y!, e.z!, e.yaw!, v.squad, sim.time, !!e.lying);
         break;
       }
@@ -285,6 +349,8 @@ export class Match {
       }
       case 'stim': if (e.p === this.viewId()) this.vm.useItem('stim'); else this.soldiers.oneShot(e.p, 'Consume', 0.9); break;
       case 'melee': if (e.p === 0) audio.play('melee', { vol: 0.6 }); break;
+      case 'gulag': if (e.p === this.me.id && e.msg === 'win') this.fadeTo(1, 1.2, 1.3); break;
+      case 'redeploy': if (e.p === this.me.id) { this.fadeK = 1; this.fadeTo(0, 0.9, 0); } break;
       case 'flare': if (d(e.x, e.y, e.z) < 700) audio.play('flareLaunch', { x: e.x, y: e.y + 20, z: e.z, range: 180, vol: 1 }); if (e.squad !== me.squad) this.hud.showNote('Enemy Recon flare spotted'); break;
       case 'callin': if (e.p === this.viewId()) audio.play('callin', { ui: true, vol: 0.6 }); break;
       case 'marker': if (e.kind === 'airstrike' || e.kind === 'cluster') { const pass = e.kind === 'cluster' ? 3.1 : 3.9, gy = sim.world.hf.at(e.x, e.z); setTimeout(() => audio.play('jet', { x: e.x, y: gy + 100, z: e.z, range: 600, vol: 1.2 }), Math.max(0, (pass - 1.6) * 1000)); }
@@ -316,7 +382,14 @@ export class Match {
 
   private viewId() { return this.me.alive || this.me.phase === Phase.Downed ? 0 : this.spectate >= 0 ? this.spectate : 0; }
 
+  /** Post-death sequence (2020 feel): ~1.4 s looking at your killer, a 5 s first-person killcam from their eyes, fades between. */
   private render(dt: number, time: number) {
+    this.fadeUpdate(dt);
+    const mode = this.postStep(this.paused ? 0 : dt);
+    const restore = mode === 'replay' ? this.applyReplay() : null;
+    try { this.renderScene(dt, time); } finally { restore?.(); }
+  }
+  private renderScene(dt: number, time: number) {
     // paused: everything that animates on the render side (viewmodel, bodies, loot, effects) holds still
     if (this.paused) { dt = 0; time = this.pauseTime; } else this.pauseTime = time;
     const sim = this.sim, me = this.me, a = this.clock.alpha, cam = this.sm.camera;
@@ -350,7 +423,21 @@ export class Match {
     { const k = Math.exp(-dt * 9); this.flinchP *= k; this.flinchY *= k; this.flinchR *= k; }
     const phase = vp.phase;
     const yaw = this.spectate >= 0 ? vp.yaw : this.camYaw + me.recoilYaw, pitch = this.spectate >= 0 ? vp.pitch : this.camPitch + me.recoil;
-    if (phase === Phase.Plane) {
+    if (this.postMode) {
+      if (this.postMode === 'replay') {
+        const k = sim.players[this.post!.killer];
+        cam.position.set(k.x, k.y + eyeHeight(k), k.z); cam.rotation.set(k.pitch, k.yaw, 0, 'YXZ');
+        this.chars.hidden = k.id;
+      } else {
+        // death cam: where you fell, turning to face whoever killed you
+        const p = this.post!, k = p.killer >= 0 ? sim.players[p.killer] : null;
+        const ty = k ? Math.atan2(-(k.x - p.x), -(k.z - p.z)) : p.yaw, tp = k ? Math.atan2(k.y - p.y, Math.hypot(k.x - p.x, k.z - p.z)) : -0.3;
+        p.yaw += wrapAngle(ty - p.yaw) * Math.min(1, dt * 3); p.pitch += (tp - p.pitch) * Math.min(1, dt * 3);
+        cam.position.set(p.x, p.y + 0.6, p.z); cam.rotation.set(p.pitch, p.yaw, 0.15, 'YXZ');
+        this.chars.hidden = -1;
+      }
+      audio.loop('wind', 0); audio.loop('engine', 0); audio.loop('heli', 0); audio.loop('vehicle', 0);
+    } else if (phase === Phase.Plane) {
       const pl = sim.plane;
       const dist = 55;
       cam.position.set(pl.x + Math.sin(this.camYaw) * Math.cos(this.camPitch) * dist, pl.y + 10 - Math.sin(this.camPitch) * dist, pl.z + Math.cos(this.camYaw) * Math.cos(this.camPitch) * dist);
@@ -390,9 +477,10 @@ export class Match {
       audio.loop(d.air ? 'heli' : 'vehicle', 0.35 + Math.min(0.35, v.speed / 60), d.air ? 0.8 + v.rotor * 0.3 : 0.7 + v.speed / 30, d.air ? 3000 : 1200);
       audio.loop(d.air ? 'vehicle' : 'heli', 0);
     } else if (this.spectate >= 0 && phase !== Phase.Gulag) {
-      this.chars.hidden = -1;
-      cam.position.set(x + Math.sin(yaw) * 4, y + 2.6, z + Math.cos(yaw) * 4);
-      cam.lookAt(x, y + 1.5, z);
+      // spectating is first person: their eyes, their aim (smoothed), their gun
+      this.chars.hidden = vp.id;
+      this.spYaw += wrapAngle(vp.yaw - this.spYaw) * Math.min(1, dt * 14); this.spPitch += (vp.pitch - this.spPitch) * Math.min(1, dt * 14);
+      cam.position.set(x, y + eyeHeight(vp), z); cam.rotation.set(this.spPitch, this.spYaw, 0, 'YXZ');
       audio.loop('wind', 0); audio.loop('engine', 0); audio.loop('heli', 0); audio.loop('vehicle', 0);
     } else {
       // first person: eye height eases between stances (prone is slower), slides tilt the view
@@ -427,6 +515,7 @@ export class Match {
       if (!alive || hp >= 80) this.lowState = false; else if (hp < 55) this.lowState = true;
       const target = vp.phase === Phase.Downed ? 1 : this.lowState ? Math.min(1, Math.max(0.15, (80 - hp) / 60)) : 0;
       this.lowK += (target - this.lowK) * Math.min(1, dt * (target > this.lowK ? 6 : 1.6));
+      if (this.postMode) this.lowK = 0; // death cam / killcam: no low-health grey
       const k = this.lowK;
       if (k > 0.05 && vp.phase !== Phase.Dead) {
         const period = 1.15 - 0.45 * k; // faster heartbeat when closer to death
@@ -436,7 +525,7 @@ export class Match {
         if (this.breathT <= 0) { this.breathT = 1.7; if (k > 0.25) audio.play('breath', { ui: true, vol: 0.15 + 0.3 * k }); }
       } else { this.beatT = 0; this.breathT = 0.4; }
       this.hud.setLowHealth(k);
-      if (this.sm.grade) { const u = this.sm.grade.uniforms; u.uGas.value += ((sim.inGas(vp) ? 1 : 0) - u.uGas.value) * Math.min(1, dt * 3); u.uLow.value = k * 0.8; }
+      if (this.sm.grade) { const u = this.sm.grade.uniforms; u.uGas.value += ((sim.inGas(vp) && !this.postMode && vp.alive ? 1 : 0) - u.uGas.value) * Math.min(1, dt * 3); u.uLow.value = k * 0.8; }
       else this.sm.renderer.domElement.style.filter = k > 0.02 ? `grayscale(${(k * 0.75).toFixed(2)})` : '';
     }
     if (Math.abs(cam.fov - fov) > 0.01) { cam.fov += (fov - cam.fov) * Math.min(1, dt * 18); cam.updateProjectionMatrix(); }
@@ -463,7 +552,11 @@ export class Match {
     const fp = (phase === Phase.Alive || phase === Phase.Gulag || phase === Phase.GulagWait) && !(vehicleOf(sim, vp) && (vp as any).seat === 0);
     this.vm.updateAir(this.spectate < 0 ? me : null, dt, this.tpBlend < 0.35 && !this.debugCam);
     if ((phase === Phase.Freefall || phase === Phase.Chute) && this.tpBlend < 0.35 && !this.debugCam) this.vm.render(this.sm.renderer);
-    if (fp && this.spectate < 0 && !this.debugCam) {
+    if (!this.debugCam && (this.postMode === 'replay' || (fp && this.spectate >= 0 && !this.postMode))) {
+      const who = this.postMode === 'replay' ? sim.players[this.post!.killer] : vp;
+      if (who.weapons[who.cur]) { this.vm.simTime = sim.time; this.vm.update(who, dt, 0, 0, Math.hypot(who.vx, who.vz), who.sprinting); this.vm.render(this.sm.renderer); }
+    }
+    if (fp && this.spectate < 0 && !this.debugCam && !this.postMode) {
       this.vm.simTime = sim.time;
       // recon capture: the upload chirp repeats while your squad holds the zone, quicker as it nears completion
       { const ac = sim.active.find((q) => q.squad === me.squad && q.kind === 'recon'); const inside = ac && ac.flare && sim.players.some((q) => q.squad === me.squad && q.phase === Phase.Alive && Math.hypot(q.x - ac.zx!, q.z - ac.zz!) < 9);
@@ -495,7 +588,7 @@ export class Match {
     // HUD
     const proj = new THREE.Vector3();
     const project = (px: number, py: number, pz: number): [number, number, boolean] => { proj.set(px, py, pz).project(cam); return [(proj.x * 0.5 + 0.5) * innerWidth, (-proj.y * 0.5 + 0.5) * innerHeight, proj.z < 1 && Math.abs(proj.x) < 1.1 && Math.abs(proj.y) < 1.1]; };
-    this.hud.update(dt, this.spectate >= 0 ? vp.yaw : this.camYaw, pitch, project, { ads: me.ads, scope: !!def?.scope, optic: this.vm.optic, spectating: this.spectate >= 0 ? vp : null, mapOpen: this.mapOpen });
+    this.hud.update(dt, this.spectate >= 0 ? vp.yaw : this.camYaw, pitch, project, { ads: me.ads, scope: !!def?.scope, optic: this.vm.optic, spectating: this.postMode === 'replay' ? sim.players[this.post!.killer] : this.spectate >= 0 ? vp : null, mapOpen: this.mapOpen });
     void wrapAngle;
   }
 }
