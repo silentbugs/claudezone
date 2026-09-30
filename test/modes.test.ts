@@ -95,3 +95,21 @@ test('helicopter: bail out mid-air and it drops, crashes and explodes on the pla
   assert.ok(credited, 'the pilot gets the credit');
   assert.ok(pilot.alive && (pilot.phase === 2 || pilot.phase === 3), 'the pilot is skydiving / parachuting');
 });
+
+test('vehicles (2020): ATV / Rover / SUV hit top speed in ~1.5 s, the Cargo Truck takes several seconds', async () => {
+  const { updateVehicles, makeVehicle, VEHICLES } = await import('../src/sim/vehicles');
+  // flat, empty stub world: measures the drive model alone
+  const col = { groundAt: () => 0, pushOut: (_x: number, _y: number, _z: number, _h: number, _r: number, _s: number, out: any) => { out.hit = false; }, waterAt: () => -99 };
+  const times: Record<string, number> = {};
+  for (const type of ['atv', 'rover', 'suv', 'truck'] as const) {
+    const v: any = makeVehicle(0, type, 1000, 0, 1000, 0);
+    const p: any = { id: 0, alive: true, phase: 4, vehicle: 0, intent: { mz: 1, mx: 0 } };
+    v.seats[0] = 0;
+    const sim: any = { vehicles: [v], players: [p], world: { col, hf: { size: 4000 } }, playersNear: () => [], damage() {}, emit() {} };
+    let t = 0; while (t < 10 && v.speed < VEHICLES[type].maxSpeed * 0.9) { updateVehicles(sim, 1 / 60); t += 1 / 60; }
+    times[type] = +t.toFixed(2);
+  }
+  console.log('0 -> 90% top speed (s)', JSON.stringify(times));
+  for (const k of ['atv', 'rover', 'suv']) assert.ok(times[k] < 1.6, `${k} reaches top speed fast (${times[k]} s)`);
+  assert.ok(times.truck > 2.5, `the Cargo Truck is slow to get going (${times.truck} s)`);
+});

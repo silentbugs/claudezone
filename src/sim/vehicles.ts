@@ -11,16 +11,16 @@ export type VehicleType = 'atv' | 'rover' | 'suv' | 'truck' | 'heli';
 /**
  * Top speeds are Warzone 2020 measurements (racinggames.gg vehicle stats: ATV 17.8, Tac Rover 19.4, SUV 16.9,
  * helicopter 25.8 m/s; the Cargo Truck is not listed, heavy-truck class ~15 m/s). `accel` is the launch
- * acceleration (m/s²); it tapers off toward top speed, so 0 → max takes ~2.8 s (ATV) to ~6.5 s (truck).
+ * acceleration (m/s²); 2020 vehicles are punchy: 0 → max in ~1.2-1.5 s (ATV, Rover, SUV), the Cargo Truck ~4 s.
  */
 export interface VehicleDef { name: string; seats: [number, number, number][]; maxSpeed: number; accel: number; turn: number; health: number; len: number; wid: number; hgt: number; air?: boolean }
 /** Seat offsets are local (x right, y up, z forward = -z). Seat 0 drives. */
 export const VEHICLES: Record<VehicleType, VehicleDef> = {
-  atv: { name: 'ATV', seats: [[0, 0.9, 0.1], [0, 1.0, 0.8]], maxSpeed: 17.8, accel: 10.5, turn: 1.9, health: 900, len: 2.2, wid: 1.2, hgt: 1.2 },
-  rover: { name: 'Tactical Rover', seats: [[-0.45, 0.9, -0.2], [0.45, 0.9, -0.2], [-0.45, 1.1, 0.9], [0.45, 1.1, 0.9]], maxSpeed: 19.4, accel: 9.5, turn: 1.5, health: 1200, len: 3.6, wid: 1.9, hgt: 1.6 },
-  suv: { name: 'SUV', seats: [[-0.45, 0.9, -0.3], [0.45, 0.9, -0.3], [-0.45, 0.9, 0.8], [0.45, 0.9, 0.8]], maxSpeed: 16.9, accel: 6.2, turn: 1.3, health: 2000, len: 4.8, wid: 2.1, hgt: 1.9 },
-  truck: { name: 'Cargo Truck', seats: [[-0.5, 1.8, -2.2], [0.5, 1.8, -2.2], [-0.6, 1.9, 1.2], [0.6, 1.9, 1.2], [-0.6, 1.9, 2.6], [0.6, 1.9, 2.6]], maxSpeed: 15, accel: 3.8, turn: 1.0, health: 3000, len: 7.5, wid: 2.5, hgt: 3.0 },
-  heli: { name: 'Helicopter', seats: [[-0.5, 0.8, -1.2], [0.5, 0.8, -1.2], [-0.8, 0.8, 0.4], [0.8, 0.8, 0.4]], maxSpeed: 25.8, accel: 10, turn: 1.4, health: 1500, len: 9, wid: 2.4, hgt: 2.8, air: true },
+  atv: { name: 'ATV', seats: [[0, 0.9, 0.1], [0, 1.0, 0.8]], maxSpeed: 17.8, accel: 19, turn: 1.9, health: 900, len: 2.2, wid: 1.2, hgt: 1.2 },
+  rover: { name: 'Tactical Rover', seats: [[-0.45, 0.9, -0.2], [0.45, 0.9, -0.2], [-0.45, 1.1, 0.9], [0.45, 1.1, 0.9]], maxSpeed: 19.4, accel: 19, turn: 1.5, health: 1200, len: 3.6, wid: 1.9, hgt: 1.6 },
+  suv: { name: 'SUV', seats: [[-0.45, 0.9, -0.3], [0.45, 0.9, -0.3], [-0.45, 0.9, 0.8], [0.45, 0.9, 0.8]], maxSpeed: 16.9, accel: 15, turn: 1.3, health: 2000, len: 4.8, wid: 2.1, hgt: 1.9 },
+  truck: { name: 'Cargo Truck', seats: [[-0.5, 1.8, -2.2], [0.5, 1.8, -2.2], [-0.6, 1.9, 1.2], [0.6, 1.9, 1.2], [-0.6, 1.9, 2.6], [0.6, 1.9, 2.6]], maxSpeed: 15, accel: 4.6, turn: 1.0, health: 3000, len: 7.5, wid: 2.5, hgt: 3.0 },
+  heli: { name: 'Helicopter', seats: [[-0.5, 0.8, -1.2], [0.5, 0.8, -1.2], [-0.8, 0.8, 0.4], [0.8, 0.8, 0.4]], maxSpeed: 25.8, accel: 14, turn: 1.4, health: 1500, len: 9, wid: 2.4, hgt: 2.8, air: true },
 };
 
 export interface Vehicle {
@@ -86,17 +86,23 @@ export function updateVehicles(sim: Sim, dt: number) {
       const fwdX = -Math.sin(v.yaw), fwdZ = -Math.cos(v.yaw);
       let sp = v.vx * fwdX + v.vz * fwdZ;
       const target = throttle > 0 ? d.maxSpeed * throttle : throttle < 0 ? -d.maxSpeed * 0.35 : 0;
-      // engine pull fades toward top speed (full at launch, ~35 % near the top); braking against motion is twice as strong
-      const pull = 1 - 0.65 * Math.min(1, Math.abs(sp) / d.maxSpeed) ** 2;
+      // engine pull stays strong almost to top speed (60 % at the very top); braking against motion is twice as strong
+      const pull = 1 - 0.4 * Math.min(1, Math.abs(sp) / d.maxSpeed) ** 3; // 2020: punchy right up to top speed
       const acc = throttle !== 0 ? d.accel * (Math.sign(target - sp) !== Math.sign(sp) && sp !== 0 ? 2 : pull) : 4;
       sp += clamp(target - sp, -acc * dt * (brake ? 3 : 1), acc * dt);
       if (brake) sp *= Math.exp(-dt * 2.5);
       const onGround = v.y - col.groundAt(v.x, v.z, v.y + 1.5, 1) < 0.4;
       if (onGround) v.yaw += steer * d.turn * clamp(Math.abs(sp) / 8, 0, 1) * Math.sign(sp || 1) * dt * (brake ? 1.6 : 1);
       // velocity follows heading on the ground (a little drift), coasts in the air
-      const nvx = -Math.sin(v.yaw) * sp, nvz = -Math.cos(v.yaw) * sp;
+      // the engine drives the forward speed directly; grip only bleeds off sideways slip (the old blend also lagged
+      // the forward speed, capping real acceleration near 2.7 m/s² whatever the table said)
+      const hx = -Math.sin(v.yaw), hz = -Math.cos(v.yaw);
       const grip = onGround ? (brake ? 0.2 : 0.85) : 0.02;
-      v.vx += (nvx - v.vx) * Math.min(1, grip * dt * 10); v.vz += (nvz - v.vz) * Math.min(1, grip * dt * 10);
+      if (onGround) {
+        let lat = v.vx * hz - v.vz * hx;
+        lat *= 1 - Math.min(1, grip * dt * 10);
+        v.vx = hx * sp + hz * lat; v.vz = hz * sp - hx * lat;
+      } else { const nvx = hx * sp, nvz = hz * sp; v.vx += (nvx - v.vx) * Math.min(1, grip * dt * 10); v.vz += (nvz - v.vz) * Math.min(1, grip * dt * 10); }
       v.speed = Math.hypot(v.vx, v.vz);
       v.x += v.vx * dt; v.z += v.vz * dt;
       // collisions: circles along the body
@@ -175,7 +181,7 @@ function heli(sim: Sim, v: Vehicle, d: VehicleDef, driver: Player | null, dt: nu
   const fwd = it ? it.mz : 0, side = it ? it.mx : 0;
   const c = Math.cos(v.yaw), s = Math.sin(v.yaw);
   const tx = (-s * fwd + c * side) * d.maxSpeed * (agl > 2 ? 1 : 0), tz = (-c * fwd - s * side) * d.maxSpeed * (agl > 2 ? 1 : 0);
-  if (!abandoned) { v.vx += (tx - v.vx) * Math.min(1, dt * 0.9); v.vz += (tz - v.vz) * Math.min(1, dt * 0.9); } else { v.vx *= Math.exp(-dt * 0.15); v.vz *= Math.exp(-dt * 0.15); }
+  if (!abandoned) { const k = Math.min(1, dt * d.accel / 7); v.vx += (tx - v.vx) * k; v.vz += (tz - v.vz) * k; } else { v.vx *= Math.exp(-dt * 0.15); v.vz *= Math.exp(-dt * 0.15); }
   if (!abandoned) v.pitch += (-fwd * 0.25 - v.pitch) * Math.min(1, dt * 3); v.roll += (-side * 0.3 - v.roll) * Math.min(1, dt * 3);
   v.x += v.vx * dt; v.y += v.vy * dt; v.z += v.vz * dt;
   v.speed = Math.hypot(v.vx, v.vz);

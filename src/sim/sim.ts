@@ -864,6 +864,15 @@ export class Sim {
     }
     return best ?? this.snapToFree(c.cx, c.cz) ?? { x, y: this.world.hf.at(x, z), z };
   }
+  /** a bot taking a contract (same rules as a player at the tablet) */
+  botAcceptContract(p: Player, id: number) { this.acceptContract(p, id); }
+  /** open a supply box (player interact or a bot reaching it): contents spill out, a contract's last box adds a satchel */
+  openChest(c: Chest, p: Player) {
+    if (c.opened) return; c.opened = true;
+    for (const itm of chestContents(this, c.x, c.y, c.z, c.legendary)) this.addItem(itm);
+    if ((c as any).satchel) this.addItem({ id: this.nextId++, kind: ItemKind.Satchel, x: c.x + 0.8, y: c.y + 0.1, z: c.z, alive: true, vy: 3 } as Item);
+    this.emit({ t: 'chest', p: p.id, x: c.x, y: c.y, z: c.z });
+  }
   private acceptContract(p: Player, id: number) {
     if (this.active.some((a) => a.squad === p.squad)) { if (!p.bot) this.emit({ t: 'announce', text: 'Your squad already has an active contract', squad: p.squad }); return; }
     const c = this.contracts.find((k) => k.id === id)!;

@@ -42,8 +42,15 @@ export class BotBrain {
   failed = new Map<number, number>();
   path: [number, number][] | null = null; pathI = 0; pathGX = 0; pathGZ = 0; replan = false; pathCd = 0;
   chestId = -1; chestT = 0;
+  /** play style: how the bot spends a match (what it goes for and how) */
+  style: 'aggressive' | 'contractor' | 'looter' | 'camper';
+  contractScanAt = 0; tabletId = -1; holdUntil = 0; holdX = 0; holdZ = 0;
   lootScanAt = 0; gunScanAt = 0;
-  constructor(public id: number, r: number) { this.skill = 0.35 + r * 0.55; this.wanderA = r * 6.28; }
+  constructor(public id: number, r: number) {
+    this.skill = 0.35 + r * 0.55; this.wanderA = r * 6.28;
+    const k = ((id * 2654435761) >>> 0) % 100;
+    this.style = k < 30 ? 'aggressive' : k < 60 ? 'contractor' : k < 85 ? 'looter' : 'camper';
+  }
   /** difficulty tuning shared by all bots (see DIFFICULTY) */
   static tune = { err: 1, react: 0, turn: 1 };
 }
@@ -434,6 +441,10 @@ function decide(sim: Sim, b: BotBrain, p: Player, inGulag: boolean) {
     for (const s of sim.buyStations) { const d = Math.hypot(s.x - p.x, s.z - p.z); if (d < bd && Math.hypot(s.x - c.nx, s.z - c.nz) < c.r) { bd = d; st = s; } }
     if (st) { b.goal = 'buy'; b.buyId = st.id; b.tx = st.x; b.tz = st.z; return; }
   }
+  // contracts (2020): squads without a human take nearby contracts and work them
+  if (armed && workContract(sim, b, p)) return;
+  // tactics by play style
+  if (armed && tactics(sim, b, p)) return;
   // loot: nearest useful item nearby
   // unarmed: go a long way for a gun or a supply box before anything else
   if (!armed && b.itemId < 0) {
@@ -484,6 +495,83 @@ function decide(sim: Sim, b: BotBrain, p: Player, inGulag: boolean) {
   const a = toNext > c.nr * 0.5 ? towardNext + sim.rng.range(-0.7, 0.7) : b.wanderA;
   const step = 60 + sim.rng.next() * 80;
   b.tx = clamp(p.x + Math.cos(a) * step, 100, 3140); b.tz = clamp(p.z + Math.sin(a) * step, 100, 3000);
+}
+
+/** Take a contract (tablet within reach, style-dependent) or work the squad's active one. Returns true when it set a goal. */
+function workContract(sim: Sim, b: BotBrain, p: Player): boolean {
+  const ac = sim.active.find((a) => a.squad === p.squad);
+  const humanSquad = sim.players.some((q) => q.squad === p.squad && !q.bot);
+  if (!ac) {
+    if (humanSquad) return false;
+    // heading for a tablet?
+    if (b.tabletId >= 0) {
+      const t = sim.contracts.find((c) => c.id === b.tabletId && !c.taken);
+      if (!t) b.tabletId = -1;
+      else {
+        if (Math.hypot(t.x - p.x, t.z - p.z) < 2.2) { sim.botAcceptContract(p, t.id); b.tabletId = -1; return false; }
+        b.goal = 'loot'; b.tx = t.x; b.tz = t.z; return true;
+      }
+    }
+    if (sim.time < b.contractScanAt) return false;
+    b.contractScanAt = sim.time + 4 + sim.rng.next() * 4;
+    const want = { contractor: 0.9, aggressive: 0.45, looter: 0.4, camper: 0.25 }[b.style];
+    if (!sim.rng.chance(want)) return false;
+    const c = sim.circle, reach = b.style === 'contractor' ? 320 : 180;
+    let best = null as null | (typeof sim.contracts)[number], bd = reach;
+    for (const t of sim.contracts) {
+      if (t.taken || Math.hypot(t.x - c.cx, t.z - c.cz) > c.r * 0.85) continue;
+      // style preference: aggressive -> bounty, looter -> scavenger / supply, camper -> recon
+      const pref = (b.style === 'aggressive' && t.kind === 'bounty') || (b.style === 'looter' && (t.kind === 'scavenger' || t.kind === 'supply')) || (b.style === 'camper' && t.kind === 'recon') ? 60 : 0;
+      const d = Math.hypot(t.x - p.x, t.z - p.z) - pref; if (d < bd) { bd = d; best = t; }
+    }
+    if (best) { b.tabletId = best.id; b.goal = 'loot'; b.tx = best.x; b.tz = best.z; return true; }
+    return false;
+  }
+  // working the active contract
+  if (ac.kind === 'scavenger') {
+    const ch = sim.chests.find((q) => q.id === ac.chest && !q.opened); if (!ch) return false;
+    if (Math.hypot(ch.x - p.x, ch.z - p.z) < 2.6) { sim.openChest(ch, p); return false; }
+    b.goal = 'loot'; b.tx = ch.x; b.tz = ch.z; return true;
+  }
+  if (ac.kind === 'recon' || ac.kind === 'supply') {
+    const d = Math.hypot(ac.zx! - p.x, ac.zz! - p.z);
+    if (ac.kind === 'recon' && d < 5) { b.goal = 'idle'; b.tx = ac.zx! + Math.cos(b.wanderA) * 2; b.tz = ac.zz! + Math.sin(b.wanderA) * 2; p.intent.crouch = p.stance === Stance.Stand && sim.rng.chance(0.02); return true; }
+    b.goal = 'rotate'; b.tx = ac.zx!; b.tz = ac.zz!; return true;
+  }
+  if (ac.kind === 'bounty') {
+    const t = sim.players[ac.target!]; if (!t?.alive) return false;
+    // hunt the rough area (the circle on their map), the fight code takes over once the target is seen
+    if (b.target < 0) { b.goal = 'rotate'; b.tx = t.x + Math.cos(b.wanderA) * 25; b.tz = t.z + Math.sin(b.wanderA) * 25; return true; }
+    return false;
+  }
+  if (ac.kind === 'mostwanted') {
+    // everyone can see us: dig in where we are and survive the timer
+    if (b.holdUntil < sim.time) { b.holdUntil = sim.time + 999; b.holdX = p.x; b.holdZ = p.z; }
+    b.goal = 'idle'; b.tx = b.holdX; b.tz = b.holdZ; return true;
+  }
+  return false;
+}
+
+/** Style tactics when there is nothing more pressing: aggressive bots push toward gunfire, campers hold a building a while. */
+function tactics(sim: Sim, b: BotBrain, p: Player): boolean {
+  if (b.style === 'aggressive' && b.target < 0) {
+    let best = null as Player | null, bd = 260;
+    for (const q of sim.players) {
+      if (q.squad === p.squad || !q.alive || sim.time - ((q as any).lastLoudShot ?? -99) > 4) continue;
+      const d = Math.hypot(q.x - p.x, q.z - p.z); if (d < bd) { bd = d; best = q; }
+    }
+    if (best && bd > 25) { b.goal = 'rotate'; b.tx = best.x + Math.cos(b.wanderA) * 15; b.tz = best.z + Math.sin(b.wanderA) * 15; return true; }
+  }
+  if (b.style === 'camper') {
+    if (b.holdUntil > sim.time) { if (Math.hypot(b.holdX - p.x, b.holdZ - p.z) > 3) { b.goal = 'idle'; b.tx = b.holdX; b.tz = b.holdZ; } else { b.goal = 'idle'; b.tx = p.x; b.tz = p.z; } return true; }
+    if (b.holdUntil < sim.time - 30 && sim.rng.chance(0.02)) {
+      // pick a building close by, inside the circle, and hold it for a minute
+      const c = sim.circle;
+      const near = sim.world.col.near(p.x, p.z, 60, []).filter((s) => (s.kind === 'house' || s.kind === 'block' || s.kind === 'tenement' || s.kind === 'shop') && Math.hypot(s.x - c.nx, s.z - c.nz) < c.nr * 0.9);
+      if (near.length) { const s = near[Math.floor(sim.rng.next() * near.length)]; b.holdX = s.x; b.holdZ = s.z; b.holdUntil = sim.time + 45 + sim.rng.next() * 40; return true; }
+    }
+  }
+  return false;
 }
 
 function useful(p: Player, kind: ItemKind, itm: any): boolean {
