@@ -1110,3 +1110,49 @@ export function prison2020(ctx: GenContext, cx: number, cz: number) {
     sub(ctx, f, 0, 0, 0, b, 'prisonyard');
   }
 }
+
+// ---------------------------------------------------------------------------------------------
+/**
+ * Arklov Peak Killhouse (2020): an open-roofed cinder-block training maze (~30 × 20 m, 2.6 m walls) with a
+ * door at each corner and rooms / corridors inside, plywood targets; beside it a half-built hut and a
+ * two-platform watchtower (ladder to each deck).
+ */
+export function killhouse(): Builder {
+  const b = new Builder(), cb = 0x9a968c, h = 2.6;
+  b.box(-26, -1, -12, 26, 0.05, 12, Mat.Concrete, { color: 0x8a8274 });
+  const door = (u: number) => ({ u0: u, u1: u + 1.1, v0: 0, v1: 2.2 });
+  const gap = (u: number) => ({ u0: u, u1: u + 1.8, v0: 0, v1: 2.4, open: true });
+  // outer walls, a door near every corner
+  b.wall(0, -15, 15, -10, 0.05, h, 0.3, Mat.Concrete, [door(1), door(27.9)], cb);
+  b.wall(0, -15, 15, 10, 0.05, h, 0.3, Mat.Concrete, [door(1), door(27.9)], cb);
+  b.wall(1, -9.85, 9.85, -15, 0.05, h, 0.3, Mat.Concrete, [door(1)], cb);
+  b.wall(1, -9.85, 9.85, 15, 0.05, h, 0.3, Mat.Concrete, [door(17.6)], cb);
+  // inner rooms and corridors
+  b.wall(0, -15, 5, -3, 0.05, h, 0.2, Mat.Concrete, [gap(4), gap(14)], cb);
+  b.wall(0, -5, 15, 4, 0.05, h, 0.2, Mat.Concrete, [gap(4.2), gap(14)], cb);
+  b.wall(1, -9.85, -3, -6, 0.05, h, 0.2, Mat.Concrete, [gap(2.5)], cb);
+  b.wall(1, 4, 9.85, 6, 0.05, h, 0.2, Mat.Concrete, [gap(2)], cb);
+  b.wall(1, -3, 4, 0, 0.05, h, 0.2, Mat.Concrete, [gap(2.6)], cb);
+  b.wall(1, -9.85, -3, 9, 0.05, h, 0.2, Mat.Concrete, [gap(3)], cb);
+  // plywood targets
+  for (const [x, z, r] of [[-11, -6, 0], [3, -7, 1], [11, 0, 0], [-3, 7, 1], [8, 7, 0], [-11, 5, 1]]) b.box(x - (r ? 0.03 : 0.3), 0.05, z - (r ? 0.3 : 0.03), x + (r ? 0.03 : 0.3), 1.8, z + (r ? 0.3 : 0.03), Mat.Wood, { color: 0xc8a878 });
+  for (const [x, z] of [[-10, -7], [10, 7], [-3, 0], [11, -6]]) b.addLoot(x, 0.05, z);
+  // half-built hut: walls to different heights, no roof, a pallet stack
+  b.wall(0, 18, 24, -4, 0.05, 2.6, 0.25, Mat.Concrete, [door(2.4)], cb);
+  b.wall(0, 18, 24, 4, 0.05, 1.3, 0.25, Mat.Concrete, [], cb);
+  b.wall(1, -3.9, 3.9, 24, 0.05, 2.0, 0.25, Mat.Concrete, [{ u0: 3, u1: 4.5, v0: 0.9, v1: 2, open: true }], cb);
+  b.box(19.5, 0.05, 0.5, 21, 1.2, 2, Mat.Wood, { color: 0x7a5a38 }); b.addLoot(21, 0.05, -1);
+  // two-platform watchtower (posts, decks with rails, ladders)
+  const tx = -21, tz = -6;
+  for (const [dx, dz] of [[-1.6, -1.6], [1.6, -1.6], [-1.6, 1.6], [1.6, 1.6]]) b.box(tx + dx - 0.12, 0.05, tz + dz - 0.12, tx + dx + 0.12, 9.2, tz + dz + 0.12, Mat.Wood, { color: 0x6a5238 });
+  for (const y of [3.6, 7.2]) {
+    b.slab(tx - 1.8, tz - 1.8, tx + 1.8, tz + 1.8, y, 0.15, Mat.Wood, y > 7 ? [[tx + 0.6, tz - 1.8, tx + 1.8, tz - 0.9]] : []);
+    b.box(tx - 1.8, y, tz + 1.7, tx + 1.8, y + 1, tz + 1.8, Mat.Wood, { color: 0x6a5238 }); b.box(tx - 1.8, y, tz - 1.8, tx - 1.7, y + 1, tz + 1.8, Mat.Wood, { color: 0x6a5238 });
+    b.box(tx + 1.7, y, tz - 0.8, tx + 1.8, y + 1, tz + 1.8, Mat.Wood, { color: 0x6a5238 });
+  }
+  b.box(tx - 2, 9.2, tz - 2, tx + 2, 9.4, tz + 2, Mat.Metal, { color: 0x5a6048 });
+  b.ladder(tx - 1.95, tz - 1.2, -1, 0, 0.05, 3.6); // ground -> first deck (outside the west side)
+  b.ladder(tx + 1.2, tz - 1.8, 0, 1, 3.6, 7.2, true); // first deck -> top deck through the hatch
+  b.addLoot(tx, 7.2, tz);
+  return b;
+}

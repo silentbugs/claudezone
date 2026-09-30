@@ -249,3 +249,23 @@ test('Gora Dam base: front doors -> control mezzanine; gantry stair -> roof heli
   console.log('gantry -> roof -> walkway -> ledge', r2);
   assert.ok(typeof r2 === 'number' && Math.abs(r2 - 10.5) < 0.5, 'on the spillway ledge');
 });
+
+test('Killhouse: corner door into the maze; watchtower ladders to the top deck', () => {
+  const sim = newSim();
+  const s = world.col.structures.find((q) => q.kind === 'killhouse')!;
+  assert.ok(s, 'killhouse placed');
+  const f = { x: s.x, z: s.z, y: s.y, a: s.angle };
+  const r1 = walkRoute(sim, f, [-13.45, -13], [[-13.45, -11], [-13.45, -8.5], [-11, -6.5], [-10.5, -4]]);
+  console.log('corner door -> maze', r1);
+  assert.ok(typeof r1 === 'number' && Math.abs(r1 - 0.05) < 0.4, 'inside the killhouse');
+  const tx = -21, tz = -6, p: any = sim.players[0];
+  walkRoute(sim, f, [tx - 3.5, tz - 1.2], [[tx - 2.6, tz - 1.2]]);
+  const climb = (yaw: number, want: number) => { p.yaw = p.intent.yaw = yaw; for (let t = 0; t < 6 * 60; t++) { p.intent.mz = 1; sim.tick(1 / 60); sim.events.length = 0; if (p.y - f.y > want - 0.2 && p.onGround && p.mantleT <= 0) break; } p.intent.mz = 0; return p.y - f.y; };
+  const h1 = climb(f.a - Math.PI / 2, 3.6); // face local +x (the ladder on the west side)
+  console.log('first deck', h1.toFixed(2));
+  assert.ok(Math.abs(h1 - 3.6) < 0.4, 'on the first deck');
+  walkRoute(sim, f, [tx + 1.2, tz - 0.6, 3.6], [[tx + 1.2, tz - 1.2]]);
+  const h2 = climb(f.a, 7.2); // face local -z (the hatch ladder)
+  console.log('top deck', h2.toFixed(2));
+  assert.ok(Math.abs(h2 - 7.2) < 0.4, 'on the top deck');
+});

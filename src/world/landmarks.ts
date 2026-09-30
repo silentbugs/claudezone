@@ -6,7 +6,7 @@
 import { Mat } from './collision';
 import { Builder, apartment, warehouse, garageRow, house, shop, FLOOR_H } from './builder';
 import { poi } from './mapdata';
-import { tvStation2020, trainStation2020, hospital2020, controlTower2020, superstore2020, terminal2020, prison2020, barracksCompound, grassHangar, fireStation, gasStation, placeNear, sub } from './landmarks2020';
+import { tvStation2020, trainStation2020, hospital2020, controlTower2020, superstore2020, terminal2020, prison2020, barracksCompound, grassHangar, killhouse, fireStation, gasStation, placeNear, sub } from './landmarks2020';
 import type { GenContext } from './mapgen';
 import { Rng } from '../core/rng';
 
@@ -524,6 +524,7 @@ function militaryBase(ctx: GenContext) {
   const p = poi('military_base');
   // 2020: barracks tent compound and earth-covered grass-roof hangars
   placeNear(ctx, barracksCompound, 'barracks', p.x - 70, p.z + 50, 90, 62, 0x5a6238, 200, 8, 'military_base');
+  placeNear(ctx, killhouse, 'killhouse', p.x + 20, p.z + 90, 54, 26, 0x9a968c, 200, 6, 'military_base');
   for (let i = 0; i < 3; i++) placeNear(ctx, grassHangar, 'hangar', p.x + 40 + i * 54, p.z - 10, 54, 38, 0x5e6e3c, 160, 8, 'military_base');
   for (let i = 0; i < 2; i++) {
     const b = new Builder(), h = 40;
