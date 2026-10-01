@@ -103,6 +103,12 @@ export class Match {
     const bp = this.hud.backpackOpen;
     const blocked = (!!this.hud.panel && !bp) || this.paused || this.menuOpen;
     this.controls.apply(this.me, this.camYaw, this.camPitch, blocked);
+    // freefall / parachute in third person: the camera looks around freely, A/D (left stick) turn your heading
+    {
+      const me = this.me, it = me.intent, air = me.phase === Phase.Freefall || me.phase === Phase.Chute;
+      if (air && this.controls.thirdPersonHeld && !blocked) { this.airYaw -= it.mx * 1.7 / 60; it.yaw = this.airYaw; it.mx = 0; }
+      else this.airYaw = me.yaw;
+    }
     if (bp) { const it = this.me.intent; it.fire = it.ads = it.jump = it.interact = it.plate = false; }
     (this.me as any).prefs = { autoChute: this.settings.chuteAutoDeploy, emptySwitch: this.settings.depletedAmmoSwitch };
     if (this.mapOpen) { const it = this.me.intent; it.fire = false; it.ads = false; it.swap = false; } // the wheel zooms the map
@@ -201,7 +207,7 @@ export class Match {
     if (this.kcEl.innerHTML !== html) this.kcEl.innerHTML = html; this.kcEl.style.display = html ? 'block' : 'none';
   } private reconT = 0; private pauseTime = 0;
   private hbT = 0; private hbWorld: [number, number][] = []; private hbPinged = new Set<number>();
-  private tugT = 0; private lastAirPhase = -1; private chuteRoll = 0;
+  private tugT = 0; private lastAirPhase = -1; private chuteRoll = 0; private airYaw = 0;
   /** current ADS magnification, eased so a zoom toggle or optic swap doesn't snap */
   zoomNow = 1;
   private adsZoom() {

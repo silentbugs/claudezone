@@ -181,11 +181,12 @@ function heli(sim: Sim, v: Vehicle, d: VehicleDef, driver: Player | null, dt: nu
     v.vy += (tvy - v.vy) * Math.min(1, dt * 2);
   }
   if (agl > 320 && v.vy > 0) v.vy = 0;
-  // yaw from mouse (driver faces where they look), tilt from WASD
-  if (driver && v.rotor > 0.6) v.yaw += wrapAngle(driver.yaw - v.yaw) * Math.min(1, dt * d.turn);
+  // the sticks fly it, the mouse / right stick only looks around: A/D (left stick x) turn, W/S (left stick y) fly
+  // forward / back, the altitude keys climb and descend
   const fwd = it ? it.mz : 0, side = it ? it.mx : 0;
+  if (driver && v.rotor > 0.6 && agl > 1) v.yaw -= side * d.turn * dt;
   const c = Math.cos(v.yaw), s = Math.sin(v.yaw);
-  const tx = (-s * fwd + c * side) * d.maxSpeed * (agl > 2 ? 1 : 0), tz = (-c * fwd - s * side) * d.maxSpeed * (agl > 2 ? 1 : 0);
+  const tx = -s * fwd * d.maxSpeed * (agl > 2 ? 1 : 0), tz = -c * fwd * d.maxSpeed * (agl > 2 ? 1 : 0);
   if (!abandoned) { const k = Math.min(1, dt * d.accel / 7); v.vx += (tx - v.vx) * k; v.vz += (tz - v.vz) * k; } else { v.vx *= Math.exp(-dt * 0.15); v.vz *= Math.exp(-dt * 0.15); }
   if (!abandoned) v.pitch += (-fwd * 0.25 - v.pitch) * Math.min(1, dt * 3); v.roll += (-side * 0.3 - v.roll) * Math.min(1, dt * 3);
   v.x += v.vx * dt; v.y += v.vy * dt; v.z += v.vz * dt;
