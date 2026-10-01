@@ -11,6 +11,7 @@ import { Builder, house, apartment, tower, warehouse, shop, garageRow, Style } f
 import { MapMasks, MAP_SIZE, M_BUILT, M_ROAD, M_SNOW, POIS, Poi } from './mapdata';
 import { buildTerrain, riverQuery, TerrainExtras, waterSurfaceAt } from './terrain';
 import { buildLandmarks } from './landmarks';
+import { FOOTPRINTS } from '../data/footprints';
 
 export type District = 'downtown' | 'urban' | 'suburb' | 'industrial' | 'military' | 'rural' | 'airport';
 
@@ -90,7 +91,7 @@ class Occupancy {
     }
     return true;
   }
-  /** Codes: 0 free, 1 building, 2 road, 3 river/sea/road splat, 4 prop, 5 tree. `roadOk` lets props sit on roads. */
+  /** Codes: 0 free, 1 building, 2 road, 3 road splat, 4 prop, 5 tree, 6 water / rail line (never). `roadOk` lets props and traced footprints sit on roads. */
   free(cx: number, cz: number, a: number, w: number, d: number, pad = 0, roadOk = false) { return this.forRect(cx, cz, a, w, d, pad, (i) => this.g[i] === 0 || (roadOk && (this.g[i] === 2 || this.g[i] === 3))); }
   mark(cx: number, cz: number, a: number, w: number, d: number, pad = 0, v = 1) { this.forRect(cx, cz, a, w, d, pad, (i) => { this.g[i] = Math.max(this.g[i], v); }); }
   markCircle(cx: number, cz: number, r: number, v = 1) { for (let z = cz - r; z <= cz + r; z += this.cell) for (let x = cx - r; x <= cx + r; x += this.cell) { if ((x - cx) ** 2 + (z - cz) ** 2 > r * r) continue; const i = Math.floor(x / this.cell), j = Math.floor(z / this.cell); if (i >= 0 && j >= 0 && i < this.res && j < this.res) this.g[j * this.res + i] = Math.max(this.g[j * this.res + i], v); } }
@@ -100,7 +101,7 @@ class Occupancy {
 export interface GenContext {
   rng: Rng; hf: Heightfield; extra: TerrainExtras; masks: MapMasks; col: CollisionWorld; occ: Occupancy;
   /** Place a builder as a structure at world pos with rotation; flattens terrain under it. */
-  place(b: Builder, kind: string, x: number, z: number, angle: number, opts?: { y?: number; flatten?: boolean; pad?: number; poi?: string; style?: number; lodColor?: number; mark?: boolean }): Structure;
+  place(b: Builder, kind: string, x: number, z: number, angle: number, opts?: { y?: number; flatten?: boolean; pad?: number; poi?: string; style?: number; lodColor?: number; mark?: boolean; skirt?: number; seat?: 'max' | 'graded' }): Structure;
   flatten(x: number, z: number, angle: number, w: number, d: number, y: number, skirt: number): void;
   footprintHeights(x: number, z: number, angle: number, w: number, d: number): { min: number; max: number; avg: number };
   buyStations: WorldData['buyStations']; chests: WorldData['chests']; contracts: WorldData['contracts']; vehicleSpawns: WorldData['vehicleSpawns'];
@@ -128,10 +129,11 @@ export function generateWorld(masks: MapMasks, seed = 1): WorldData {
     const x = (i + 0.5) * occ.cell, z = (j + 0.5) * occ.cell;
     if (masks.has(x, z, M_ROAD)) occ.g[j * occ.res + i] = 2;
     const k = Math.round(z / hf.step) * hf.res + Math.round(x / hf.step);
-    if (extra.river[k] || hf.h[k] < 0.3 || extra.road[k] > 0.35) occ.g[j * occ.res + i] = 3;
+    if (extra.river[k] || hf.h[k] < 0.3) occ.g[j * occ.res + i] = 6; // water: never built on
+    else if (extra.road[k] > 0.35) occ.g[j * occ.res + i] = 3;
   }
   // the freight line and a margin either side are off-limits too
-  { const rp = extra.railPath; for (let i = 0; i < rp.length; i += 3) { const x = rp[i], z = rp[i + 2]; for (let dz = -8; dz <= 8; dz += occ.cell) for (let dx = -8; dx <= 8; dx += occ.cell) { const oi = Math.floor((x + dx) / occ.cell), oj = Math.floor((z + dz) / occ.cell); if (oi >= 0 && oj >= 0 && oi < occ.res && oj < occ.res) occ.g[oj * occ.res + oi] = 3; } } }
+  { const rp = extra.railPath; for (let i = 0; i < rp.length; i += 3) { const x = rp[i], z = rp[i + 2]; for (let dz = -8; dz <= 8; dz += occ.cell) for (let dx = -8; dx <= 8; dx += occ.cell) { const oi = Math.floor((x + dx) / occ.cell), oj = Math.floor((z + dz) / occ.cell); if (oi >= 0 && oj >= 0 && oi < occ.res && oj < occ.res) occ.g[oj * occ.res + oi] = 6; } } }
   const doors: DoorRec[] = [];
   const ladders: LadderRec[] = [];
   const ascenders: AscenderRec[] = [];
@@ -167,8 +169,9 @@ export function generateWorld(masks: MapMasks, seed = 1): WorldData {
       const c = Math.cos(angle), s = Math.sin(angle);
       const wx = x + cx * c + cz * s, wz = z - cx * s + cz * c;
       let y = opts.y;
-      if (y === undefined) { const fh = ctx.footprintHeights(wx, wz, angle, w, d); y = fh.max; }
-      if (opts.flatten !== false) ctx.flatten(wx, wz, angle, w, d, y - 0.15, 4);
+      // 'graded': on a slope the floor sits between the mean and the top of the ground (cut and fill), not on its top
+      if (y === undefined) { const fh = ctx.footprintHeights(wx, wz, angle, w, d); y = opts.seat === 'graded' ? fh.avg + (fh.max - fh.avg) * 0.35 : fh.max; }
+      if (opts.flatten !== false) ctx.flatten(wx, wz, angle, w, d, y - 0.15, opts.skirt ?? 4);
       if (opts.mark !== false) occ.mark(wx, wz, angle, w, d, opts.pad ?? 1.5, 1);
       const st = makeStructure(0, kind, x, y, z, angle, b.parts, b.ramps, b.loot);
       st.poi = opts.poi; st.style = opts.style; st.lodColor = opts.lodColor;
@@ -194,57 +197,10 @@ export function generateWorld(masks: MapMasks, seed = 1): WorldData {
   // 1) landmarks (hand-built POI centrepieces)
   buildLandmarks(ctx);
 
-  // 2) procedural buildings on built-up ground
+  // 2) every building on its real footprint (traced from the tac map: position, size, orientation, L / U wings)
   const roadField = roadDirectionField(masks);
-  const cands: [number, number][] = [];
-  for (let z = 30; z < MAP_SIZE - 30; z += 5) for (let x = 30; x < MAP_SIZE - 30; x += 5) {
-    if (masks.density(x, z, 3, M_BUILT) > 0.34) cands.push([x + (hash2(x, z, 7) - 0.5) * 3, z + (hash2(x, z, 9) - 0.5) * 3]);
-  }
-  // shuffle deterministically, but bias big-building districts first
-  for (let i = cands.length - 1; i > 0; i--) { const j = Math.floor(rng.next() * (i + 1)); [cands[i], cands[j]] = [cands[j], cands[i]]; }
-  let placed = 0;
-  // largest footprints first, so big blocks claim the ground before houses fill the gaps
-  for (let pass = 0; pass < 4; pass++) for (const [x, z] of cands) {
-    if (occ.at(x, z) !== 0) continue;
-    const { d: dist, poi } = districtAt(x, z);
-    const sizes = sizeOptions(dist, rng);
-    if (pass >= sizes.length) continue;
-    const snowy = z < 1400 && masks.density(x, z, 12, M_SNOW) > 0.12;
-    // the tac map's north is noisy (rock highlights read as buildings): only trust it near roads or POIs
-    if (z < 1350 && (dist === 'rural' || !poi) && (roadField(x, z) === null || masks.density(x, z, 6, M_BUILT) < 0.55)) continue;
-    const minBuilt = snowy ? 0.8 : z < 1350 && dist === 'rural' ? 0.7 : dist === 'downtown' ? 0.36 : 0.42;
-    const ang = roadField(x, z) ?? (poi ? hash2(poi.x | 0, poi.z | 0) * Math.PI : rng.range(0, Math.PI));
-    const [w, d] = sizes[pass];
-    if (!occ.free(x, z, ang, w, d, 1.2)) continue;
-    let built = 0, n = 0;
-    const c = Math.cos(ang), s = Math.sin(ang);
-    for (let v = -d / 2; v <= d / 2; v += 3) for (let u = -w / 2; u <= w / 2; u += 3) { n++; if (masks.has(x + u * c + v * s, z - u * s + v * c, M_BUILT)) built++; }
-    if (built / n < minBuilt) continue;
-    const fh = ctx.footprintHeights(x, z, ang, w, d);
-    if (fh.max - fh.min > Math.max(3.5, Math.min(w, d) * 0.25)) continue;
-    const bb = makeBuilding(rng, dist, w, d, x, z);
-    if (!bb) continue;
-    ctx.place(bb.b, bb.kind, x, z, ang, { poi: poi?.id, style: bb.style, lodColor: bb.lod });
-    if (bb.kind === 'house' && (dist === 'suburb' || dist === 'rural') && rng.chance(0.6)) addYard(ctx, x, z, ang, w, d);
-    placed++;
-  }
-
-  // 3) scattered rural houses/sheds where the map is empty but near roads (Verdansk countryside)
-  for (let i = 0; i < 700; i++) {
-    const x = rng.range(150, MAP_SIZE - 150), z = rng.range(1250, MAP_SIZE - 300);
-    if (occ.at(x, z) !== 0) continue;
-    const { d: dist } = districtAt(x, z);
-    if (dist !== 'rural' && dist !== 'suburb') continue;
-    if (masks.density(x, z, 15, M_SNOW) > 0.1) continue;
-    const ang = roadField(x, z); if (ang === null) continue;
-    if (hf.at(x, z) < 2 || hf.at(x, z) > 150) continue;
-    const w = rng.range(7, 11), d = rng.range(6, 9);
-    if (!occ.free(x, z, ang, w, d, 2)) continue;
-    const fh = ctx.footprintHeights(x, z, ang, w, d); if (fh.max - fh.min > 3) continue;
-    if (!inPlayable(x, z)) continue;
-    ctx.place(house(rng, w, d, rng.chance(0.3) ? 2 : 1, styleFor(rng, 'house')), 'house', x, z, ang, { style: 0 });
-    placed++;
-  }
+  const placed = placeFootprints(ctx, roadField);
+  void placed;
 
   // 4) street props: burnt cars along roads, barriers, containers
   const props = placeProps(ctx, roadField);
@@ -301,18 +257,6 @@ import { pointInPoly } from '../core/math';
 const PLAY = VERDANSK.playable as unknown as [number, number][];
 export function inPlayable(x: number, z: number) { return pointInPoly(x, z, PLAY); }
 
-function sizeOptions(d: District, rng: Rng): [number, number][] {
-  const r = (a: number, b: number) => rng.range(a, b);
-  switch (d) {
-    case 'downtown': return [[r(36, 52), r(13, 16)], [r(24, 34), r(12, 15)], [r(14, 20), r(11, 14)], [r(9, 13), r(8, 11)]];
-    case 'urban': return [[r(30, 44), r(11, 13)], [r(18, 26), r(10, 13)], [r(12, 16), r(9, 12)], [r(8, 11), r(7, 10)]];
-    case 'industrial': return [[r(34, 50), r(20, 28)], [r(22, 32), r(14, 20)], [r(12, 18), r(9, 14)], [r(8, 11), r(6, 9)]];
-    case 'military': return [[r(30, 40), r(12, 16)], [r(18, 26), r(10, 12)], [r(9, 13), r(7, 10)]];
-    case 'airport': return [[r(36, 50), r(22, 30)], [r(20, 28), r(12, 18)], [r(10, 14), r(8, 11)]];
-    default: return [[r(10, 13), r(8, 11)], [r(8, 10), r(7, 9)], [r(6, 8), r(5, 7)]];
-  }
-}
-
 /**
  * 2020 village / suburban plot: a low fence (wooden picket, fieldstone or chain-link) about 3 m round the house
  * with a gap for the front gate, each side only where the ground is free; sometimes a garden shed at the back.
@@ -350,34 +294,136 @@ function addYard(ctx: GenContext, x: number, z: number, ang: number, w: number, 
   for (const [lx, lz, ww, dd] of [[0, -hd, 2 * hw, 0.6], [0, hd, 2 * hw, 0.6], [-hw, 0, 0.6, 2 * hd], [hw, 0, 0.6, 2 * hd]] as const) { const [wx, wz] = W(lx, lz); occ.mark(wx, wz, ang, ww, dd, 0, 4); }
 }
 
-function makeBuilding(rng: Rng, d: District, w: number, dd: number, x: number, z: number): { b: Builder; kind: string; style: number; lod: number } | null {
-  const big = w * dd;
-  if (d === 'downtown') {
-    if (big > 380) { const st = styleFor(rng, 'tower'); return { b: block2020(rng, w, dd, st, { kind: 'tower', floors: rng.int(7, 10), glass: true }), kind: 'tower', style: 2, lod: st.wallColor }; }
-    if (big > 150) { const st = styleFor(rng, 'block'); return { b: block2020(rng, w, dd, st, { kind: 'panel', floors: rng.int(4, 7) }), kind: 'block', style: 1, lod: st.wallColor }; }
-    const st = styleFor(rng, 'shop'); return { b: shop(rng, w, dd, st), kind: 'shop', style: 3, lod: st.wallColor };
+/**
+ * Buildings on the traced footprints. Each rectangle (or each wing of an L / U / T block) becomes one building of
+ * exactly that size, turned so its front faces the nearest road; the archetype comes from the district and the
+ * footprint (size, proportions). Footprints under a hand-built landmark are left to the landmark.
+ */
+function placeFootprints(ctx: GenContext, roadField: (x: number, z: number) => number | null): number {
+  const { rng, occ, hf } = ctx;
+  let n = 0;
+  const pendingSteps: [Builder, Structure][] = [];
+  for (const [fx, fz, fang, fw, fd, round, parts] of FOOTPRINTS) {
+    if (!inPlayable(fx, fz) || hf.at(fx, fz) < 0.6) continue;
+    if (!occ.free(fx, fz, fang, fw * 0.8, fd * 0.8, 0, true)) continue; // a landmark already stands here (roads under a footprint are the old trace)
+    const { d: dist, poi } = districtAt(fx, fz);
+    const c = Math.cos(fang), s = Math.sin(fang);
+    if (round) { placeTank(ctx, fx, fz, Math.min(fw, fd) / 2); n++; continue; }
+    const rects: [number, number, number, number][] = parts ? parts : [[0, 0, fw, fd]];
+    const area = rects.reduce((a, r) => a + r[2] * r[3], 0);
+    const wingSeed = rng.next();
+    for (const [u, v, w0, d0] of rects) {
+      const x = fx + u * c + v * s, z = fz - u * s + v * c;
+      // front toward the road: of the four quarter turns, the one whose -z faces the road, preferring the long side
+      const want = roadField(x, z);
+      let best = { a: fang, w: w0, d: d0, score: -Infinity };
+      for (let k = 0; k < 4; k++) {
+        const a = fang + (k * Math.PI) / 2, w = k % 2 ? d0 : w0, d = k % 2 ? w0 : d0;
+        const face = want === null ? 0 : Math.cos(a - want);
+        const score = face * 2 + (w >= d ? 0.6 : 0);
+        if (score > best.score) best = { a, w, d, score };
+      }
+      const bb = buildingFor(rng, dist, best.w, best.d, area, wingSeed);
+      if (!bb) continue;
+      const st = ctx.place(bb.b, bb.kind, x, z, best.a, { poi: poi?.id, style: bb.style, lodColor: bb.lod, pad: 0.3, seat: 'graded', skirt: 7 });
+      pendingSteps.push([bb.b, st]);
+      if (bb.kind === 'house' && !parts && (dist === 'suburb' || dist === 'rural') && rng.chance(0.5)) addYard(ctx, x, z, best.a, best.w, best.d);
+      n++;
+    }
   }
-  if (d === 'urban') {
-    // long 3-storey tenements (Torsk Bloc style)
-    if (w >= 34 && dd <= 13.5 && rng.chance(0.45)) { const st = styleFor(rng, 'block'); return { b: tenement2020(rng, w, dd, st), kind: 'tenement', style: 1, lod: st.wallColor }; }
-    if (big > 280) { const st = styleFor(rng, 'block'); return { b: block2020(rng, w, dd, st, { kind: 'panel', floors: rng.int(3, 5) }), kind: 'block', style: 1, lod: st.wallColor }; }
-    if (big > 110) { const st = styleFor(rng, rng.chance(0.5) ? 'shop' : 'block'); return rng.chance(0.5) ? { b: block2020(rng, w, dd, st, { kind: 'walkup', floors: rng.int(2, 3) }), kind: 'block', style: 1, lod: st.wallColor } : { b: shop(rng, w, dd, st), kind: 'shop', style: 3, lod: st.wallColor }; }
-    const st = styleFor(rng, 'house'); return { b: house(rng, w, dd, 2, st), kind: 'house', style: 0, lod: st.wallColor };
+  // steps last: a neighbour's grading can still lower the ground in front of a door
+  for (const [b, st] of pendingSteps) addDoorSteps(ctx, b, st);
+  return n;
+}
+
+/**
+ * Buildings stand on the real (sloping) ground: where a ground-floor door still sits above the terrain outside it,
+ * a flight of concrete steps runs down from the threshold (sloped Verdansk streets have them everywhere).
+ */
+function addDoorSteps(ctx: GenContext, b: Builder, st: Structure) {
+  const c = Math.cos(st.angle), s = Math.sin(st.angle), done: [number, number][] = [];
+  for (const d of (b as any).doors ?? []) {
+    if (d.y > 0.8) continue; // upper-floor doors open onto balconies / gantries
+    // door centre (building-local) and its two faces
+    const lx = d.x + Math.cos(d.angle) * d.w / 2, lz = d.z - Math.sin(d.angle) * d.w / 2;
+    if (done.some(([px, pz]) => Math.hypot(px - lx, pz - lz) < 1.6)) continue; // the other leaf of a double door
+    done.push([lx, lz]);
+    const nx = Math.sin(d.angle), nz = Math.cos(d.angle);
+    let bestGap = 0, side = 1;
+    const floorY = st.y + d.y;
+    for (const sd of [1, -1]) {
+      const ox = lx + nx * sd * 1.4, oz = lz + nz * sd * 1.4, wx = st.x + ox * c + oz * s, wz = st.z - ox * s + oz * c;
+      if (!(wx > 2 && wz > 2 && wx < MAP_SIZE - 2 && wz < MAP_SIZE - 2)) continue; // (also NaN-safe)
+      const g = floorY - ctx.hf.at(wx, wz); // (the collision grid is only built after generation: terrain is what is outside a door)
+      if (g > bestGap) { bestGap = g; side = sd; }
+    }
+    // only where the ground falls away below the building's own base (house plinths and block porches have steps)
+    if (bestGap - d.y < 0.45 || bestGap > 6) continue;
+    // a stair (rendered as steps) going down and out from the threshold; its own frame: +z outward
+    // on a steep bank the ground keeps falling: re-measure at the foot of the flight until it lands
+    let run = Math.max(0.9, bestGap / 0.62);
+    for (let it = 0; it < 4; it++) {
+      const ox = lx + nx * side * (run + 0.4), oz = lz + nz * side * (run + 0.4), wx = st.x + ox * c + oz * s, wz = st.z - ox * s + oz * c;
+      if (!(wx > 2 && wz > 2 && wx < MAP_SIZE - 2 && wz < MAP_SIZE - 2)) break;
+      bestGap = Math.max(bestGap, floorY - ctx.hf.at(wx, wz)); run = Math.max(0.9, bestGap / 0.62);
+    }
+    if (bestGap > 8) continue;
+    const hw = Math.max(0.7, d.w / 2 + 0.35);
+    const sb = new Builder();
+    sb.ramp(-hw, -bestGap, 0, hw, 0, run, 1, -1, Mat.Concrete, 0x9a968f);
+    sb.box(-hw, -bestGap - 1, 0, hw, -bestGap + 0.02, run, Mat.Concrete, { color: 0x8a8680, noCollide: true }); // footing
+    const ang = st.angle + d.angle + (side > 0 ? 0 : Math.PI); // the stair's +z = the door's outward face
+    const wx = st.x + lx * c + lz * s, wz = st.z - lx * s + lz * c;
+    ctx.place(sb, 'steps', wx, wz, ang, { y: floorY, flatten: false, mark: false });
   }
-  if (d === 'industrial' || d === 'airport') {
-    if (big > 220) { const st = styleFor(rng, 'industrial'); return { b: warehouse(rng, w, dd, rng.range(7, 10), st), kind: 'warehouse', style: 4, lod: st.wallColor }; }
-    if (big > 90) { const st = styleFor(rng, 'industrial'); return { b: warehouse(rng, w, dd, 5, st), kind: 'warehouse', style: 4, lod: st.wallColor }; }
-    const st = styleFor(rng, 'house'); return { b: shop(rng, w, dd, st), kind: 'shop', style: 3, lod: st.wallColor };
+}
+
+/** Archetype for one footprint rectangle (w = front, d = depth), never asking a builder for a size it can't do. */
+function buildingFor(rng: Rng, dist: District, w: number, d: number, area: number, seed: number): { b: Builder; kind: string; style: number; lod: number } | null {
+  if (w < 3 || d < 3) return null;
+  // kiosks, sheds, garages, guard huts
+  if (w * d < 28 || Math.min(w, d) < 4.5) {
+    const st = styleFor(rng, 'house'), b = new Builder(), h = rng.range(2.6, 3.2);
+    b.box(-w / 2, 0, -d / 2, w / 2, h, d / 2, st.wall, { color: st.wallColor });
+    b.box(-w / 2 - 0.2, h, -d / 2 - 0.2, w / 2 + 0.2, h + 0.2, d / 2 + 0.2, Mat.Roof, { color: 0x4a4f55 });
+    return { b, kind: 'shed', style: 0, lod: st.wallColor };
   }
-  if (d === 'military') {
+  const big = w * d, lean = Math.max(w, d) / Math.min(w, d);
+  const ok = (minW: number, minD: number) => w >= minW && d >= minD;
+  if (dist === 'downtown') {
+    if (area > 900 && ok(15, 12)) { const st = styleFor(rng, 'tower'); return { b: block2020(rng, w, d, st, { kind: 'tower', floors: 6 + Math.floor(seed * 5), glass: true }), kind: 'tower', style: 2, lod: st.wallColor }; }
+    if (big > 150 && ok(12, 9)) { const st = styleFor(rng, 'block'); return { b: block2020(rng, w, d, st, { kind: 'panel', floors: 4 + Math.floor(seed * 4) }), kind: 'block', style: 1, lod: st.wallColor }; }
+    const st = styleFor(rng, 'shop'); return { b: shop(rng, w, d, st), kind: 'shop', style: 3, lod: st.wallColor };
+  }
+  if (dist === 'urban') {
+    if (w >= 34 && d >= 9 && d <= 15 && lean > 2.4) { const st = styleFor(rng, 'block'); return { b: tenement2020(rng, w, d, st), kind: 'tenement', style: 1, lod: st.wallColor }; }
+    if (big > 280 && ok(12, 9)) { const st = styleFor(rng, 'block'); return { b: block2020(rng, w, d, st, { kind: 'panel', floors: 3 + Math.floor(seed * 3) }), kind: 'block', style: 1, lod: st.wallColor }; }
+    if (big > 110 && ok(10, 8)) { const st = styleFor(rng, seed < 0.5 ? 'shop' : 'block'); return seed < 0.5 ? { b: shop(rng, w, d, st), kind: 'shop', style: 3, lod: st.wallColor } : { b: block2020(rng, w, d, st, { kind: 'walkup', floors: 2 + Math.floor(seed * 2) }), kind: 'block', style: 1, lod: st.wallColor }; }
+    const st = styleFor(rng, 'house'); return { b: house(rng, w, d, 2, st), kind: 'house', style: 0, lod: st.wallColor };
+  }
+  if (dist === 'industrial' || dist === 'airport') {
+    if (big > 220) { const st = styleFor(rng, 'industrial'); return { b: warehouse(rng, w, d, big > 600 ? 9 : 7, st), kind: 'warehouse', style: 4, lod: st.wallColor }; }
+    if (big > 90) { const st = styleFor(rng, 'industrial'); return { b: warehouse(rng, w, d, 5, st), kind: 'warehouse', style: 4, lod: st.wallColor }; }
+    const st = styleFor(rng, 'house'); return { b: shop(rng, w, d, st), kind: 'shop', style: 3, lod: st.wallColor };
+  }
+  if (dist === 'military') {
     const st: Style = { wall: Mat.Concrete, wallColor: rng.pick([0x8c8a78, 0x7d806e, 0x9a947e]), trim: 0, roof: Mat.Roof, roofColor: 0x4f5446 };
-    if (big > 300) return { b: warehouse(rng, w, dd, 8, st, { hangar: rng.chance(0.5) }), kind: 'hangar', style: 4, lod: st.wallColor };
-    return { b: apartment(rng, w, dd, 2, st), kind: 'barracks', style: 1, lod: st.wallColor };
+    if (big > 300) return { b: warehouse(rng, w, d, 8, st, { hangar: seed < 0.5 }), kind: 'hangar', style: 4, lod: st.wallColor };
+    return { b: apartment(rng, w, d, 2, st), kind: 'barracks', style: 1, lod: st.wallColor };
   }
+  // suburbs and countryside: houses; big plain sheds are barns, mid-size blocks walk-ups
   const st = styleFor(rng, 'house');
-  if (d === 'suburb' && big > 130 && rng.chance(0.5)) { const s2 = styleFor(rng, 'block'); return { b: block2020(rng, w, dd, s2, { kind: 'walkup', floors: rng.int(2, 3) }), kind: 'block', style: 1, lod: s2.wallColor }; }
-  if (big > 150) { const s2 = styleFor(rng, 'industrial'); return { b: warehouse(rng, w, dd, 6, s2), kind: 'barn', style: 4, lod: s2.wallColor }; }
-  return { b: house(rng, w, dd, rng.chance(0.55) ? 2 : 1, st), kind: 'house', style: 0, lod: st.wallColor };
+  if (dist === 'suburb' && big > 160 && ok(10, 8) && lean < 2.2) { const s2 = styleFor(rng, 'block'); return { b: block2020(rng, w, d, s2, { kind: 'walkup', floors: 2 + Math.floor(seed * 2) }), kind: 'block', style: 1, lod: s2.wallColor }; }
+  if (big > 170) { const s2 = styleFor(rng, 'industrial'); return { b: warehouse(rng, w, d, 6, s2), kind: 'barn', style: 4, lod: s2.wallColor }; }
+  return { b: house(rng, w, d, big > 85 && seed < 0.6 ? 2 : 1, st), kind: 'house', style: 0, lod: st.wallColor };
+}
+
+/** Round footprints: storage tanks / silos (steel cylinder with a ladder-free conical top). */
+function placeTank(ctx: GenContext, x: number, z: number, r: number) {
+  const b = new Builder(), h = r > 4 ? r * 1.4 : r * 3;
+  b.box(-r, 0, -r, r, h, r, Mat.Metal, { color: 0x9aa0a4, shape: 'cyl' });
+  b.box(-r * 0.85, h, -r * 0.85, r * 0.85, h + r * 0.35, r * 0.85, Mat.Metal, { color: 0x8a9094, shape: 'cyl' });
+  ctx.place(b, 'tank', x, z, 0, { pad: 0.5 });
 }
 
 /** Angle so a building faces the nearest road (null when no road nearby). */
