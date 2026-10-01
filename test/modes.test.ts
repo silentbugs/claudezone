@@ -153,3 +153,21 @@ test('vehicles: ramming walls barely scratches them (gunfire is what wrecks a ve
   assert.ok(crashes >= 10, 'it did hit the wall');
   assert.ok(v.alive && v.health > VEHICLES.atv.health * 0.8, 'still in good shape after ten rams');
 });
+
+test('bots fly the helicopter: climb, turn and fly to a destination ~600 m away, land and get out', async () => {
+  const { enterVehicle, vehicleOf } = await import('../src/sim/vehicles');
+  const s: any = new Sim(world, 5, { humans: 0 }); s.time = 120;
+  const v = s.vehicles.find((q: any) => q.type === 'heli')!;
+  const p = s.players[0]; Object.assign(p, { phase: 4, alive: true, x: v.x, z: v.z, y: v.y, health: 1e6 });
+  for (const q of s.players) if (q.id !== 0) { q.phase = 6; q.alive = false; }
+  Object.assign(s.players[149], { phase: 4, alive: true, x: 3000, z: 300, y: 300 }); // keep the match going
+  enterVehicle(s, p, v);
+  const b = s.brains[0]; const a = Math.atan2(1620 - v.z, 1620 - v.x); b.tx = v.x + Math.cos(a) * 600; b.tz = v.z + Math.sin(a) * 600; b.goal = 'rotate';
+  let maxAgl = 0;
+  for (let i = 0; i < 60 * 90 && vehicleOf(s, p); i++) { s.tick(1 / 60); s.events.length = 0; maxAgl = Math.max(maxAgl, v.y - world.hf.at(v.x, v.z)); }
+  const d = Math.hypot(p.x - b.tx, p.z - b.tz);
+  console.log('heli bot: climbed to', maxAgl.toFixed(0), 'm, ended', d.toFixed(0), 'm from the destination, out:', !vehicleOf(s, p));
+  assert.ok(maxAgl > 40, 'climbed to cruise height');
+  assert.ok(d < 120, 'flew to the destination');
+  assert.ok(!vehicleOf(s, p) && p.alive, 'landed and got out');
+});

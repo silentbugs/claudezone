@@ -15,6 +15,7 @@ import { gulagArena } from '../world/landmarks';
 import { vehicleOf, enterVehicle, exitVehicle, VEHICLES } from './vehicles';
 
 type Goal = 'drop' | 'loot' | 'rotate' | 'fight' | 'revive' | 'buy' | 'idle' | 'follow';
+export type Strategy = 'loot' | 'shop' | 'hunt' | 'hold' | 'hide' | 'roam';
 
 /** Bot difficulty (chosen on the menu): skill range, aim error, extra reaction time, aim turn speed. */
 export type Difficulty = 'easy' | 'normal' | 'hard' | 'veteran';
@@ -48,6 +49,13 @@ export class BotBrain {
   lootScanAt = 0; gunScanAt = 0;
   /** vehicles: how far a trip has to be before this player looks for a ride (Infinity = only when the gas forces it) */
   rideAt = Infinity; boardWait = 0; ramming = false;
+  /** the plan for the next stretch of the match, re-weighed every few seconds and on events (see strategize) */
+  strategy: Strategy = 'loot'; stratAt = 0; why = '';
+  /** perception: last gunfire / footsteps heard, last time an enemy UAV had us, last shot taken */
+  heardX = 0; heardZ = 0; heardAt = -99; exposedAt = -99; hurtSeen = -99;
+  hideX = 0; hideZ = 0; hideUntil = 0; retreatUntil = 0; slideUsed = 0;
+  /** personality: sneaky players crouch-walk near enemies and hide when found; others push */
+  sneaky = false;
   constructor(public id: number, r: number) {
     this.skill = 0.35 + r * 0.55; this.wanderA = r * 6.28;
     const k = ((id * 2654435761) >>> 0) % 100;
@@ -56,6 +64,7 @@ export class BotBrain {
     const drive = ((id * 40503) >>> 0) % 100 / 100;
     const keen = { aggressive: 0.8, contractor: 0.7, looter: 0.5, camper: 0.3 }[this.style];
     if (drive < keen) this.rideAt = { aggressive: 150, contractor: 200, looter: 260, camper: 360 }[this.style] + drive * 120;
+    this.sneaky = ((id * 2246822519) >>> 0) % 100 < (this.style === 'camper' ? 70 : this.style === 'aggressive' ? 10 : 30);
   }
   /** difficulty tuning shared by all bots (see DIFFICULTY) */
   static tune = { err: 1, react: 0, turn: 1 };
@@ -186,12 +195,199 @@ function rideDecision(sim: Sim, b: BotBrain, p: Player) {
   }
   const trip = Math.hypot(b.tx - p.x, b.tz - p.z);
   if (trip < b.rideAt) return;
-  const v = sim.vehicles.find((q) => q.alive && q.type !== 'heli' && q.seats[0] < 0 && q.health > VEHICLES[q.type].health * 0.4 && Math.hypot(q.x - p.x, q.z - p.z) < 70);
+  // long trips: a helicopter if one is close (the keen drivers among the better players fly)
+  const heliOk = trip > 600 && b.skill > 0.45 && b.rideAt < 300;
+  const v = sim.vehicles.find((q) => q.alive && (q.type !== 'heli' || heliOk) && q.seats[0] < 0 && q.health > VEHICLES[q.type].health * 0.4 && Math.hypot(q.x - p.x, q.z - p.z) < (q.type === 'heli' ? 90 : 70));
   if (!v) return;
   if (Math.hypot(v.x - p.x, v.z - p.z) < VEHICLES[v.type].len / 2 + 2.2) {
     if (enterVehicle(sim, p, v)) { b.boardWait = sim.time + 9; b.tx2 = b.tx; b.tz2 = b.tz; }
   } else { b.tx2 = b.tx; b.tz2 = b.tz; b.tx = v.x; b.tz = v.z; }
 }
+/** In passing, like a player tapping interact: cash, plates and ammo within reach, and a supply box right beside us. */
+function grabNearby(sim: Sim, p: Player) {
+  for (const itm of sim.itemsNear(p.x, p.z, 3.5)) {
+    if (!itm.alive || Math.abs(itm.y - p.y) > 1.8 || Math.hypot(itm.x - p.x, itm.z - p.z) > 3.5) continue;
+    if (itm.kind === ItemKind.Cash || (itm.kind === ItemKind.Plate && p.plates < p.maxPlates) || (itm.kind === ItemKind.Ammo && useful(p, itm.kind, itm))) simTake(sim, p, itm.id);
+  }
+}
+
+/** Toggle toward a stance (crouch / prone are toggles in the controls, like a player's keys). */
+function setStance(p: Player, want: Stance) {
+  const it = p.intent;
+  if (p.stance === want || (p as any).slideT > 0) return;
+  if (want === Stance.Prone || p.stance === Stance.Prone) it.prone = true;
+  else it.crouch = true;
+}
+
+/**
+ * Perception, like a player's eyes and ears: gunfire within ~160 m and footsteps within ~25 m (sprinting enemies we
+ * can't see), an enemy UAV that has us, and who just shot us.
+ */
+function perceive(sim: Sim, b: BotBrain, p: Player) {
+  let best = 160;
+  for (const q of sim.playersNear(p.x, p.z, 160)) {
+    if (q.squad === p.squad || !q.alive || q.phase !== Phase.Alive) continue;
+    const d = Math.hypot(q.x - p.x, q.z - p.z), shot = sim.time - ((q as any).lastLoudShot ?? -99) < 2.5, step = d < 25 && q.sprinting;
+    if ((shot || step) && d < best) { best = d; b.heardX = q.x; b.heardZ = q.z; if (sim.time - b.heardAt > 3) b.stratAt = 0; b.heardAt = sim.time; }
+  }
+  for (const [sq, u] of sim.squadUav) {
+    if (sq === p.squad || u.until <= sim.time) continue;
+    const R = (u.level ?? 1) >= 3 ? 1e9 : (u.level ?? 1) >= 2 ? 650 : 450;
+    if (Math.hypot(u.x - p.x, u.z - p.z) < R) { if (sim.time - b.exposedAt > 5) b.stratAt = 0; b.exposedAt = sim.time; }
+  }
+  if (sim.time - p.lastDamaged < 0.3 && b.hurtSeen < p.lastDamaged) { b.hurtSeen = p.lastDamaged; b.stratAt = Math.min(b.stratAt, sim.time + 0.5); }
+}
+
+/** What this player wants from a buy station right now (empty: nothing worth the trip). */
+function shopWants(sim: Sim, p: Player): string[] {
+  const out: string[] = [], c = p.cash;
+  if (sim.players.some((q) => q.squad === p.squad && q.id !== p.id && q.phase === Phase.Dead) && c >= PRICES.buyback) out.push('buyback');
+  if (c >= PRICES.loadout && !p.loadoutUsed) out.push('loadout');
+  if (p.plates < 2 && c >= PRICES.plates) out.push('plates');
+  if (!p.selfRevive && c >= PRICES.selfRevive + 1500) out.push('selfRevive');
+  if (!p.hasMask && sim.circle.phase >= 3 && c >= PRICES.gasMask) out.push('gasMask');
+  if (!p.killstreak && c >= PRICES.uav + 1500) out.push('uav');
+  return out;
+}
+
+/**
+ * The plan (2020 players don't just wander): weigh looting, shopping, hunting a sound / UAV ping, holding a building,
+ * hiding (found by a UAV while weak, or a sneaky player who heard someone) and roaming toward the circle, with the
+ * play style and personality as biases and a little hysteresis; re-weighed every 6-12 s and on events (shot at, heard
+ * someone, UAV'd). Executes hide / shop / hunt / hold by setting the goal; returns true when it did.
+ */
+function strategize(sim: Sim, b: BotBrain, p: Player, armed: boolean): boolean {
+  const c = sim.circle;
+  if (sim.time >= b.stratAt) {
+    b.stratAt = sim.time + 6 + sim.rng.next() * 6;
+    const kit = (armed ? 1 : 0) + Math.min(1, p.plates / 3) + p.armor / 150;
+    const weak = p.armor < 75 || p.health < 60 || p.plates < 1;
+    const exposed = sim.time - b.exposedAt < 4, heard = sim.time - b.heardAt < 10;
+    const st = b.style, wants = shopWants(sim, p);
+    const station = wants.length ? sim.buyStations.find((q) => Math.hypot(q.x - p.x, q.z - p.z) < 450 && Math.hypot(q.x - c.nx, q.z - c.nz) < c.nr * 1.1) : undefined;
+    const u: Record<Strategy, number> = {
+      loot: (armed ? 0 : 3) + (3 - kit) * 0.9 + (c.phase < 2 ? 0.6 : 0) + (st === 'looter' ? 0.6 : 0),
+      shop: station ? 1.4 + wants.length * 0.5 : -9,
+      hunt: (st === 'aggressive' ? 1.4 : st === 'contractor' ? 0.6 : st === 'looter' ? 0.4 : 0) + kit * 0.5 + (heard ? 1.1 : 0) + (p.killstreak === 'uav' ? 0.6 : 0) - (weak ? 1.2 : 0),
+      hold: (st === 'camper' ? 1.5 : 0.3) + (c.phase >= 3 ? 0.9 : 0) + (b.sneaky ? 0.3 : 0),
+      hide: (exposed && (weak || b.sneaky) ? 2.6 : 0) + (weak && heard ? 1.4 : 0) + (b.sneaky && heard ? 0.5 : 0),
+      roam: 0.7,
+    };
+    u[b.strategy] += 0.4; // stick with a plan unless something better comes along
+    for (const k in u) u[k as Strategy] += (sim.rng.next() - 0.5) * 0.4;
+    let best: Strategy = 'roam'; for (const k in u) if (u[k as Strategy] > u[best]) best = k as Strategy;
+    // squads move together: a bot follows its squad leader's hunt / hold (hiding and shopping stay personal)
+    const lead = sim.players.find((q) => q.squad === p.squad && q.bot && q.alive && q.phase === Phase.Alive);
+    const lb = lead && lead.id !== p.id ? sim.brains[lead.id] : null;
+    if (lb && (lb.strategy === 'hunt' || lb.strategy === 'hold') && best !== 'hide' && best !== 'shop' && Math.hypot(lead!.x - p.x, lead!.z - p.z) < 200) {
+      best = lb.strategy; b.heardX = lb.heardX; b.heardZ = lb.heardZ; b.heardAt = Math.max(b.heardAt, lb.heardAt); b.holdX = lb.holdX; b.holdZ = lb.holdZ; b.holdUntil = lb.holdUntil;
+    }
+    if (best !== b.strategy) { b.strategy = best; b.hideUntil = 0; }
+    b.why = Object.entries(u).map(([k, v]) => k + ' ' + v.toFixed(1)).join(', ');
+  }
+  switch (b.strategy) {
+    case 'shop': {
+      const st = sim.buyStations.filter((q) => Math.hypot(q.x - c.nx, q.z - c.nz) < c.nr * 1.1).sort((a2, b2) => Math.hypot(a2.x - p.x, a2.z - p.z) - Math.hypot(b2.x - p.x, b2.z - p.z))[0];
+      if (!st || !shopWants(sim, p).length) { b.strategy = 'roam'; return false; }
+      b.goal = 'buy'; b.buyId = st.id; b.tx = st.x; b.tz = st.z; return true;
+    }
+    case 'hide': {
+      if (b.hideUntil < sim.time) {
+        // a building close by, inside the circle, preferably away from the threat
+        const tx = sim.time - b.heardAt < 10 ? b.heardX : p.x, tz = sim.time - b.heardAt < 10 ? b.heardZ : p.z;
+        const cands = sim.world.col.near(p.x, p.z, 70, []).filter((q) => (q.kind === 'house' || q.kind === 'block' || q.kind === 'shop' || q.kind === 'tenement' || q.kind === 'barn' || q.kind === 'warehouse') && Math.hypot(q.x - c.nx, q.z - c.nz) < c.nr);
+        cands.sort((a2, b2) => (Math.hypot(a2.x - p.x, a2.z - p.z) - Math.hypot(a2.x - tx, a2.z - tz) * 0.5) - (Math.hypot(b2.x - p.x, b2.z - p.z) - Math.hypot(b2.x - tx, b2.z - tz) * 0.5));
+        const h = cands[0];
+        if (!h) { b.strategy = 'roam'; return false; }
+        // a spot inside, off the centre line of the doors
+        const lx = (h.bx0 + h.bx1) / 2 * 0.6 + (sim.rng.next() - 0.5) * 2, lz = (h.bz0 + h.bz1) / 2 + (h.bz1 - h.bz0) * 0.15;
+        b.hideX = h.x + lx * h.cos + lz * h.sin; b.hideZ = h.z - lx * h.sin + lz * h.cos; b.hideUntil = sim.time + 18 + sim.rng.next() * 20;
+      }
+      if (p.plates > 0 && p.armor < 150) p.intent.plate = true;
+      b.goal = 'idle'; b.tx = b.hideX; b.tz = b.hideZ; return true;
+    }
+    case 'hunt': {
+      // go to the sound, else where our UAV shows someone, else pop a UAV, else toward the circle
+      let tx = NaN, tz = NaN;
+      if (sim.time - b.heardAt < 15) { tx = b.heardX; tz = b.heardZ; }
+      else {
+        const uav = sim.squadUav.get(p.squad);
+        if (uav && uav.until > sim.time) {
+          const R = (uav.level ?? 1) >= 2 ? 650 : 450; let bd = R;
+          for (const q of sim.players) if (q.alive && q.squad !== p.squad && q.phase === Phase.Alive && Math.hypot(q.x - uav.x, q.z - uav.z) < R) { const d = Math.hypot(q.x - p.x, q.z - p.z); if (d < bd) { bd = d; tx = q.x; tz = q.z; } }
+        } else if (p.killstreak === 'uav' && !sim.inWarmup) sim.useKillstreak(p);
+      }
+      if (isNaN(tx)) { tx = c.nx + (sim.rng.next() - 0.5) * c.nr; tz = c.nz + (sim.rng.next() - 0.5) * c.nr; if (b.goal === 'rotate' && Math.hypot(b.tx - p.x, b.tz - p.z) > 8) return true; }
+      b.goal = 'rotate'; b.tx = tx; b.tz = tz; return true;
+    }
+    case 'hold': {
+      if (b.holdUntil < sim.time) {
+        const near = sim.world.col.near(p.x, p.z, 90, []).filter((q) => (q.kind === 'house' || q.kind === 'block' || q.kind === 'tenement' || q.kind === 'shop') && Math.hypot(q.x - c.nx, q.z - c.nz) < c.nr * 0.8);
+        if (!near.length) { b.strategy = 'roam'; return false; }
+        const h = near[Math.floor(sim.rng.next() * near.length)]; b.holdX = h.x; b.holdZ = h.z; b.holdUntil = sim.time + 40 + sim.rng.next() * 40;
+      }
+      b.goal = 'idle'; b.tx = b.holdX; b.tz = b.holdZ; return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Fight movement a player would use: crouch to steady a mid-range fight, go prone with a sniper far off, slide into
+ * a push, jump-shoot when hit up close, turn toward a shooter we can't see, and fall back to cover to plate up when
+ * losing a trade.
+ */
+function fightMoves(sim: Sim, b: BotBrain, p: Player, q: Player, visible: boolean, dist: number, cls: string, think: boolean) {
+  const it = p.intent;
+  const hurt = sim.time - p.lastDamaged < 0.6;
+  // getting shot by someone we can't see: turn to where it came from and take them as the target
+  if (hurt && p.killedBy >= 0 && p.killedBy !== q.id) {
+    const a = sim.players[p.killedBy];
+    if (a?.alive && Math.hypot(a.x - p.x, a.z - p.z) < 250) { b.target = a.id; b.lastSeenX = a.x + (sim.rng.next() - 0.5) * 8; b.lastSeenZ = a.z + (sim.rng.next() - 0.5) * 8; b.engageStart = sim.time; }
+  }
+  // losing the trade (armor gone, health low, they're healthier): break line of sight and plate
+  const losing = p.armor <= 0 && p.health < 55 && (q.armor > 0 || q.health > p.health) && dist > 6;
+  if (hurt && losing && b.retreatUntil < sim.time) b.retreatUntil = sim.time + 1.6 + sim.rng.next() * 1.2;
+  if (b.retreatUntil > sim.time) {
+    const away = Math.atan2(-(p.x - q.x), -(p.z - q.z)), rel = wrapAngle(away - p.yaw);
+    it.mz = Math.cos(rel); it.mx = -Math.sin(rel) + b.strafe * 0.4; it.sprint = false; it.fire = it.fire && !hurt;
+    if (think) setStance(p, Stance.Stand);
+    return;
+  }
+  // stance for the range
+  if (think) {
+    const sniper = cls === 'sniper' || cls === 'marksman';
+    const want = !visible ? Stance.Stand : sniper && dist > 90 && !hurt ? Stance.Prone : dist > 30 && b.skill > 0.45 && !hurt && (b.id + Math.floor(sim.time / 3)) % 3 !== 0 ? Stance.Crouch : Stance.Stand;
+    setStance(p, want);
+  }
+  // slide into a push (once per approach), jump-shot when hit up close
+  if (p.sprinting && !visible && dist < 28 && sim.time - b.slideUsed > 6 && sim.rng.chance(0.4 * b.skill)) { it.crouch = true; b.slideUsed = sim.time; }
+  if (visible && hurt && dist < 18 && p.onGround && sim.rng.chance(0.05 + b.skill * 0.05)) it.jump = true;
+}
+
+/**
+ * Flying the helicopter like a player: climb to ~70 m, turn with the yaw keys toward the destination, fly forward,
+ * descend and hop out near it; bail out with the parachute if it's burning.
+ */
+function botFly(sim: Sim, b: BotBrain, p: Player, v: import('./vehicles').Vehicle, dt: number, think: boolean) {
+  const it = p.intent as any;
+  it.fire = false; it.ads = false; it.up = false; it.down = false;
+  if (p.id !== v.seats[0]) { it.mz = 0; it.mx = 0; if (think && v.seats[0] < 0 && v.y - sim.world.hf.at(v.x, v.z) < 4) exitVehicle(sim, p); return; }
+  if (think && (b.tx2 || b.tz2)) { b.tx = b.tx2; b.tz = b.tz2; b.tx2 = b.tz2 = 0; }
+  const agl = v.y - sim.world.col.groundAt(v.x, v.z, v.y + 1, 2), dx = b.tx - v.x, dz = b.tz - v.z, dist = Math.hypot(dx, dz);
+  const err = wrapAngle(Math.atan2(-dx, -dz) - v.yaw);
+  if (v.health < VEHICLES[v.type].health * 0.3 && agl > 30) { exitVehicle(sim, p); return; } // burning: jump and pull the chute
+  if (dist > 90) {
+    it.up = agl < 60; it.down = agl > 95;
+    it.mx = clamp(-err * 2, -1, 1);
+    it.mz = agl > 20 ? (Math.abs(err) < 0.5 ? 1 : 0.15) : 0;
+  } else {
+    it.mx = 0; it.mz = dist > 25 ? 0.3 : 0; it.down = agl > 1.2;
+    if (agl < 2.5 && v.speed < 6) { exitVehicle(sim, p); b.goal = 'idle'; }
+  }
+  void dt;
+}
+
 const lerpYaw = (a: number, b: number, t: number) => a + wrapAngle(b - a) * t;
 
 function humanIn(sim: Sim, p: Player): boolean { for (const q of sim.players) if (q.squad === p.squad && !q.bot) return true; return false; }
@@ -278,8 +474,8 @@ export function botThink(sim: Sim, b: BotBrain, p: Player, dt: number, think: bo
   if (veh) {
     // passengers pick targets and shoot from their seats (2020); the driver drives
     if (veh.seats[0] !== p.id) { if (think) scanForTarget(sim, b, p); if (b.target < 0 || !sim.players[b.target].alive) { b.target = -1; botDrive(sim, b, p, veh, dt, think); return; } }
-    else { botDrive(sim, b, p, veh, dt, think); return; }
-  } else if (think) { decide(sim, b, p, inGulag); rideDecision(sim, b, p); }
+    else { if (VEHICLES[veh.type].air) botFly(sim, b, p, veh, dt, think); else botDrive(sim, b, p, veh, dt, think); return; }
+  } else if (think) { perceive(sim, b, p); grabNearby(sim, p); decide(sim, b, p, inGulag); rideDecision(sim, b, p); }
   const w = p.weapons[p.cur];
   const def = w ? WEAPON[w.id] : null;
   // --- combat
@@ -312,7 +508,7 @@ export function botThink(sim: Sim, b: BotBrain, p: Player, dt: number, think: bo
       }
     }
     // fight movement: strafe, some crouching, close to preferred range
-    b.strafeT -= dt; if (b.strafeT <= 0) { b.strafeT = 0.5 + sim.rng.next() * 1.2; b.strafe = sim.rng.chance(0.5) ? 1 : -1; if (sim.rng.chance(0.2 * b.skill)) it.crouch = true; }
+    b.strafeT -= dt; if (b.strafeT <= 0) { b.strafeT = 0.5 + sim.rng.next() * 1.2; b.strafe = sim.rng.chance(0.5) ? 1 : -1; }
     const c1 = sim.circle;
     if (!inGulag && Math.hypot(p.x - c1.cx, p.z - c1.cz) > c1.r - 10) {
       // fighting in the gas: keep running for the circle, strafe relative to that
@@ -330,12 +526,16 @@ export function botThink(sim: Sim, b: BotBrain, p: Player, dt: number, think: bo
       it.yaw = lerpYaw(it.yaw, Math.atan2(-lx, -lz), Math.min(1, dt * 5));
       if (Math.hypot(lx, lz) < 2) b.target = -1;
     }
-    if (p.stance === Stance.Crouch && sim.rng.chance(0.01)) it.crouch = true;
     if (w && w.mag === 0) it.reload = true;
+    fightMoves(sim, b, p, q, visible, dist, def?.cls ?? '', think);
     return;
   }
   it.ads = false;
-  if (p.stance !== Stance.Stand && sim.rng.chance(0.05)) it.crouch = p.stance === Stance.Crouch;
+  // out of a fight: crouched in a hiding spot or creeping up on a sound (sneaky players), standing otherwise
+  const hiding = b.strategy === 'hide' && Math.hypot(b.hideX - p.x, b.hideZ - p.z) < 3;
+  const creeping = b.sneaky && sim.time - b.heardAt < 12 && Math.hypot(b.heardX - p.x, b.heardZ - p.z) < 60;
+  if (think) setStance(p, hiding ? (b.sneaky && sim.time - b.exposedAt > 3 ? Stance.Prone : Stance.Crouch) : creeping ? Stance.Crouch : Stance.Stand);
+  if (hiding) { it.mz = 0; it.mx = 0; it.sprint = false; }
   // --- non-combat upkeep
   if (p.plates > 0 && p.armor < 150 && sim.time - b.seenAt > 1.5) it.plate = true;
   if (w && def && w.mag < (def.mag * 0.5) && p.ammo[def.ammo] > 0 && sim.time - b.seenAt > 2) it.reload = true;
@@ -347,7 +547,7 @@ export function botThink(sim: Sim, b: BotBrain, p: Player, dt: number, think: bo
         const itm = sim.itemById.get(b.itemId);
         if (!itm || !itm.alive) { b.itemId = -1; break; }
         const d = Math.hypot(itm.x - p.x, itm.z - p.z);
-        if (d < 2.4 || (b.itemT > 5 && d < 22)) {
+        if (d < 2.4 || (b.itemT > 4 && d < 30) || (b.itemT > 10 && d < 45)) {
           // looting abstraction: bots can't path through every doorway, so after trying for a while they "find the way"
           if (itm.kind === ItemKind.Weapon || itm.kind === ItemKind.Lethal || itm.kind === ItemKind.Tactical || itm.kind === ItemKind.Killstreak || itm.kind === ItemKind.SelfRevive || itm.kind === ItemKind.GasMask || itm.kind === ItemKind.Satchel) wantPickup(sim, p, itm.id);
           else simTake(sim, p, itm.id);
@@ -397,12 +597,16 @@ function simTake(sim: Sim, p: Player, id: number, explicit = false) {
 
 function botShop(sim: Sim, p: Player) {
   const dead = sim.players.find((q) => q.squad === p.squad && q.id !== p.id && q.phase === Phase.Dead);
-  if (dead && p.cash >= PRICES.buyback) { sim.buy(p, 'buyback', dead.id); return; }
-  if (p.cash >= PRICES.loadout && !p.loadoutUsed) { sim.buy(p, 'loadout'); return; }
+  if (dead && p.cash >= PRICES.buyback) sim.buy(p, 'buyback', dead.id);
+  if (p.cash >= PRICES.loadout && !p.loadoutUsed) sim.buy(p, 'loadout');
   if (p.cash >= PRICES.plates && p.plates < 3) sim.buy(p, 'plates');
-  if (p.cash >= PRICES.selfRevive && !p.selfRevive) sim.buy(p, 'selfRevive');
-  // spare cash: a UAV (or sometimes a Counter UAV / airstrike) for the next fight
-  if (!p.killstreak && p.cash >= PRICES.uav + 2000) sim.buy(p, sim.rng.pick(['uav', 'uav', 'cuav', 'cluster', 'airstrike'] as const));
+  if (p.cash >= PRICES.selfRevive + 1000 && !p.selfRevive) sim.buy(p, 'selfRevive');
+  if (!p.hasMask && sim.circle.phase >= 3 && p.cash >= PRICES.gasMask) sim.buy(p, 'gasMask');
+  // spare cash: a UAV mostly (a Counter UAV when an enemy UAV is up, now and then an airstrike)
+  if (!p.killstreak && p.cash >= PRICES.uav + 1000) {
+    const enemyUav = [...sim.squadUav].some(([sq, u]) => sq !== p.squad && u.until > sim.time);
+    sim.buy(p, enemyUav && p.cash >= PRICES.cuav ? 'cuav' : sim.rng.pick(['uav', 'uav', 'uav', 'cluster', 'airstrike'] as const));
+  }
 }
 
 function decide(sim: Sim, b: BotBrain, p: Player, inGulag: boolean) {
@@ -482,6 +686,7 @@ function decide(sim: Sim, b: BotBrain, p: Player, inGulag: boolean) {
   if (sim.inWarmup) { if (b.goal !== 'idle' || Math.hypot(b.tx - p.x, b.tz - p.z) < 4) { b.goal = 'idle'; b.wanderA += sim.rng.range(-1, 1); b.tx = clamp(p.x + Math.cos(b.wanderA) * 80, 100, 3140); b.tz = clamp(p.z + Math.sin(b.wanderA) * 80, 100, 3000); } return; }
   // ---------------- goals
   if (b.goal !== 'loot') b.itemId = -1; // a stale loot target would block looting forever
+  if (b.goal === 'loot' && b.itemId < 0 && b.chestId < 0) { b.goal = 'idle'; b.lootScanAt = 0; } // nothing to fetch any more: look again
   // revive a downed squadmate
   const downed = sim.players.find((q) => q.squad === p.squad && q.phase === Phase.Downed && Math.hypot(q.x - p.x, q.z - p.z) < 120);
   if (downed) { b.goal = 'revive'; (b as any).reviveId = downed.id; return; }
@@ -513,34 +718,49 @@ function decide(sim: Sim, b: BotBrain, p: Player, inGulag: boolean) {
     for (const s of sim.buyStations) { const d = Math.hypot(s.x - p.x, s.z - p.z); if (d < bd && Math.hypot(s.x - c.nx, s.z - c.nz) < c.r) { bd = d; st = s; } }
     if (st) { b.goal = 'buy'; b.buyId = st.id; b.tx = st.x; b.tz = st.z; return; }
   }
+  // opportunistic: anything useful within a few steps gets picked up whatever the plan (players loot as they go)
+  if (b.itemId < 0 && b.strategy !== 'hide') {
+    let best = null as null | { id: number; x: number; z: number }, bd = 18;
+    for (const itm of sim.itemsNear(p.x, p.z, 18)) {
+      if (!itm.alive || Math.abs(itm.y - p.y) > 2.5 || (b.failed.get(itm.id) ?? 0) > sim.time || !useful(p, itm.kind, itm)) continue;
+      const d = Math.hypot(itm.x - p.x, itm.z - p.z) - (itm.kind === ItemKind.Cash ? 4 : 0);
+      if (d < bd) { bd = d; best = itm; }
+    }
+    if (best) { b.itemId = best.id; b.itemT = 0; b.tx = best.x; b.tz = best.z; b.goal = 'loot'; return; }
+  } else if (b.itemId >= 0 && b.goal === 'loot') return;
+  // the plan for the next stretch (hide / shop / hunt / hold), re-weighed every few seconds and on events
+  if (strategize(sim, b, p, armed)) return;
   // contracts (2020): squads without a human take nearby contracts and work them
   if (armed && workContract(sim, b, p)) return;
   // tactics by play style
   if (armed && tactics(sim, b, p)) return;
   // loot: nearest useful item nearby
   // unarmed: go a long way for a gun or a supply box before anything else
-  if (!armed && b.itemId < 0) {
+  // supply boxes: unarmed players go a long way for one; looters (and roamers, nearer) clear the boxes around them
+  const boxRange = !armed ? 160 : b.strategy === 'loot' ? 60 : b.strategy === 'roam' ? 35 : 0;
+  if ((boxRange > 0 || b.chestId >= 0) && b.itemId < 0) {
     // a supply box we're already heading for
     const cur = b.chestId >= 0 ? sim.chests.find((c2) => c2.id === b.chestId && !c2.opened) : undefined;
     if (cur) {
       const d = Math.hypot(cur.x - p.x, cur.z - p.z);
       b.chestT += 0.1;
-      if (d < 2.6 || (b.chestT > 6 && d < 22)) { cur.opened = true; for (const i2 of chestContentsLazy(sim, cur)) sim.addItem(i2); b.chestId = -1; }
+      // opened: pick through what spilled out before heading for the next box
+      if (d < 2.6 || (b.chestT > 5 && d < 30)) { cur.opened = true; for (const i2 of chestContentsLazy(sim, cur)) sim.addItem(i2); b.chestId = -1; b.gunScanAt = sim.time + 5; b.lootScanAt = 0; }
       else if (b.chestT > 14) { b.failed.set(-cur.id, sim.time + 120); b.chestId = -1; }
       else { b.tx = cur.x; b.tz = cur.z; b.goal = 'loot'; return; }
     } else b.chestId = -1;
     if (sim.time >= b.gunScanAt) {
       b.gunScanAt = sim.time + 1 + sim.rng.next();
       let best: any = null, bd = 130;
-      for (const itm of sim.itemsNear(p.x, p.z, 130)) { if (itm.kind !== ItemKind.Weapon || WEAPON[itm.weapon!].cls === 'pistol' || (b.failed.get(itm.id) ?? 0) > sim.time) continue; const d = Math.hypot(itm.x - p.x, itm.z - p.z); if (d < bd) { bd = d; best = itm; } }
+      if (!armed) for (const itm of sim.itemsNear(p.x, p.z, 130)) { if (itm.kind !== ItemKind.Weapon || WEAPON[itm.weapon!].cls === 'pistol' || (b.failed.get(itm.id) ?? 0) > sim.time) continue; const d = Math.hypot(itm.x - p.x, itm.z - p.z); if (d < bd) { bd = d; best = itm; } }
       if (best) { b.itemId = best.id; b.itemT = 0; b.tx = best.x; b.tz = best.z; b.goal = 'loot'; return; }
-      let ch: any = null; bd = 160;
+      let ch: any = null; bd = boxRange;
       for (const c2 of sim.chests) { if (c2.opened || Math.abs(c2.x - p.x) > bd || Math.abs(c2.z - p.z) > bd || (b.failed.get(-c2.id) ?? 0) > sim.time) continue; const d = Math.hypot(c2.x - p.x, c2.z - p.z); if (d < bd) { bd = d; ch = c2; } }
       if (ch) { b.chestId = ch.id; b.chestT = 0; b.tx = ch.x; b.tz = ch.z; b.goal = 'loot'; return; }
     }
   }
   const needy = !armed || p.plates < 2 || p.armor < 100;
-  if (b.itemId < 0 && sim.time >= b.lootScanAt && (needy || sim.rng.chance(0.5))) {
+  if (b.itemId < 0 && sim.time >= b.lootScanAt && (needy || b.gunScanAt > sim.time || sim.rng.chance(0.5))) {
     b.lootScanAt = sim.time + 0.8 + sim.rng.next() * 0.6;
     const R = needy ? 70 : 45;
     let best = null, bd = R;
@@ -551,7 +771,8 @@ function decide(sim: Sim, b: BotBrain, p: Player, inGulag: boolean) {
       if (d < bd) { bd = d; best = itm; }
     }
     // open supply boxes too
-    for (const ch of sim.chests) if (!ch.opened && Math.abs(ch.x - p.x) < 30 && Math.abs(ch.z - p.z) < 30) { const d = Math.hypot(ch.x - p.x, ch.z - p.z); if (d < 2.5) { ch.opened = true; for (const i2 of chestContentsLazy(sim, ch)) sim.addItem(i2); } else if (d < bd) { bd = d; best = null; b.tx = ch.x; b.tz = ch.z; b.goal = 'loot'; } }
+    // (a box becomes the box target, so the same "find the way" rule as for items applies)
+    for (const ch of sim.chests) if (!ch.opened && Math.abs(ch.x - p.x) < 30 && Math.abs(ch.z - p.z) < 30 && (b.failed.get(-ch.id) ?? 0) <= sim.time) { const d = Math.hypot(ch.x - p.x, ch.z - p.z); if (d < 2.5) { ch.opened = true; for (const i2 of chestContentsLazy(sim, ch)) sim.addItem(i2); } else if (d < bd) { bd = d; best = null; b.chestId = ch.id; b.chestT = 0; b.tx = ch.x; b.tz = ch.z; b.goal = 'loot'; } }
     if (best) { b.itemId = best.id; b.itemT = 0; b.tx = best.x; b.tz = best.z; b.goal = 'loot'; return; }
   }
   if (b.goal === 'loot' && b.itemId >= 0) return;
