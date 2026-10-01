@@ -46,6 +46,7 @@ export class Match {
   private settingsEl: SettingsMenu | null = null;
   onSettingChange: (k: keyof Settings) => void = () => {};
   private fpsEl = document.createElement('div'); private fpsAcc = 0; private fpsN = 0;
+  private perf = { sim: 0, render: 0, worst: 0, calls: 0, tris: 0 };
   camYaw = 0; camPitch = 0;
   mapOpen = false; paused = false;
   spectate = -1;
@@ -65,7 +66,11 @@ export class Match {
   constructor(public sm: SceneMgr, private world: WorldData, private input: Input, tac: HTMLCanvasElement, private ui: HTMLElement, public settings: Settings, seed: number, squadSize = 3, difficulty: Difficulty = 'normal') {
     this.sim = new Sim(world, seed, { humans: 1, warmup: 45, squadSize, difficulty });
     this.controls = new Controls(input, settings);
-    input.onUnlock = () => { if (!this.menuOpen && !this.hud.panel && !this.mapOpen && !this.done) this.togglePause(); };
+    input.onUnlock = () => {
+      // Esc in the buy station releases the pointer lock: that closes the station (click to take the mouse back)
+      if (this.hud.panel && !this.hud.backpackOpen && !this.mapOpen) { this.hud.closePanel(); this.hud.cursorShow(false); this.hud.showNote('Click to resume'); return; }
+      if (!this.menuOpen && !this.hud.panel && !this.mapOpen && !this.done) this.togglePause();
+    };
     this.fpsEl.className = 'fps'; ui.appendChild(this.fpsEl);
     this.hud = new Hud(this.sim, tac, 0, settings);
     ui.appendChild(this.hud.root);
@@ -106,6 +111,10 @@ export class Match {
   private look() {
     const { dx, dy } = this.input.consumeMouse();
     this.lastMouse = { dx, dy };
+    // a panel opened with the pointer still locked (buy station): the mouse drives the in-game cursor
+    const vc = !!this.hud.panel && !this.hud.backpackOpen && this.input.locked;
+    this.hud.cursorShow(vc);
+    if (vc) { this.hud.cursorMove(dx, dy); if (this.input.wasPressed('Mouse0')) this.hud.cursorClick(); return; }
     if (this.hud.panel || this.menuOpen) return;
     const p = this.me, w = p.weapons[p.cur];
     const zoom = w ? 1 + (this.zoomNow - 1) * p.ads : 1;
@@ -251,8 +260,20 @@ export class Match {
         }
       }
     } else inp.endFrame();
-    this.fpsAcc += dt; this.fpsN++; if (this.fpsAcc > 0.5) { this.fpsEl.textContent = this.settings.showFps ? `${Math.round(this.fpsN / this.fpsAcc)} FPS` : ''; this.fpsAcc = 0; this.fpsN = 0; }
+    this.fpsAcc += dt; this.fpsN++;
+    if (this.fpsAcc > 0.5) {
+      // FPS counter with a breakdown (Settings > Show FPS): where the frame goes on this machine
+      if (this.settings.showFps) {
+        const n = this.fpsN, c = this.sm.renderer.domElement, slow = this.perf.worst > 34;
+        // 2020 telemetry: small dark boxes in a row at the top-left corner (label white, value grey)
+        const box = (k: string, v: string) => `<span><b>${k}:</b> ${v}</span>`;
+        this.fpsEl.innerHTML = box('FPS', String(Math.round(n / this.fpsAcc))) + box('Latency', '0 ms') + box('Frame', `${(1000 * this.fpsAcc / n).toFixed(1)} ms`) + box('CPU Sim', `${(this.perf.sim / n).toFixed(1)} ms`) + box('CPU Render', `${(this.perf.render / n).toFixed(1)} ms`) + box('Draw Calls', String(this.perf.calls)) + box('Tris', `${(this.perf.tris / 1e6).toFixed(2)}M`) + box('Res', `${c.width}×${c.height}`) + (slow ? box('Worst', `${this.perf.worst.toFixed(0)} ms`) : '');
+      } else this.fpsEl.textContent = '';
+      this.fpsAcc = 0; this.fpsN = 0; this.perf.sim = 0; this.perf.render = 0; this.perf.worst = 0;
+    }
+    this.perf.worst = Math.max(this.perf.worst, dt * 1000);
     if (!this.paused) {
+      const tSim = performance.now();
       this.clock.advance(dt, (step) => {
         this.fillIntent();
         this.sim.tick(step);
@@ -260,8 +281,13 @@ export class Match {
         for (const e of this.sim.events) this.handleEvent(e);
         this.sim.events.length = 0;
       });
+      this.perf.sim += performance.now() - tSim;
     }
+    const tR = performance.now();
+    this.sm.renderer.info.autoReset = false; this.sm.renderer.info.reset(); // count every pass of the frame
     this.render(dt, time);
+    this.perf.render += performance.now() - tR;
+    { const info = this.sm.renderer.info.render; this.perf.calls = info.calls; this.perf.tris = info.triangles; }
     if (this.sim.over && !this.done) { this.done = true; const me = this.me; setTimeout(() => this.onEnd(this.sim.winner === me.squad, this.placement(), me), 2500); }
     if (!this.me.alive && !this.done && !this.spectatingOn && this.me.phase === Phase.Dead && !this.sim.players.some((q) => q.squad === this.me.squad && q.alive)) {
       this.done = true; setTimeout(() => this.onEnd(false, this.placement(), this.me), this.post ? 7500 : 3500);
@@ -374,7 +400,7 @@ export class Match {
       case 'contract': if (e.p >= 0 && sim.players[e.p].squad === me.squad) audio.play(e.msg === 'start' ? 'contractStart' : e.msg === 'done' ? 'contractDone' : e.msg === 'fail' ? 'uiDeny' : 'contractStep', { ui: true, vol: 0.7 }); if (e.p >= 0 && sim.players[e.p].squad === me.squad) audio.say(e.msg === 'start' ? 'Contract accepted.' : e.msg === 'done' ? 'Contract complete.' : e.msg === 'fail' ? 'Contract failed.' : 'Next target marked.'); break;
       case 'announce':
         if (e.text === '__infil__') { audio.play('musicInfil', { music: true, vol: 0.8 }); this.hud.showBanner('Verdansk', `Battle Royale — ${['Solos', 'Duos', 'Trios'][sim.squadSize - 1] ?? 'Quads'} • 150 players`); this.camYaw = Math.atan2(-sim.plane.dx, -sim.plane.dz); this.camPitch = -0.2; audio.play('uiBuy', { vol: 0.4 }); }
-        if (e.text === '__buy__' && e.squad === me.squad && me.phase === Phase.Alive && sim.interactTarget(me)?.kind === 'buy') { document.exitPointerLock?.(); this.hud.openBuy((k, a) => { const r = sim.buy(me, k, a); if (!r) audio.play('uiBuy'); return r; }, () => (document.getElementById('game') as HTMLElement).requestPointerLock?.()); }
+        if (e.text === '__buy__' && e.squad === me.squad && me.phase === Phase.Alive && sim.interactTarget(me)?.kind === 'buy') { this.hud.openBuy((k, a) => { const r = sim.buy(me, k, a); if (!r) audio.play('uiBuy'); return r; }, () => { try { ((document.getElementById('game') as HTMLElement).requestPointerLock?.() as any)?.catch?.(() => {}); } catch { /* the browser refuses right after Esc: the next click re-locks */ } }); }
         if (e.text === '__loadout__' && e.squad === me.squad && me.phase === Phase.Alive) { document.exitPointerLock?.(); this.hud.openLoadout((i) => { sim.applyLoadout(me, i); (document.getElementById('game') as HTMLElement).requestPointerLock?.(); }); }
         break;
     }

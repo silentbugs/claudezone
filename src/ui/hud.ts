@@ -806,6 +806,27 @@ export class Hud {
     if (!force && key === this.bpLast) return;
     this.bpLast = key; p.innerHTML = html;
   }
+  /**
+   * In-game menu cursor: the buy station keeps the pointer locked (so Esc only releases the lock, which we read as
+   * "close the menu", instead of the browser leaving fullscreen) and this cursor follows the mouse instead.
+   */
+  private vcur = (() => { const e = el('div', 'vcur'); e.innerHTML = '<svg viewBox="0 0 24 24"><path d="M3 2l15 11-6.5 1 3.6 7.2-2.6 1.3-3.6-7.2L3 20z" fill="#fff" stroke="#111" stroke-width="1.4" stroke-linejoin="round"/></svg>'; e.style.display = 'none'; return e; })();
+  private vx = 0; private vy = 0; private vHover: Element | null = null;
+  cursorShow(on: boolean) {
+    if (on && this.vcur.style.display === 'none') { this.vx = innerWidth / 2; this.vy = innerHeight / 2; if (!this.vcur.parentNode) document.body.appendChild(this.vcur); }
+    this.vcur.style.display = on ? 'block' : 'none'; if (!on) this.vHover = null;
+  }
+  cursorMove(dx: number, dy: number) {
+    this.vx = Math.max(0, Math.min(innerWidth - 2, this.vx + dx)); this.vy = Math.max(0, Math.min(innerHeight - 2, this.vy + dy));
+    this.vcur.style.transform = `translate(${this.vx}px, ${this.vy}px)`;
+    const t = document.elementFromPoint(this.vx, this.vy);
+    if (t !== this.vHover) {
+      // mouseenter on every ancestor newly under the cursor (the rows listen on themselves)
+      for (let n: Element | null = t; n && !(this.vHover && n.contains(this.vHover)); n = n.parentElement) n.dispatchEvent(new MouseEvent('mouseenter'));
+      this.vHover = t;
+    }
+  }
+  cursorClick() { const t = document.elementFromPoint(this.vx, this.vy) as HTMLElement | null; t?.click(); }
   closePanel() { if (this.panel) { const cb = (this.panel as any).onClose; this.panel.remove(); this.panel = null; cb?.(); } }
 }
 export { RARITY_NAMES, FIELD_UPGRADE_NAMES };

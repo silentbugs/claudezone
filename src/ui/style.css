@@ -49,7 +49,10 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #000; font-f
 .settings input[type=range] { width: 220px; accent-color: #f6c343; }
 .settings .val { width: 52px; text-align: right; color: #ccc; font-variant-numeric: tabular-nums; }
 .settings .shint { color: #888; font-size: 13px; margin-top: 12px; }
-.fps { position: absolute; right: 8px; top: 86px; font: 12px monospace; color: #9f9; text-shadow: 0 1px 2px #000; }
+/* 2020 telemetry (Settings > Show FPS): measured from hud_onfoot_2_pc - top-left corner, ~0.5 % in, 20 px tall boxes */
+.fps { position: absolute; left: 0.5vh; top: 0.45vh; display: flex; gap: 0.35vh; pointer-events: none; z-index: 5; font-family: 'Rajdhani', 'Segoe UI', sans-serif; font-size: 1.35vh; }
+.fps span { background: rgba(0, 0, 0, 0.55); color: #a9aeb2; padding: 0.15vh 0.6vh; line-height: 1.6vh; white-space: nowrap; }
+.fps b { color: #fff; font-weight: 700; }
 .menu .mlabel { font-size: 13px; font-weight: 700; letter-spacing: 0.2em; opacity: 0.7; margin: 10px 0 2px; }
 .menu .diffs button { width: 128px; padding: 14px 8px; font-size: 17px; }
 .menu .startbtn { width: 526px; text-align: center; margin: 14px 0 10px; padding: 18px; font-size: 24px; background: #f0b429; color: #111; border-left: none; }
