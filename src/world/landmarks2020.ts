@@ -61,7 +61,7 @@ function arcDeck(ctx: GenContext, f: Frame, cx: number, cz: number, r0: number, 
  */
 export function tvStation2020(ctx: GenContext) {
   const p = poi('tv_station');
-  const f = frame(ctx, 'tv_station', p.x - 10, p.z + 8, 0.3, 90, 50, 'tvstation', 0xb9b2a4);
+  const f = frame(ctx, 'tv_station', p.x - 10, p.z + 8, 0, 90, 50, 'tvstation', 0xb9b2a4); // square to the map, drum foyer to the west (2025 tac map trace)
   const wallC = 0xb9b2a4, brick = 0x8a5a44, st = Mat.Concrete;
   const X0 = -6, X1 = 46, Z0 = -16, Z1 = 16, F2 = 4.5, R = 9;
   const b = new Builder();
