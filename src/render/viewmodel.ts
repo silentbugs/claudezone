@@ -1,5 +1,7 @@
 /** First-person arms + weapon, rendered in their own pass so they never clip into walls. */
 import * as THREE from 'three';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { gripHand, supportHand } from './hands';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 import { WEAPON } from '../data/weapons';
@@ -29,10 +31,8 @@ function limb(ax: number, ay: number, az: number, bx: number, by: number, bz: nu
 function leftArmGeometry(sleeve: number, pistol: boolean): THREE.BufferGeometry {
   const glove = 0x2e2d2a;
   const fist = new RoundedBoxGeometry(0.055, 0.045, 0.09, 2, 0.018);
-  return mergeGeometries([
-    part(fist, glove, 0, 0, 0),
-    limb(pistol ? -0.003 : -0.006, -0.015, 0.035, pistol ? -0.08 : -0.166, -0.26, 0.26, 0.036, sleeve),
-  ].map((g) => { g.deleteAttribute('uv'); return g; }))!;
+  void fist; void glove;
+  return supportHand(sleeve, pistol); // fingered glove, camo sleeve, watch (hands.ts)
 }
 function armsGeometry(sleeve: number, pistol: boolean, glb = false, gz?: number, hz?: number): THREE.BufferGeometry {
   const glove = 0x2e2d2a;
@@ -41,10 +41,8 @@ function armsGeometry(sleeve: number, pistol: boolean, glb = false, gz?: number,
   if (glb) {
     // gloved fists wrapped around the model's grip and handguard
     const fist = (w: number, h: number, d: number) => new RoundedBoxGeometry(w, h, d, 2, 0.018);
-    return mergeGeometries([
-      part(fist(0.05, 0.075, 0.075), glove, 0.004, pistol ? -0.055 : -0.06, gripZ),
-      limb(0.006, -0.07, gripZ + 0.03, 0.08, -0.3, gripZ + 0.24, 0.036, sleeve),
-    ].map((g) => { g.deleteAttribute('uv'); return g; }))!;
+    void fist;
+    return gripHand(pistol ? -0.055 : -0.06, gripZ, sleeve, pistol); // fingers wrapped round the grip (hands.ts)
   }
   return mergeGeometries([
     // right hand on the grip, forearm running back and down out of frame
@@ -94,6 +92,7 @@ export class ViewModel {
   constructor() {
     this.scene.add(new THREE.HemisphereLight(0xd8e2ee, 0x6a6050, 2.2));
     const d = new THREE.DirectionalLight(0xfff0dc, 2.4); d.position.set(-0.5, 1, 0.3); this.scene.add(d);
+    const k2 = new THREE.DirectionalLight(0xdfe8f2, 1.1); k2.position.set(0.8, 0.4, 0.6); this.scene.add(k2); // soft key from the right: edges of the receiver catch light
     const fm = new THREE.MeshBasicMaterial({ color: 0xffd28a, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false });
     const fg = mergeGeometries([new THREE.PlaneGeometry(0.16, 0.16), new THREE.PlaneGeometry(0.16, 0.16).rotateY(Math.PI / 2), new THREE.PlaneGeometry(0.16, 0.16).rotateX(Math.PI / 2)])!;
     this.flash = new THREE.Mesh(fg, fm); this.flash.visible = false;
@@ -357,7 +356,7 @@ export class ViewModel {
     this.idleT += dt;
     const S = 0.7, pistol = WEAPON[w!.id].cls === 'pistol';
     const g = !!this.glb;
-    const hip = pistol ? new THREE.Vector3(0.1, g ? -0.11 : -0.13, g ? -0.42 : -0.48) : new THREE.Vector3(g ? 0.13 : 0.12, g ? -0.15 : -0.14, g ? -0.4 : -0.36), aim = new THREE.Vector3(0, -this.sight * S, pistol ? (g ? -0.4 : -0.5) : g && this.optic ? -0.1 - this.opticZ * S : g ? -0.3 : -0.36);
+    const hip = pistol ? new THREE.Vector3(0.1, g ? -0.11 : -0.13, g ? -0.42 : -0.48) : new THREE.Vector3(g ? 0.125 : 0.12, g ? -0.132 : -0.14, g ? -0.4 : -0.36), aim = new THREE.Vector3(0, -this.sight * S, pistol ? (g ? -0.4 : -0.5) : g && this.optic ? -0.1 - this.opticZ * S : g ? -0.3 : -0.36);
     const pos = hip.clone().lerp(aim, ads);
     let rx = 0, ry = 0, rz = 0;
     if (this.sprintK > 0.001) {
@@ -483,8 +482,11 @@ export class ViewModel {
     this.flashLight.position.copy(this.flash.position);
     this.flashLight.intensity = this.flashT > 0 ? 8 - p.ads * 5 : 0;
   }
+  private envDone = false;
   render(r: THREE.WebGLRenderer) {
     if (!this.root.visible && !this.air.visible) return;
+    // a soft studio environment for the first-person scene: metal parts reflect something instead of reading black
+    if (!this.envDone) { this.envDone = true; const pm = new THREE.PMREMGenerator(r); this.scene.environment = pm.fromScene(new RoomEnvironment(), 0.04).texture; this.scene.environmentIntensity = 0.55; pm.dispose(); }
     r.autoClear = false; r.clearDepth(); r.render(this.scene, this.camera); r.autoClear = true;
   }
 }

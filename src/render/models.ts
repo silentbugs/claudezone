@@ -62,7 +62,7 @@ class Models {
       const want = new Set<string>(['soldier_swat', 'att_suppressor', 'att_red_dot', 'att_holo', 'att_scope', ...Object.values(GUN_MODEL), ...Object.values(LOW_MODEL), 'container_red', 'container_green']);
       await Promise.all([...want].map(async (k) => {
         const e = this.man[k]; if (!e) return;
-        try { const g = await loader.loadAsync(e.file.startsWith('models/') ? e.file : base + e.file); this.gltf.set(k, g); } catch (err) { console.warn('model failed', k, err); }
+        try { const g = await loader.loadAsync(e.file.startsWith('models/') ? e.file : base + e.file); this.gltf.set(k, g); if (!k.startsWith('soldier')) tuneGunMaterials(g.scene); } catch (err) { console.warn('model failed', k, err); }
       }));
       // RPG is authored ~3x real size
       const rpg = this.gltf.get('launcher_rpg'); if (rpg) rpg.scene.scale.setScalar(0.31);
@@ -273,4 +273,20 @@ function reticleTex(holo: boolean): THREE.Texture {
   const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; retCache[k] = t; return t;
 }
 
+/**
+ * The CC0 gun pack ships its main material fully metallic and fully rough (renders black with nothing to reflect) and
+ * its flat blacks at #0c0c0c. 2020 guns are dark but read: anodised receivers, lighter polymer, visible edges.
+ */
+const tuned = new WeakSet<THREE.Material>();
+function tuneGunMaterials(root: THREE.Object3D) {
+  root.traverse((o) => {
+    const m = o as THREE.Mesh; if (!m.isMesh) return;
+    for (const mt of (Array.isArray(m.material) ? m.material : [m.material]) as THREE.MeshStandardMaterial[]) {
+      if (!mt || tuned.has(mt) || !(mt as any).isMeshStandardMaterial || /Glass|Cerulean/.test(mt.name)) continue;
+      tuned.add(mt);
+      if (mt.metalness > 0.9) { mt.metalness = 0.45; mt.roughness = 0.5; }
+      else if (/Black/.test(mt.name)) { mt.color.setHex(/Lighter/.test(mt.name) ? 0x34342f : 0x24241f); mt.metalness = 0.25; mt.roughness = 0.62; }
+    }
+  });
+}
 export const models = new Models();
