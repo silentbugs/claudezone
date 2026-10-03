@@ -160,7 +160,7 @@ test('vault in and out through a house window; jump spam never reaches the roof'
   }
   console.log('jump spam max height', maxY.toFixed(2), 'eaves', s.by1.toFixed(1));
   // walking in and up the stairs (to 2F or into the loft) is fine; never onto the roof above the top floor
-  const roofTop = Math.max(...s.parts.filter((q: any) => q.mat === 8 && !q.noCollide && q.x1 - q.x0 > 3).map((q: any) => q.y1));
+  const roofTop = Math.max(...s.parts.filter((q: any) => (q.mat === 8 || q.mat === 3) && !q.noCollide && q.x1 - q.x0 > 3).map((q: any) => q.y1)); // tile or corrugated-metal roof
   assert.ok(maxY < roofTop + 0.5, 'never climbed onto the roof');
 });
 
