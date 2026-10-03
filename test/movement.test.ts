@@ -297,3 +297,32 @@ test('cottage loft: walk up the loft stair and stand up in the attic', () => {
   }
   assert.ok(tried >= 3 && ok === tried, `stood up in every loft (${ok}/${tried})`);
 });
+
+test('stairs are solid: no climbing onto a flight from its side or from underneath; loft roofs stop you at the eaves', () => {
+  const sim = new Sim(world, 1, { humans: 1 });
+  const p: any = freshPlayer(sim);
+  // a two-storey house stair (rises along local x)
+  const s = world.col.structures.find((q) => q.kind === 'house' && q.ramps.some((r) => r.mat !== 8 && r.y0 < 1 && r.y1 - r.y0 > 2.5))!;
+  const r = s.ramps.find((q) => q.mat !== 8 && q.y0 < 1)!;
+  const mid = (r.x0 + r.x1) / 2, zc = (r.z0 + r.z1) / 2, inward = r.z0 > 0 ? -1 : 1; // the open side faces the room
+  const [sx, sz] = toWorld(s, mid, inward > 0 ? r.z1 + 1.2 : r.z0 - 1.2), [tx, tz] = toWorld(s, mid, zc);
+  Object.assign(p, { x: sx, z: sz, y: world.col.groundAt(sx, sz, s.y + r.y0 + 0.5), vx: 0, vy: 0, vz: 0, stance: 0 }); p.fallStartY = p.y;
+  walk(sim, p, tx, tz, 3);
+  console.log('side of the flight: ended', (p.y - s.y).toFixed(2), 'm up (flight there is', ((r.y0 + r.y1) / 2).toFixed(2), ')');
+  assert.ok(p.y - s.y < r.y0 + 0.6, 'did not pop up onto the middle of the flight from the side');
+  // loft: walk from the ridge line toward the eaves, never through the sloped roof
+  const lofts = world.col.structures.filter((q) => q.kind === 'house' && q.ramps.some((x) => x.mat === 4));
+  let ok = 0, n = 0;
+  for (const h of lofts.slice(0, 5)) {
+    const lr = h.ramps.find((x) => x.mat === 4)!, roof = h.ramps.find((x) => x.mat === 8)!;
+    const top = lr.y1, [ax, az] = toWorld(h, (lr.x0 + lr.x1) / 2 + (lr.dir > 0 ? 1.5 : -1.5), 0), [bx, bz] = toWorld(h, (lr.x0 + lr.x1) / 2, h.bz0 - 3);
+    Object.assign(p, { x: ax, z: az, y: h.y + top + 0.02, vx: 0, vy: 0, vz: 0, stance: 0, onGround: true }); p.fallStartY = p.y;
+    if (!world.col.fits(p.x, p.y, p.z, 1.8, 0.3)) continue;
+    n++;
+    walk(sim, p, bx, bz, 3);
+    const [, lz] = toLocal(h, p.x, p.z);
+    if (lz > h.bz0 + 0.5) ok++; else console.log('loft escape at', lz.toFixed(2), 'eaves', h.bz0.toFixed(2), 'roof', roof.z0.toFixed(2));
+  }
+  console.log('loft roof held', ok, '/', n);
+  assert.ok(n >= 2 && ok === n, 'the loft roof kept the player inside');
+});

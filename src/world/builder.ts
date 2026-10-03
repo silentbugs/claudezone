@@ -210,8 +210,8 @@ export function house(rng: Rng, w: number, d: number, floors: number, st: Style)
     b.addLoot(-side * (hw - 1.5), top, 0);
   } else b.slab(-hw - 0.3, -hd - 0.3, hw + 0.3, hd + 0.3, top, 0.25, st.roof, [], st.roofColor);
   b.box(-hw - 0.4, top, -hd - 0.4, hw + 0.4, top + ridge, hd + 0.4, st.roof, { shape: 'gable', noCollide: true, color: st.roofColor });
-  b.ramp(-hw - 0.4, top, -hd - 0.4, hw + 0.4, top + ridge, 0, 1, 1, st.roof);
-  b.ramp(-hw - 0.4, top, 0, hw + 0.4, top + ridge, hd + 0.4, 1, -1, st.roof);
+  b.ramp(-hw - 0.4, top, -hd - 0.4, hw + 0.4, top + ridge, 0, 1, 1, Mat.Roof); // collision surfaces stay Mat.Roof (the visible roof is the gable box)
+  b.ramp(-hw - 0.4, top, 0, hw + 0.4, top + ridge, hd + 0.4, 1, -1, Mat.Roof);
   b.box(-hw, top, -hd * 0.3, hw, top + ridge * 0.6, hd * 0.3, st.roof, { noCollide: true, mat: Mat.Wood } as any); // bullet blocker inside the gable
   if (rng.chance(0.6)) { const cx = rng.range(-hw * 0.6, hw * 0.6); b.box(cx - 0.35, top + ridge * 0.4, -0.35 + d * 0.12, cx + 0.35, top + ridge + 0.9, 0.35 + d * 0.12, Mat.Brick, { color: 0x8a6a5a }); }
   b.box(-hw - 0.1, -0.3, -hd - 0.1, hw + 0.1, E + 0.35, hd + 0.1, Mat.Concrete, { color: 0x8a8580, noCollide: true }); // plinth band

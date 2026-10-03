@@ -257,7 +257,7 @@ test('Gora Dam base: front doors -> control mezzanine; gantry stair -> roof heli
   const s = world.col.structures.find((q) => q.kind === 'damhall')!;
   assert.ok(s, 'generator hall placed');
   const f = { x: s.x, z: s.z, y: s.y, a: s.angle };
-  const r1 = walkRoute(sim, f, [-2, 91], [[-2, 89], [-2, 86], [-2, 77], [-13.9, 72], [-13.9, 70.2], [-13.9, 79.5], [-13.9, 81], [-8, 82]]);
+  const r1 = walkRoute(sim, f, [-2, 91], [[-2, 89], [-2, 86], [-2, 77], [-13.9, 69.6], [-13.9, 79.5], [-13.9, 81], [-8, 82]]);
   console.log('front doors -> mezzanine', r1);
   assert.ok(typeof r1 === 'number' && Math.abs(r1 - 4.6) < 0.4, 'on the control mezzanine');
   const r2 = walkRoute(sim, f, [17, 57], [[16.05, 59], [16.05, 84.5], [15, 85.5], [8, 80], [0, 70], [-13, 54], [-13, 30], [-13, 15.5]]);

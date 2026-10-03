@@ -13,6 +13,8 @@ export const PENETRATION: Partial<Record<Mat, number>> = { [Mat.Wood]: 0.65, [Ma
 export interface Part { x0: number; y0: number; z0: number; x1: number; y1: number; z1: number; mat: Mat; color?: number; noCollide?: boolean; shape?: 'box' | 'cyl' | 'gable' | 'wedge'; /** smashed window pane: gone for collision, bullets and rendering */ broken?: boolean }
 /** Stair ramp in local space rising along axis (0 = x, 1 = z) in direction dir. */
 export interface RampPart { x0: number; y0: number; z0: number; x1: number; y1: number; z1: number; axis: 0 | 1; dir: 1 | -1; mat?: Mat; color?: number }
+/** thickness of a ramp slab (stair flight / sloped roof) under its walking surface */
+export const RAMP_T = 0.3;
 
 export interface Structure {
   id: number;
@@ -132,6 +134,34 @@ export class CollisionWorld {
     return out;
   }
 
+/**
+   * A ramp is a slab RAMP_T thick under its surface. A body (feet y, height h) at local (lx, lz) overlaps it when the
+   * surface there is above its step height and the underside below its head. Returns the smallest horizontal push
+   * (local) that clears it: uphill along the slope until there is headroom, or out of a side, or null.
+   */
+  rampPush(s: Structure, r: RampPart, lx: number, lz: number, y: number, h: number, step: number, rad: number): [number, number] | null {
+    const cx = lx < r.x0 ? r.x0 : lx > r.x1 ? r.x1 : lx, cz = lz < r.z0 ? r.z0 : lz > r.z1 ? r.z1 : lz;
+    const dx = lx - cx, dz = lz - cz; if (dx * dx + dz * dz >= rad * rad) return null;
+    const top = s.y + this.rampHeight(r, cx, cz);
+    if (top <= y + step || top - RAMP_T >= y + h) return null;
+    const opts: [number, number][] = [];
+    // out of the four sides of the footprint (with the body radius)
+    opts.push([r.x0 - rad - lx, 0], [r.x1 + rad - lx, 0], [0, r.z0 - rad - lz], [0, r.z1 + rad - lz]);
+    // along the slope: uphill until the underside clears the head, downhill until the surface is under the step
+    const len = r.axis === 0 ? r.x1 - r.x0 : r.z1 - r.z0, rise = r.y1 - r.y0;
+    if (len > 0.01 && rise > 0.01) {
+      const uNeed = (y + h + RAMP_T - s.y - r.y0) / rise, uStep = (y + step - s.y - r.y0) / rise; // fractions along the rise
+      const cur = (r.axis === 0 ? (cx - r.x0) : (cz - r.z0)) / len, u = r.dir === 1 ? cur : 1 - cur;
+      const up = uNeed <= 1 ? (uNeed - u) * len : Infinity, down = uStep >= 0 ? (u - uStep) * len : Infinity;
+      const sgn = r.dir === 1 ? 1 : -1;
+      if (up > 0 && up < Infinity) opts.push(r.axis === 0 ? [sgn * up, 0] : [0, sgn * up]);
+      if (down > 0 && down < Infinity) opts.push(r.axis === 0 ? [-sgn * down, 0] : [0, -sgn * down]);
+    }
+    let best = opts[0], bl = Infinity;
+    for (const o of opts) { const l = Math.abs(o[0]) + Math.abs(o[1]); if (l < bl) { bl = l; best = o; } }
+    return bl < 4 ? best : null; // deeper than that: a teleport, not a push (leave it to the floor logic)
+  }
+
   rampHeight(r: RampPart, lx: number, lz: number): number {
     const t = r.axis === 0 ? (lx - r.x0) / (r.x1 - r.x0) : (lz - r.z0) / (r.z1 - r.z0);
     const u = r.dir === 1 ? t : 1 - t;
@@ -173,10 +203,10 @@ export class CollisionWorld {
         const b = s.y + p.y0;
         if (b >= y && b < c) c = b;
       }
-      // sloped roofs are ceilings from inside (lofts); stair flights are not
+      // ramps are solid slabs: sloped roofs are ceilings from inside (lofts), stair flights from underneath
       for (const r of s.ramps) {
-        if (r.mat !== Mat.Roof || lx < r.x0 || lx > r.x1 || lz < r.z0 || lz > r.z1) continue;
-        const b = s.y + this.rampHeight(r, lx, lz) - 0.25;
+        if (lx < r.x0 || lx > r.x1 || lz < r.z0 || lz > r.z1) continue;
+        const b = s.y + this.rampHeight(r, lx, lz) - RAMP_T;
         if (b >= y && b < c) c = b;
       }
     }
@@ -214,6 +244,11 @@ export class CollisionWorld {
           }
           lx += px; lz += pz; lmoved = true;
         }
+        for (const rp of s.ramps) {
+          if (lx < rp.x0 - r || lx > rp.x1 + r || lz < rp.z0 - r || lz > rp.z1 + r) continue;
+          const d = this.rampPush(s, rp, lx, lz, y, h, step, r);
+          if (d) { lx += d[0]; lz += d[1]; lmoved = true; }
+        }
         if (lmoved) {
           const [wx, wz] = toWorld(s, lx, lz);
           out.nx += wx - x; out.nz += wz - z;
@@ -230,6 +265,7 @@ export class CollisionWorld {
     const list = this.near(x, z, r, tmpS);
     for (const s of list) {
       const [lx, lz] = toLocal(s, x, z);
+      for (const rp of s.ramps) if (lx > rp.x0 - r && lx < rp.x1 + r && lz > rp.z0 - r && lz < rp.z1 + r && this.rampPush(s, rp, lx, lz, y, h, 0.05, r)) return false;
       for (const p of s.parts) {
         if (p.noCollide) continue;
         if (s.y + p.y1 <= y + 0.05 || s.y + p.y0 >= y + h) continue;
