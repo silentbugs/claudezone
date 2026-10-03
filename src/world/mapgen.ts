@@ -493,7 +493,7 @@ function smoothNoise(x: number, z: number, cell: number, seed: number) {
 function placeTrees(ctx: GenContext): Tree[] {
   const { rng, hf, occ, extra, masks } = ctx;
   const trees: Tree[] = [];
-  const N = 26000;
+  const N = 52000; // ~2x the old density: 2020's countryside is forest-heavy
   for (let i = 0; i < N; i++) {
     const x = rng.range(0, MAP_SIZE), z = rng.range(0, MAP_SIZE);
     const y = hf.at(x, z);
@@ -513,7 +513,7 @@ function placeTrees(ctx: GenContext): Tree[] {
     const slope = 1 - hf.normal(x, z)[1];
     if (slope > 0.35) continue;
     const kind: 0 | 1 | 2 = rng.chance(0.18) ? 2 : (z < 1500 || rng.chance(0.55)) ? 0 : 1;
-    const s = kind === 2 ? rng.range(0.7, 1.4) : rng.range(0.8, 1.35);
+    const s = kind === 2 ? rng.range(0.7, 1.4) : kind === 0 ? rng.range(1.05, 1.75) : rng.range(0.85, 1.35); // tall pines (~14-23 m)
     trees.push({ x, y, z, s, kind });
     if (kind !== 2 && inPlayable(x, z)) {
       // trunk collider

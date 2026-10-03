@@ -23,7 +23,7 @@ function needleTexture() {
       const x = t * W * 0.95, y = H / 2 + (Math.random() * 2 - 1) * env * Math.sqrt(Math.random());
       const a = (y < H / 2 ? -1 : 1) * (0.5 + Math.random() * 0.7) + (Math.random() - 0.5) * 0.4, l = 7 + Math.random() * 9;
       const c = 0.62 + Math.random() * 0.5, tip = Math.random() < 0.15;
-      g.strokeStyle = tip ? `rgb(${70 * c},${96 * c},${58 * c})` : `rgb(${36 * c},${58 * c},${38 * c})`; g.lineWidth = 2.4;
+      g.strokeStyle = tip ? `rgb(${84 * c},${110 * c},${80 * c})` : `rgb(${46 * c},${70 * c},${56 * c})`; // blue-green spruce (2020) g.lineWidth = 2.4;
       g.beginPath(); g.moveTo(x, y); g.lineTo(x + Math.cos(a) * l, y + Math.sin(a) * l); g.stroke();
     }
   });
@@ -35,7 +35,7 @@ function leafTexture() {
       const x = W / 2 + (Math.random() - 0.5) * W * 0.85, y = H / 2 + (Math.random() - 0.5) * H * 0.85;
       if (Math.hypot(x - W / 2, y - H / 2) > W * 0.44) continue;
       const c = 0.7 + Math.random() * 0.45, a = Math.random() * 6.28;
-      g.fillStyle = `rgb(${88 * c},${104 * c},${50 * c})`;
+      g.fillStyle = `rgb(${120 * c},${124 * c},${70 * c})`; // tinted per tree (autumn yellows / greens / oranges)
       g.beginPath(); g.ellipse(x, y, 9, 5, a, 0, Math.PI * 2); g.fill();
     }
   });
@@ -122,28 +122,38 @@ export class Trees {
     const leafDepth = new THREE.MeshDepthMaterial({ map: lt, alphaTest: 0.5, depthPacking: THREE.RGBADepthPacking });
     const pine = pineGeometry(), leafy = leafyGeometry(), bush = bushGeometry();
     const lodMat = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, flatShading: true });
-    const lodPine = mergeGeometries([vcolor(new THREE.CylinderGeometry(0.1, 0.3, 4, 5).translate(0, 2, 0), 0x4a3a2a, 0), vcolor(new THREE.ConeGeometry(2.9, 11, 7).translate(0, 8, 0), 0x46603f, 0.1)])!;
-    const lodLeafy = mergeGeometries([vcolor(new THREE.CylinderGeometry(0.12, 0.2, 5, 5).translate(0, 2.5, 0), 0xb8b0a0, 0), vcolor(new THREE.IcosahedronGeometry(2.8, 0).translate(0, 6.6, 0), 0x5e6e38, 0.1)])!;
+    const lodPine = vcolor(new THREE.ConeGeometry(2.9, 12.5, 5, 1, true).translate(0, 7.2, 0), 0x4c6650, 0.1); // 10 triangles: the haze does the rest
+    const lodLeafy = vcolor(new THREE.OctahedronGeometry(2.8, 0).scale(1, 1.2, 1).translate(0, 6.2, 0), 0xffffff, 0.1);
     const CH = 540, buckets = new Map<string, Tree[]>();
     for (const t of trees) { const key = `${Math.floor(t.x / CH)}:${Math.floor(t.z / CH)}`; let b = buckets.get(key); if (!b) buckets.set(key, (b = [])); b.push(t); }
     const m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3(), e = new THREE.Euler();
-    const inst = (geo: THREE.BufferGeometry, mat: THREE.Material, list: Tree[], shadow: boolean, depth?: THREE.Material) => {
+    // 2020 Verdansk autumn: leafy trees in yellow, orange and green; pines vary a little in shade
+    const AUTUMN = [0xd8c058, 0xc89a40, 0x9aa450, 0x8c9a48, 0xb07838, 0xa8b058].map((h) => new THREE.Color(h));
+    const hash = (t: Tree) => { const v = Math.sin(t.x * 12.9898 + t.z * 78.233) * 43758.5453; return v - Math.floor(v); };
+    const leafTint = (t: Tree) => AUTUMN[Math.floor(hash(t) * AUTUMN.length)];
+    const pineTint = (t: Tree) => new THREE.Color().setScalar(0.85 + hash(t) * 0.3);
+    const inst = (geo: THREE.BufferGeometry, mat: THREE.Material, list: Tree[], shadow: boolean, depth?: THREE.Material, tint?: (t: Tree) => THREE.Color) => {
       const im = new THREE.InstancedMesh(geo, mat, Math.max(1, list.length));
-      list.forEach((t, i) => { e.set(0, (t.x * 13.1 + t.z * 7.7) % 6.28, 0); q.setFromEuler(e); s.setScalar(t.s); p.set(t.x, t.y - 0.2, t.z); m.compose(p, q, s); im.setMatrixAt(i, m); });
+      list.forEach((t, i) => {
+        e.set(0, (t.x * 13.1 + t.z * 7.7) % 6.28, 0); q.setFromEuler(e); s.setScalar(t.s); p.set(t.x, t.y - 0.2, t.z); m.compose(p, q, s); im.setMatrixAt(i, m);
+        if (tint) im.setColorAt(i, tint(t));
+      });
       im.count = list.length; im.castShadow = shadow; im.receiveShadow = true; if (depth) im.customDepthMaterial = depth;
       im.computeBoundingSphere(); this.group.add(im); return im;
     };
     for (const [key, list] of buckets) {
       const [ci, cj] = key.split(':').map(Number);
       const pines = list.filter((t) => t.kind === 0), leafs = list.filter((t) => t.kind === 1), bushes = list.filter((t) => t.kind === 2);
-      const near = [inst(pine.branches, pineMat, pines, true, pineDepth), inst(pine.trunk, barkMat, pines, true), inst(leafy.branches, leafMat, leafs, true, leafDepth), inst(leafy.trunk, barkMat, leafs, true), inst(bush, leafMat, bushes, false)];
+      const near = [inst(pine.branches, pineMat, pines, true, pineDepth, pineTint), inst(pine.trunk, barkMat, pines, true), inst(leafy.branches, leafMat, leafs, true, leafDepth, leafTint), inst(leafy.trunk, barkMat, leafs, true), inst(bush, leafMat, bushes, false, undefined, leafTint)];
       const farG = new THREE.Group();
-      farG.add(inst(lodPine, lodMat, pines, false), inst(lodLeafy, lodMat, leafs, false));
+      farG.add(inst(lodPine, lodMat, pines, false, undefined, pineTint), inst(lodLeafy, lodMat, leafs, false, undefined, leafTint));
       this.group.add(farG);
       this.chunks.push({ near, far: farG, cx: (ci + 0.5) * CH, cz: (cj + 0.5) * CH, state: -1 });
     }
   }
-  nearDist = 820;
+  nearDist = 440;
+  /** beyond this the haze hides the forest anyway */
+  farDist = 1600;
   /** tree chunks cast shadows only when the camera is within this distance of their square */
   shadowDist = 160;
   update(cam: THREE.Vector3, time: number) {
@@ -152,11 +162,11 @@ export class Trees {
       const near = Math.hypot(c.cx - cam.x, c.cz - cam.z) < this.nearDist ? 1 : 0;
       const dx = Math.max(0, Math.abs(cam.x - c.cx) - 270), dz = Math.max(0, Math.abs(cam.z - c.cz) - 270);
       const shadow = near && Math.hypot(dx, dz) < this.shadowDist ? 2 : 0;
-      const st = near + shadow;
+      const st = near + shadow + (Math.hypot(c.cx - cam.x, c.cz - cam.z) < this.farDist ? 4 : 0);
       if (st === c.state) continue;
       c.state = st;
       for (const o of c.near) { o.visible = !!near; if ((o as any).__cast === undefined) (o as any).__cast = o.castShadow; o.castShadow = (o as any).__cast && !!shadow; }
-      c.far.visible = !near;
+      c.far.visible = !near && Math.hypot(c.cx - cam.x, c.cz - cam.z) < this.farDist;
     }
   }
 }
