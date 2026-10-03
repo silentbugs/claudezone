@@ -314,3 +314,8 @@
 
 /* incoming air support warning (2020: red caps across the upper middle of the screen) */
 .hud .strikewarn { position: absolute; left: 50%; top: 21%; transform: translateX(-50%); color: #ff3b2f; font-size: calc(var(--px) * 30); font-weight: 700; letter-spacing: 0.06em; text-shadow: 0 0 calc(var(--px) * 8) rgba(0,0,0,0.9); white-space: nowrap; }
+
+/* infil letterbox (warmup -> plane) */
+.letterbox { position: absolute; inset: 0; pointer-events: none; z-index: 39; }
+.letterbox i { position: absolute; left: 0; right: 0; height: calc(12vh * var(--lb, 1)); background: #000; }
+.letterbox i:first-child { top: 0; } .letterbox i:last-child { bottom: 0; }

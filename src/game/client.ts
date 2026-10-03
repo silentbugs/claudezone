@@ -196,7 +196,22 @@ export class Match {
   private fadeEl: HTMLElement | null = null; private kcEl: HTMLElement | null = null;
   private fadeK = 0; private fadeTarget = 0; private fadeRate = 1; private fadeDelay = 0;
   private fadeTo(target: number, seconds: number, delay: number) { this.fadeTarget = target; this.fadeRate = 1 / Math.max(0.05, seconds); this.fadeDelay = delay; }
+  /** warmup end (2020): a countdown, fade to black, then the plane fades in under cinematic bars */
+  private lbEl: HTMLElement | null = null; private lbT = 0; private wuNote = -1;
+  private warmupTransition(dt: number) {
+    const sim = this.sim, left = sim.warmup - sim.time;
+    if (sim.inWarmup) {
+      const n = Math.ceil(left);
+      if (left <= 10 && n !== this.wuNote) { this.wuNote = n; this.hud.showBanner('Warmup ending', `Deploying in ${n}`); if (n <= 5) audio.play('beep', { ui: true, vol: 0.3, rate: n === 1 ? 1.4 : 1 }); }
+      if (left < 0.8) { this.fadeTarget = 1; this.fadeRate = 1 / 0.7; this.fadeDelay = 0; }
+    }
+    if (!this.lbEl) { this.lbEl = document.createElement('div'); this.lbEl.className = 'letterbox'; this.lbEl.innerHTML = '<i></i><i></i>'; this.hud.root.appendChild(this.lbEl); }
+    if (this.lbT > 0) this.lbT = Math.max(0, this.lbT - dt);
+    const k = this.lbT > 3 ? 1 : this.lbT / 3; // bars hold, then slide away over the last 3 s
+    this.lbEl.style.setProperty('--lb', (k * k * (3 - 2 * k)).toFixed(3)); this.lbEl.style.display = this.lbT > 0 ? 'block' : 'none';
+  }
   private fadeUpdate(dt: number) {
+    this.warmupTransition(dt);
     if (!this.fadeEl) { this.fadeEl = document.createElement('div'); this.fadeEl.style.cssText = 'position:absolute;inset:0;background:#000;pointer-events:none;opacity:0;z-index:40'; this.hud.root.appendChild(this.fadeEl); }
     if (this.fadeDelay > 0) this.fadeDelay -= dt;
     else if (this.fadeK !== this.fadeTarget && !this.postMode) { const st = this.fadeRate * dt; this.fadeK += Math.sign(this.fadeTarget - this.fadeK) * Math.min(st, Math.abs(this.fadeTarget - this.fadeK)); }
@@ -408,7 +423,7 @@ export class Match {
       case 'squadwipe': if (e.squad === me.squad) audio.say('Your squad has been eliminated.'); break;
       case 'contract': if (e.p >= 0 && sim.players[e.p].squad === me.squad) audio.play(e.msg === 'start' ? 'contractStart' : e.msg === 'done' ? 'contractDone' : e.msg === 'fail' ? 'uiDeny' : 'contractStep', { ui: true, vol: 0.7 }); if (e.p >= 0 && sim.players[e.p].squad === me.squad) audio.say(e.msg === 'start' ? 'Contract accepted.' : e.msg === 'done' ? 'Contract complete.' : e.msg === 'fail' ? 'Contract failed.' : 'Next target marked.'); break;
       case 'announce':
-        if (e.text === '__infil__') { audio.play('musicInfil', { music: true, vol: 0.8 }); this.hud.showBanner('Verdansk', `Battle Royale — ${['Solos', 'Duos', 'Trios'][sim.squadSize - 1] ?? 'Quads'} • 150 players`); this.camYaw = Math.atan2(-sim.plane.dx, -sim.plane.dz); this.camPitch = -0.2; audio.play('uiBuy', { vol: 0.4 }); }
+        if (e.text === '__infil__') { this.fadeK = 1; this.fadeTo(0, 1.8, 0.6); this.lbT = 6.5; audio.play('musicInfil', { music: true, vol: 0.8 }); this.hud.showBanner('Verdansk', `Battle Royale — ${['Solos', 'Duos', 'Trios'][sim.squadSize - 1] ?? 'Quads'} • 150 players`); this.camYaw = Math.atan2(-sim.plane.dx, -sim.plane.dz); this.camPitch = -0.2; audio.play('uiBuy', { vol: 0.4 }); }
         if (e.text === '__buy__' && e.squad === me.squad && me.phase === Phase.Alive && sim.interactTarget(me)?.kind === 'buy') { this.hud.openBuy((k, a) => { const r = sim.buy(me, k, a); if (!r) audio.play('uiBuy'); return r; }, () => { try { ((document.getElementById('game') as HTMLElement).requestPointerLock?.() as any)?.catch?.(() => {}); } catch { /* the browser refuses right after Esc: the next click re-locks */ } }); }
         if (e.text === '__loadout__' && e.squad === me.squad && me.phase === Phase.Alive) { document.exitPointerLock?.(); this.hud.openLoadout((i) => { sim.applyLoadout(me, i); (document.getElementById('game') as HTMLElement).requestPointerLock?.(); }); }
         break;

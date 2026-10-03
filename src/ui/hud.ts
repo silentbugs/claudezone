@@ -187,16 +187,17 @@ export class Hud {
     const toWorld = (e: MouseEvent): [number, number] => { const r = this.fmCanvas.getBoundingClientRect(), v = this.fmView(), fx = ((e.clientX - r.left) / r.width * FM_W - FM_B) / (FM_W - 2 * FM_B), fz = ((e.clientY - r.top) / r.height * FM_W - FM_B) / (FM_W - 2 * FM_B); return [v.x0 + fx * v.span, v.z0 + fz * v.span]; };
     this.fmCanvas.addEventListener('wheel', (e) => {
       e.preventDefault();
-      const [wx, wz] = toWorld(e), z0 = this.fmZoom;
-      this.fmZoom = Math.max(1, Math.min(8, this.fmZoom * (e.deltaY < 0 ? 1.3 : 1 / 1.3)));
-      const k = z0 / this.fmZoom; this.fmCx = wx + (this.fmCx - wx) * k; this.fmCz = wz + (this.fmCz - wz) * k;
+      // smooth zoom: set a target, drawFullMap eases toward it keeping the point under the cursor in place
+      const [wx, wz] = toWorld(e), v = this.fmView();
+      this.fmZoomT = Math.max(1, Math.min(8, (this.fmZoomT ?? this.fmZoom) * (e.deltaY < 0 ? 1.3 : 1 / 1.3)));
+      this.fmAnchor = { wx, wz, fx: (wx - v.x0) / v.span, fz: (wz - v.z0) / v.span };
     }, { passive: false });
     let drag: { x: number; y: number; cx: number; cz: number; moved: boolean } | null = null;
     this.fmCanvas.addEventListener('mousedown', (e) => { drag = { x: e.clientX, y: e.clientY, cx: this.fmCx, cz: this.fmCz, moved: false }; });
     addEventListener('mousemove', (e) => {
       if (!drag) return; const r = this.fmCanvas.getBoundingClientRect(), v = this.fmView(), dx = e.clientX - drag.x, dy = e.clientY - drag.y;
       if (Math.hypot(dx, dy) > 4) drag.moved = true;
-      if (drag.moved) { const inner = (FM_W - 2 * FM_B) / FM_W; this.fmCx = drag.cx - (dx / (r.width * inner)) * v.span; this.fmCz = drag.cz - (dy / (r.height * inner)) * v.span; }
+      if (drag.moved) { this.fmAnchor = null; const inner = (FM_W - 2 * FM_B) / FM_W; this.fmCx = drag.cx - (dx / (r.width * inner)) * v.span; this.fmCz = drag.cz - (dy / (r.height * inner)) * v.span; }
     });
     addEventListener('mouseup', (e) => {
       if (!drag) return; const d = drag; drag = null; if (d.moved || e.target !== this.fmCanvas) return;
@@ -662,7 +663,16 @@ export class Hud {
     for (const pg of this.pings) { g.strokeStyle = '#f6c343'; g.lineWidth = 2 * px; g.beginPath(); g.moveTo(pg.x, pg.z - 8 * px); g.lineTo(pg.x + 8 * px, pg.z); g.lineTo(pg.x, pg.z + 8 * px); g.lineTo(pg.x - 8 * px, pg.z); g.closePath(); g.stroke(); }
   }
 
+  private fmZoomT: number | undefined; private fmAnchor: { wx: number; wz: number; fx: number; fz: number } | null = null; private fmT = 0;
   private drawFullMap(me: Player) {
+    { // ease the zoom (~0.15 s) around the cursor anchor
+      const now = performance.now() / 1000, dt = Math.min(0.1, now - (this.fmT || now)); this.fmT = now;
+      if (this.fmZoomT !== undefined && Math.abs(this.fmZoomT - this.fmZoom) > 1e-3) {
+        this.fmZoom += (this.fmZoomT - this.fmZoom) * (1 - Math.exp(-dt * 16));
+        if (Math.abs(this.fmZoomT - this.fmZoom) < 0.002) this.fmZoom = this.fmZoomT;
+        if (this.fmAnchor) { const span = MAP_SIZE / this.fmZoom; this.fmCx = this.fmAnchor.wx - this.fmAnchor.fx * span + span / 2; this.fmCz = this.fmAnchor.wz - this.fmAnchor.fz * span + span / 2; }
+      } else this.fmZoomT = this.fmZoom;
+    }
     const g = this.fmCanvas.getContext('2d')!, B = FM_B, W = FM_W - 2 * B, v = this.fmView(), sc = W / v.span, T = this.tac, k = T.width / MAP_SIZE;
     const X = (x: number) => (x - v.x0) * sc, Z = (z: number) => (z - v.z0) * sc;
     // the map lives inside a black frame; everything below draws in the inner square
