@@ -186,7 +186,7 @@ export function structureMaterial(tex: THREE.DataArrayTexture, transparent = fal
         roughnessFactor *= 0.85 + texel.g * 0.3;
         float L = floor(vLayer + 0.5);
         if (L == 5.0) roughnessFactor = 0.12;
-        else if (L == 3.0 || L == 9.0) roughnessFactor = 0.55;
+        else if (L == 3.0 || L == 9.0) roughnessFactor = 0.72; // weathered corrugated metal: no mirror glints on roofs
         else if (L == 7.0) roughnessFactor = 0.8;`)
       .replace('#include <metalnessmap_fragment>', `#include <metalnessmap_fragment>
         if (floor(vLayer + 0.5) == 3.0 || floor(vLayer + 0.5) == 9.0) metalnessFactor = 0.12;

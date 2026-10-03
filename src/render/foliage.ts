@@ -85,7 +85,7 @@ export class Foliage {
     let c = this.cells.get(key);
     if (c) return c;
     const { hf, extra, col } = this.world, out: number[] = [];
-    const N = 150;
+    const N = 220; // lusher fields (2020 meadows are thick with grass)
     for (let k = 0; k < N; k++) {
       const x = (ci + hash2(ci * 131 + k, cj, 11)) * CELL, z = (cj + hash2(ci, cj * 97 + k, 13)) * CELL;
       const kk = Math.round(z / hf.step) * hf.res + Math.round(x / hf.step);
@@ -97,7 +97,7 @@ export class Foliage {
       if (y < 0.6) continue;
       const nrm = hf.normal(x, z); if (nrm[1] < 0.8) continue;
       if (col.groundAt(x, z, y + 30, 0.6) > y + 0.02) continue; // under or on a structure (runways, slabs)
-      const s = 0.45 + hash2(ci + k, cj - k, 23) * 0.55;
+      const s = 0.55 + hash2(ci + k, cj - k, 23) * 0.65;
       out.push(x, y - 0.05, z, hash2(k, ci + cj, 29) * 6.28, s, 0.8 + hash2(ci - k, cj + k, 31) * 0.35);
     }
     c = Float32Array.from(out);
