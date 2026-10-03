@@ -162,7 +162,7 @@ export class Soldiers {
     const pk = s.proneK;
     // downed: rolled half onto the side, curled up
     s.downK = (s.downK ?? 0) + ((downed ? 1 : 0) - (s.downK ?? 0)) * Math.min(1, dt * 5);
-    s.tilt.rotation.set(-Math.PI / 2 * pk, 0, 0.9 * s.downK, 'XYZ'); s.tilt.position.set(0, (0.13 + 0.08 * s.downK) * pk, 0.85 * pk);
+    s.tilt.rotation.set(-Math.PI / 2 * pk, 0, 0.9 * s.downK, 'XYZ'); s.tilt.position.set(0, (0.2 + 0.05 * s.downK) * pk, 0.85 * pk);
     let clip = 'Idle';
     if (inVeh) clip = 'Driving';
     else if (downed) clip = 'Crouch_Idle';
@@ -194,6 +194,8 @@ export class Soldiers {
     const right = v4.set(1, 0, 0).applyQuaternion(s.root.quaternion);
     const chest = s.bones.Chest ?? s.bones.Torso;
     if (chest && !inVeh && pk < 0.5) rotateWorld(chest, right, s.pitch * 0.45);
+    // prone: up on the elbows - chest propped up and the head raised to look ahead (lying flat buried the face)
+    if (chest && !inVeh && pk > 0.01 && !downed) { rotateWorld(chest, right, (0.55 + s.pitch * 0.25) * pk); const head = s.bones.Head ?? s.bones.Neck; if (head) rotateWorld(head, right, 0.75 * pk); }
     if (!armed) { s.gun.visible = false; return; }
     const key = `${w!.id}:${w!.rarity}`;
     if (key !== s.gunKey) {
@@ -212,7 +214,7 @@ export class Soldiers {
     const reload = p.reloadT > 0;
     s.gun.position.set(sprint ? 0.1 : 0.13 - p.ads * 0.06, sh - (sprint ? 0.2 : p.ads > 0.5 ? 0.06 : 0.12), sprint ? -0.24 : s.pistol ? -0.42 : -0.3 + p.ads * 0.06);
     s.gun.rotation.set(sprint ? -0.55 : s.pitch * 0.9 + (reload ? -0.35 : 0), sprint ? 0.9 : 0.03, sprint ? 0.5 : reload ? 0.4 : 0, 'YXZ');
-    if (pk > 0.5) { s.gun.position.set(0.1, 0.24, s.pistol ? -1.2 : -1.02); s.gun.rotation.set(s.pitch * 0.5, 0.02, 0, 'YXZ'); }
+    if (pk > 0.5) { s.gun.position.set(0.12, 0.3, s.pistol ? -1.15 : -0.95); s.gun.rotation.set(s.pitch * 0.5, 0.02, 0, 'YXZ'); }
     s.gun.updateMatrixWorld(true);
     // arms: two-bone IK from the shoulders to the grip / handguard
     const tR = v1.copy(s.grip).applyMatrix4(s.gun.matrixWorld);

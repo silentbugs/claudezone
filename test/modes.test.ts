@@ -193,3 +193,20 @@ test('bots never shoot (or track) a target behind a wall; with a clear view they
   console.log('in the open: bot fired', shots, 'target', b.target, 'seen ago', (s.time - b.seenAt).toFixed(2), 'dist', Math.hypot(me.x - bot.x, me.z - bot.z).toFixed(1), 'canSee', s.world.col.los(bot.x, bot.y + 1.6, bot.z, me.x, me.y + 1.4, me.z), 'phase', bot.phase, 'goal', b.goal, 'wpn', JSON.stringify(bot.weapons[bot.cur]), 'react', b.reactAt.toFixed(1), 't', s.time.toFixed(1));
   assert.ok(shots > 0, 'fires once the target is visible');
 });
+
+test('fire mode switch (B): full auto <-> semi on an M4, burst <-> auto on the FR 5.56', () => {
+  const s: any = new Sim(world, 3, { humans: 1 }); s.time = 120;
+  const p = s.players[0]; Object.assign(p, { phase: 4, alive: true, bot: false, health: 1e6 }); p.ammo.heavy = 999; p.ammo.light = 999;
+  const fireFor = (ticks: number) => { let n = 0; for (let i = 0; i < ticks; i++) { p.intent.fire = true; s.tick(1 / 60); n += s.events.filter((e: any) => e.t === 'shot' && e.p === 0).length; s.events.length = 0; } p.intent.fire = false; s.tick(1 / 60); s.events.length = 0; return n; };
+  p.weapons = [{ id: 'm4', rarity: 0, mag: 30 }, null]; p.cur = 0;
+  const auto = fireFor(60);
+  p.intent.fireMode = true; s.tick(1 / 60); s.events.length = 0;
+  assert.equal(p.weapons[0].mode, 'semi');
+  p.weapons[0].mag = 30; const semi = fireFor(60);
+  console.log('M4 full auto', auto, 'shots/s, semi', semi);
+  assert.ok(auto > 8 && semi === 1, 'held trigger: full auto sprays, semi fires once');
+  p.weapons = [{ id: 'fr556', rarity: 0, mag: 30 }, null]; p.cur = 0;
+  assert.equal(fireFor(30), 3, 'FR 5.56 defaults to a 3-round burst');
+  p.intent.fireMode = true; s.tick(1 / 60); s.events.length = 0;
+  assert.equal(p.weapons[0].mode, 'auto');
+});

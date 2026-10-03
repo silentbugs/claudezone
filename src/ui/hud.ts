@@ -5,6 +5,7 @@
  * loot card above the crosshair, hitmarkers, prompts, parachute altimeter, tac map and buy menus.
  */
 import type { Sim } from '../sim/sim';
+import { fireModes, fireModeOf } from '../sim/combat';
 import { LOADOUTS } from '../sim/sim';
 import { ItemKind, Phase, Player, SimEvent, Item, BackpackDrop } from '../sim/types';
 import { WEAPON, RARITY_COLORS, RARITY_NAMES, CLASS_NAMES, AMMO_NAMES, attachmentsFor, blueprintName, WeaponDef, damageAt } from '../data/weapons';
@@ -117,7 +118,8 @@ export class Hud {
       const left = Math.ceil((me.gulagReadyAt ?? 0) - sim.time), q = sim.gulag.queue.indexOf(me.id);
       st = left > 0 ? `GULAG<b>Your match begins in ${left}s</b>` : `GULAG<b>Waiting for an opponent${q > 0 ? ` — ${q} ahead of you` : ''}</b>`;
     } else if (me.phase === Phase.Dead && this.specId >= 0) {
-      const q = sim.players[this.specId]; st = `SPECTATING<b>${q.name}${q.squad === me.squad ? '' : q.id === me.killedBy ? ' — your killer' : ''}</b>`;
+      const q = sim.players[this.specId], nMates = sim.players.filter((x) => x.squad === me.squad && x.alive && x.id !== me.id && x.phase !== Phase.GulagWait && x.phase !== Phase.Gulag).length;
+      st = `SPECTATING<b>${q.name}${q.squad === me.squad ? '' : q.id === me.killedBy ? ' — your killer' : ''}</b>${q.squad === me.squad && nMates > 1 ? '<small>LMB / RMB  switch teammate</small>' : ''}`;
     } else if (me.phase === Phase.Gulag) {
       const left = (me.frozenUntil ?? 0) - sim.time;
       if (left > 0) cd = String(Math.ceil(left)); else if (left > -0.8) cd = 'FIGHT';
@@ -339,7 +341,7 @@ export class Hud {
       this.nameT -= dt;
       const lt = view.lethal, tt = view.tactical;
       this.set('weap', this.weap, `<div class="gunbox"><div class="gname" style="opacity:${this.nameT > 0 ? 1 : 0};color:${rc}">${blueprintName(w.id, w.rarity) ? `"${blueprintName(w.id, w.rarity)}" ` : ''}${d.name}</div><div class="smear" style="background:${rc}"></div>${sil(w.id, w.rarity)}</div>` +
-        (d.cls === 'melee' ? '' : `<div class="ammo ${low ? 'low' : ''}"><div class="mag">${w.id === 'turretgun' ? '∞' : w.mag}</div><div class="res">${w.id === 'turretgun' ? '' : view.ammo[d.ammo]}</div></div>`) +
+        (d.cls === 'melee' ? '' : `<div class="ammo ${low ? 'low' : ''}">${fireModes(d).length > 1 ? `<div class="fmode">${({ auto: 'AUTO', semi: 'SEMI', burst: 'BURST' } as const)[fireModeOf(w, d)]}</div>` : ''}<div class="mag">${w.id === 'turretgun' ? '∞' : w.mag}</div><div class="res">${w.id === 'turretgun' ? '' : view.ammo[d.ammo]}</div></div>`) +
         `<div class="eq"><div class="slot ${tt ? '' : 'empty'}"><div class="row">${ICON[TACTICAL_ICON[tt?.type ?? 'stun']]}${tt ? tt.n : ''}</div>${this.k('tactical')}</div><div class="slot ${lt ? '' : 'empty'}"><div class="row">${ICON[LETHAL_ICON[lt?.type ?? 'frag']]}${lt ? lt.n : ''}</div>${this.k('lethal')}</div></div>`);
       this.set('fu', this.fu, `${view.killstreak ? `<div class="ring" title="${KILLSTREAK_NAMES[view.killstreak]}">${ICON[STREAK_ICON[view.killstreak]]}${this.k('killstreak')}</div>` : ''}<div class="ring" style="opacity:${view.fieldUpgrade ? 1 : 0.5}">${view.fieldUpgrade ? ICON[view.fieldUpgrade] : ''}${this.k('fieldUpgrade')}</div>`);
     } else { this.set('weap', this.weap, ''); this.set('fu', this.fu, ''); }

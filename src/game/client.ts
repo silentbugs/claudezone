@@ -229,7 +229,7 @@ export class Match {
   frame(dt: number, time: number) {
     const inp = this.input;
     {
-      const w = this.me.weapons[this.me.cur], sc = !!(w && WEAPON[w.id].scope);
+      const w = this.me.weapons[this.me.cur], sc = !!(w && WEAPON[w.id].scope); (this.me as any).scoped = sc; // B zooms a scope while aiming, switches fire mode otherwise
       if (sc && this.me.ads > 0.5 && (this.settings.binds.scopeZoom ?? []).some((c) => c && inp.wasPressed(c))) { this.scopeLevel ^= 1; audio.play('uiBuy', { ui: true, vol: 0.18, rate: 2.2 }); }
       this.zoomNow += (this.adsZoom() - this.zoomNow) * (1 - Math.exp(-dt * 14));
     }
@@ -393,6 +393,7 @@ export class Match {
       case 'melee': if (e.p === 0) audio.play('melee', { vol: 0.6 }); break;
       case 'gulag': if (e.p === this.me.id && e.msg === 'win') this.fadeTo(1, 1.2, 1.3); break;
       case 'redeploy': if (e.p === this.me.id) { this.fadeK = 1; this.fadeTo(0, 0.9, 0); } break;
+      case 'firemode': if (e.p === 0) { audio.play('dry', { vol: 0.35, rate: 1.6 }); this.hud.showNote(({ auto: 'Full auto', semi: 'Semi-auto', burst: 'Burst' } as Record<string, string>)[e.mode]); } break;
       case 'vcrash': if (d(e.x, e.y, e.z) < 150) audio.play('vehicleCrash', { x: e.x, y: e.y, z: e.z, range: 60, vol: Math.min(1.2, 0.45 + e.impact / 25), rate: 0.9 + Math.random() * 0.2 }); break;
       case 'contractGone': if (d(e.x, e.y, e.z) < 80) audio.play('impactMetal', { x: e.x, y: e.y, z: e.z, range: 30, vol: 0.9, rate: 0.6 }); break;
       case 'flare': if (d(e.x, e.y, e.z) < 700) audio.play('flareLaunch', { x: e.x, y: e.y + 20, z: e.z, range: 180, vol: 1 }); if (e.squad !== me.squad) this.hud.showNote('Enemy Recon flare spotted'); break;
@@ -445,7 +446,14 @@ export class Match {
       const ok = (q: typeof me | undefined) => !!q && q.alive && q.id !== me.id && q.phase !== Phase.GulagWait && q.phase !== Phase.Gulag && q.phase !== Phase.Spectate && q.phase !== Phase.Plane;
       const sp = sim.players[this.spectate];
       const mate = sim.players.find((q) => q.squad === me.squad && ok(q));
-      if (mate && (!ok(sp) || sp!.squad !== me.squad)) this.spectate = mate.id;
+      // cycle through living squadmates (left / right click or arrow keys, like 2020's next / previous player)
+      const mates = sim.players.filter((q) => q.squad === me.squad && ok(q));
+      const nextK = this.input.wasPressed('Mouse0') || this.input.wasPressed('ArrowRight') || this.input.wasPressed('KeyE');
+      const prevK = this.input.wasPressed('Mouse2') || this.input.wasPressed('ArrowLeft') || this.input.wasPressed('KeyQ');
+      if ((nextK || prevK) && mates.length > 1 && ok(sp) && sp!.squad === me.squad) {
+        const i = mates.findIndex((q) => q.id === sp!.id), n = mates.length;
+        this.spectate = mates[(i + (nextK ? 1 : n - 1)) % n].id;
+      } else if (mate && (!ok(sp) || sp!.squad !== me.squad)) this.spectate = mate.id;
       else if (!mate && !ok(sp)) {
         let k = sp ? sp.killedBy : me.killedBy, hops = 0;
         while (k >= 0 && !ok(sim.players[k]) && hops++ < 12) k = sim.players[k].killedBy;

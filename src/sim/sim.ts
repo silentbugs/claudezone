@@ -360,6 +360,19 @@ export class Sim {
       this.playerUpkeep(p, dt);
     }
     updateVehicles(this, dt);
+    // safety net: a body that ends up somewhere invalid (NaN from a bad vector, or through the floor) goes back to its
+    // last good spot instead of being lost forever (it would never see the gas and the match could never end)
+    for (const p of this.players) {
+      if (p.phase !== Phase.Alive && p.phase !== Phase.Downed) continue;
+      const P = p as any, ok = Number.isFinite(p.x) && Number.isFinite(p.y) && Number.isFinite(p.z) && Number.isFinite(p.vx) && Number.isFinite(p.vz) && Number.isFinite(p.vy);
+      const sunk = ok && p.y < this.world.hf.at(p.x, p.z) - 6 && this.world.col.waterAt(p.x, p.z) < p.y;
+      if (ok && !sunk) { P.goodX = p.x; P.goodY = p.y; P.goodZ = p.z; continue; }
+      p.x = P.goodX ?? this.circle.cx; p.z = P.goodZ ?? this.circle.cz; p.y = this.world.col.groundAt(p.x, p.z, (P.goodY ?? 300) + 1);
+      p.px = p.x; p.py = p.y; p.pz = p.z; p.vx = p.vy = p.vz = 0; p.fallStartY = p.y; p.onGround = true;
+      if (!Number.isFinite(p.yaw)) p.yaw = 0; if (!Number.isFinite(p.intent.yaw)) p.intent.yaw = p.yaw;
+      if (!Number.isFinite(p.pitch)) p.pitch = 0; if (!Number.isFinite(p.intent.pitch)) p.intent.pitch = 0;
+      P.rescued = (P.rescued ?? 0) + 1;
+    }
     updateBullets(this, dt);
     updateThrowables(this, dt);
     this.updateExplosions(dt);

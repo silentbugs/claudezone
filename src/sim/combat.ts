@@ -1,3 +1,4 @@
+import type { FireMode, WeaponSlot } from './types';
 /** Weapons, bullets, throwables, explosions. */
 import { WEAPON, damageAt, rarityMods, AMMO_MAX , isSuppressed } from '../data/weapons';
 import { Mat, PENETRATION, RayHit } from '../world/collision';
@@ -28,6 +29,8 @@ export function weaponTick(sim: Sim, p: Player, dt: number) {
   if (p.boltT > 0) p.boltT -= dt;
   // ADS
   const w = p.weapons[p.cur];
+  // fire-mode switch (B): cycles the gun's modes
+  if ((it as any).fireMode) { (it as any).fireMode = false; if (w) { const ms = fireModes(WEAPON[w.id]); if (ms.length > 1) { const i = ms.indexOf(fireModeOf(w, WEAPON[w.id])); w.mode = ms[(i + 1) % ms.length]; sim.emit({ t: 'firemode', p: p.id, mode: w.mode }); } } }
   const def = w ? WEAPON[w.id] : null;
   const wantAds = it.ads && canShoot(p) && p.reloadT <= 0.0 + (def ? def.reload : 0) && p.plateT <= 0;
   const adsT = def ? def.adsTime * rarityMods(w!.rarity).ads : 0.2;
@@ -98,13 +101,24 @@ export function weaponTick(sim: Sim, p: Player, dt: number) {
       return;
     }
     if (p.fireCd > 0 || p.boltT > 0) { p.triggerHeld = true; return; }
-    if (!def.auto && p.triggerHeld) return;
+    const mode = fireModeOf(w, def);
+    if (mode !== 'auto' && p.triggerHeld) return;
     if (p.sprinting) { p.sprinting = false; p.sprintOut = p.tacSprint > 0 ? def.tacSprintOut : def.sprintOut; p.tacSprint = 0; return; } // sprint-to-fire delay (per class)
     if (p.sprintOut > 0) return;
     fire(sim, p, w, def, mods);
-    if (def.burst && def.burst > 1) { p.burstLeft = def.burst - 1; if (w.mag <= 0) { p.burstLeft = 0; p.fireCd = 60 / (def.burstRpm ?? def.rpm); } }
+    if (mode === 'burst' && def.burst && def.burst > 1) { p.burstLeft = def.burst - 1; if (w.mag <= 0) { p.burstLeft = 0; p.fireCd = 60 / (def.burstRpm ?? def.rpm); } }
     p.triggerHeld = true;
   } else p.triggerHeld = false;
+}
+
+/** The gun's fire modes, first = default: full-auto guns auto / semi, burst guns burst / auto, the rest one mode. */
+export function fireModes(def: { auto: boolean; burst?: number; bolt?: boolean; pump?: boolean }): FireMode[] {
+  if (def.bolt || def.pump) return ['semi'];
+  if (def.burst && def.burst > 1) return ['burst', 'auto'];
+  return def.auto ? ['auto', 'semi'] : ['semi'];
+}
+export function fireModeOf(w: WeaponSlot, def: Parameters<typeof fireModes>[0]): FireMode {
+  const ms = fireModes(def); return w.mode && ms.includes(w.mode) ? w.mode : ms[0];
 }
 
 /** Melee: hits the closest enemy in a short cone in front. */
