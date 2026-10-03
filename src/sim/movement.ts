@@ -1,5 +1,5 @@
 /** Player locomotion for every phase: C-130, freefall, parachute, ground, downed, swimming. */
-import { MOVE, DEPLOY } from './config';
+import { MOVE, SLOPE, DEPLOY } from './config';
 import { Phase, Player, Stance } from './types';
 import type { Sim } from './sim';
 import { WEAPON } from '../data/weapons';
@@ -180,7 +180,27 @@ function ground(sim: Sim, p: Player, dt: number) {
     if ((it as any).slideHold && !(it as any).crouchHeld && p.slideT > 0 && p.slideT < MOVE.slideTime - 0.15) p.slideT = 0; // hold mode: releasing crouch ends the slide (stay crouched)
     if (it.jump) { p.slideT = 0; p.stance = tryStand(sim, p); p.vx = p.slideDx; p.vz = p.slideDz; } // slide into a jump keeps the speed
   }
-  const acc = p.slideT > 0 ? 80 : p.onGround || p.swimming ? MOVE.accel : MOVE.airAccel;
+  // --- hills (2020): climbing gets slower past ~25 deg; past ~40 deg you can't walk up at all and slide down with
+  // little control (only on the terrain itself - stairs, ramps and roofs are walked normally)
+  let slopeCtl = 1;
+  if (p.onGround && !p.swimming && p.slideT <= 0 && !downed) {
+    const n = col.terrain.normal(p.x, p.z), ny = n[1];
+    if (ny < SLOPE.easyNy && col.groundAt(p.x, p.z, p.y + 0.1, 0.25) <= col.terrain.at(p.x, p.z) + 0.05) {
+      const hl = Math.hypot(n[0], n[2]) || 1, dx = n[0] / hl, dz = n[2] / hl; // downhill direction
+      const up = -(tx * dx + tz * dz); // speed component going uphill
+      if (ny < SLOPE.slideNy && !col.terrain.isGraded(p.x, p.z)) {
+        // too steep: no uphill progress, gravity pulls you down the face
+        if (up > 0) { tx += dx * up; tz += dz * up; }
+        const pull = SLOPE.slideSpeed * Math.min(1, (SLOPE.slideNy - ny) / 0.12 + 0.35);
+        tx += dx * pull; tz += dz * pull; slopeCtl = SLOPE.slideControl;
+        (p as any).sliding = true;
+      } else if (up > 0) {
+        const k = 1 - (SLOPE.easyNy - ny) / (SLOPE.easyNy - SLOPE.slideNy) * SLOPE.climbLoss; // 1 .. 1-climbLoss
+        tx += dx * up * (1 - k); tz += dz * up * (1 - k);
+      }
+    } else (p as any).sliding = false;
+  } else (p as any).sliding = false;
+  const acc = (p.slideT > 0 ? 80 : p.onGround || p.swimming ? MOVE.accel : MOVE.airAccel) * slopeCtl;
   const dvx = tx - p.vx, dvz = tz - p.vz, dl = Math.hypot(dvx, dvz), step = acc * dt;
   if (dl <= step) { p.vx = tx; p.vz = tz; } else { p.vx += (dvx / dl) * step; p.vz += (dvz / dl) * step; }
   // --- jump / mantle
@@ -192,7 +212,7 @@ function ground(sim: Sim, p: Player, dt: number) {
     else if (p.onGround) {
       if (p.stance !== Stance.Stand) { p.stance = tryStand(sim, p); }
       else if (tryMantle(sim, p)) return;
-      else { p.vy = MOVE.jumpV; p.onGround = false; sim.emit({ t: 'jump', p: p.id }); }
+      else { p.vy = (p as any).sliding ? MOVE.jumpV * 0.6 : MOVE.jumpV; p.onGround = false; sim.emit({ t: 'jump', p: p.id }); }
     } else if (tryMantle(sim, p)) return;
     else {
       // pop the parachute when falling from a height (rooftops, cliffs, helicopters)

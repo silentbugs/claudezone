@@ -3,6 +3,13 @@ export const TICK = 1 / 60;
 export const PLAYERS = 150;
 export const SQUAD_SIZE = 3;
 
+/**
+ * Hills: walking is normal up to easyNy (normal.y, ~25 deg); climbing slows to (1 - climbLoss) toward slideNy
+ * (~40 deg); steeper faces can't be climbed and slide you down at up to slideSpeed m/s with slideControl of the
+ * normal acceleration.
+ */
+export const SLOPE = { easyNy: 0.9, slideNy: 0.766, climbLoss: 0.6, slideSpeed: 7, slideControl: 0.25 };
+
 export const MOVE = {
   // walk comes from the held weapon (WeaponDef.walk); these are multipliers / fallbacks (Warzone 2020 data mine)
   walk: 4.9, sprintMul: 1.31, tacSprintMul: 1.57, crouchMul: 0.6, proneMul: 0.15, strafeMul: 0.7, strafeAdsMul: 0.8, backMul: 0.77, backAdsMul: 0.88,

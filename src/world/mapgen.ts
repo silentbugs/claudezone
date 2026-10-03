@@ -11,6 +11,7 @@ import { Builder, house, apartment, tower, warehouse, shop, garageRow, Style } f
 import { MapMasks, MAP_SIZE, M_BUILT, M_ROAD, M_SNOW, POIS, Poi } from './mapdata';
 import { buildTerrain, riverQuery, TerrainExtras, waterSurfaceAt } from './terrain';
 import { buildLandmarks } from './landmarks';
+import { SLOPE } from '../sim/config';
 import { FOOTPRINTS } from '../data/footprints';
 
 export type District = 'downtown' | 'urban' | 'suburb' | 'industrial' | 'military' | 'rural' | 'airport';
@@ -163,6 +164,7 @@ export function generateWorld(masks: MapMasks, seed = 1): WorldData {
         if (e > skirt) continue;
         const k = j * hf.res + i, t = smoothstep(skirt, 0, e);
         hf.h[k] = hf.h[k] + (y - hf.h[k]) * t;
+        (hf.graded ??= new Uint8Array(hf.res * hf.res))[k] = 1;
       }
     },
     place(b, kind, x, z, angle, opts = {}) {
@@ -210,6 +212,9 @@ export function generateWorld(masks: MapMasks, seed = 1): WorldData {
 
   // 4b) street lamps on urban road edges, power lines along the highways
   placeStreetFurniture(ctx);
+
+  // 4c) nowhere you can't walk out of: fill tiny pits, an ascender out of anything bigger
+  ensureEscapes(ctx);
 
   // 5) trees
   const trees = placeTrees(ctx);
@@ -429,6 +434,59 @@ function placeTank(ctx: GenContext, x: number, z: number, r: number) {
   b.box(-r, 0, -r, r, h, r, Mat.Metal, { color: 0x9aa0a4, shape: 'cyl' });
   b.box(-r * 0.85, h, -r * 0.85, r * 0.85, h + r * 0.35, r * 0.85, Mat.Metal, { color: 0x8a9094, shape: 'cyl' });
   ctx.place(b, 'tank', x, z, 0, { pad: 0.5 });
+}
+
+/**
+ * Steep faces (> ~40 deg) can't be climbed, so check the whole map: from every playable spot there must be a path to
+ * the POIs (gentle ground both ways, or downhill through steep ground). Pits a few cells across are filled to their
+ * rim; anything larger gets a cliff ascender up to the nearest reachable rim (2020 cliffs had them). Repeats until
+ * nothing is trapped. Terrain only; buildings have their own stairs and ladders.
+ */
+export function trappedCells(ctx: Pick<GenContext, 'hf' | 'col'>): { comps: number[][]; reach: Uint8Array; H: Float32Array } {
+  const hf = ctx.hf, n = hf.res, st = hf.step, N = n * n;
+  const steep = new Uint8Array(N), play = new Uint8Array(N), H = new Float32Array(N);
+  for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
+    const k = j * n + i, x = i * st, z = j * st, w = ctx.col.waterAt(x, z);
+    H[k] = Math.max(hf.h[k], w - 1.2);
+    if (!inPlayable(x, z)) continue;
+    play[k] = 1;
+    if (!(w > hf.h[k] + 0.5) && hf.graded?.[k] !== 1 && hf.normal(x, z)[1] < SLOPE.slideNy) steep[k] = 1;
+  }
+  const reach = new Uint8Array(N), q = new Int32Array(N); let qh = 0, qt = 0;
+  for (const p of POIS) { const k = Math.round(p.z / st) * n + Math.round(p.x / st); if (play[k] && !steep[k]) { reach[k] = 1; q[qt++] = k; } }
+  const nb = [-1, 1, -n, n, -n - 1, -n + 1, n - 1, n + 1];
+  while (qh < qt) { const c = q[qh++]; for (const d of nb) { const m = c + d; if (m < 0 || m >= N || reach[m] || !play[m]) continue; if ((!steep[m] && !steep[c]) || H[c] <= H[m] + 0.3) { reach[m] = 1; q[qt++] = m; } } }
+  const seen = new Uint8Array(N), comps: number[][] = [];
+  for (let k = 0; k < N; k++) { if (!play[k] || reach[k] || seen[k]) continue; const c: number[] = [], s2 = [k]; seen[k] = 1; while (s2.length) { const a = s2.pop()!; c.push(a); for (const d of nb) { const m = a + d; if (m >= 0 && m < N && play[m] && !reach[m] && !seen[m]) { seen[m] = 1; s2.push(m); } } } comps.push(c); }
+  return { comps, reach, H };
+}
+function ensureEscapes(ctx: GenContext) {
+  const hf = ctx.hf, n = hf.res, st = hf.step;
+  for (let pass = 0; pass < 6; pass++) {
+    const { comps, reach, H } = trappedCells(ctx);
+    if (!comps.length) return;
+    for (const c of comps) {
+      // the lowest reachable rim cell around the pocket
+      let rim = -1, rimH = Infinity;
+      for (const k of c) for (const d of [-1, 1, -n, n, -n - 1, -n + 1, n - 1, n + 1]) { const m = k + d; if (m >= 0 && m < reach.length && reach[m] && H[m] < rimH) { rimH = H[m]; rim = m; } }
+      if (c.length <= 40 || rim < 0) {
+        // small: fill the pocket up to the rim (and soften its walls) so it's just a dip
+        const lvl = rim >= 0 ? rimH : Math.max(...c.map((k) => hf.h[k]));
+        for (const k of c) hf.h[k] = Math.max(hf.h[k], lvl - 0.2);
+        for (const k of c) for (const d of [-1, 1, -n, n]) { const m = k + d; if (m >= 0 && m < hf.h.length) hf.h[m] = hf.h[m] * 0.5 + Math.max(hf.h[m], lvl - 0.2) * 0.5; }
+      } else {
+        // big: an ascender from the pocket floor next to the rim up onto it
+        let best = c[0], bd = Infinity; const rx = rim % n, rz = Math.floor(rim / n);
+        for (const k of c) { const d = Math.hypot(k % n - rx, Math.floor(k / n) - rz); if (d < bd) { bd = d; best = k; } }
+        const x = (best % n) * st, z = Math.floor(best / n) * st, tx = rx * st, tz = rz * st, l = Math.hypot(tx - x, tz - z) || 1;
+        const y0 = hf.h[best], y1 = rimH + 0.05, b = new Builder();
+        b.ascender(0, 0, (tx - x) / l, (tz - z) / l, 0, y1 - y0);
+        ctx.place(b, 'ascender', x, z, 0, { y: y0, flatten: false, mark: false });
+        // a small level landing on the rim to step onto
+        ctx.flatten(tx, tz, 0, 3, 3, y1, 2);
+      }
+    }
+  }
 }
 
 /** Angle so a building faces the nearest road (null when no road nearby). */

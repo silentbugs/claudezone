@@ -14,7 +14,9 @@ export function walkRoute(sim: Sim, f: { x: number; z: number; y: number; a: num
   const L = (x: number, z: number) => { const dx = x - f.x, dz = z - f.z; return [dx * c - dz * s, dx * s + dz * c]; };
   const p: any = sim.players[0];
   const [sx, sz] = W(start[0], start[1]);
-  Object.assign(p, { phase: 4, alive: true, x: sx, z: sz, y: world.col.groundAt(sx, sz, f.y + (start[2] ?? 0) + 1), vx: 0, vy: 0, vz: 0, onGround: true, mantleT: 0, stance: 0, health: 100 }); p.fallStartY = p.y;
+  // a fresh body each route: alive (a fall on an earlier route must not leave it queued for the Gulag), off ladders and ascenders
+  Object.assign(p, { phase: 4, alive: true, x: sx, z: sz, y: world.col.groundAt(sx, sz, f.y + (start[2] ?? 0) + 1), vx: 0, vy: 0, vz: 0, onGround: true, mantleT: 0, stance: 0, health: 1e6, ladder: -1, asc: -1, slideT: 0, gulagUsed: true }); p.fallStartY = p.y;
+  (sim as any).gulag.queue = (sim as any).gulag.queue.filter((id: number) => id !== p.id);
   for (const [lx, lz, jump] of pts) {
     const [tx, tz] = W(lx, lz);
     // a third value on a waypoint = keep jumping on the way (mantle up crates / ledges)

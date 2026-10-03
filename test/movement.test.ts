@@ -326,3 +326,29 @@ test('stairs are solid: no climbing onto a flight from its side or from undernea
   console.log('loft roof held', ok, '/', n);
   assert.ok(n >= 2 && ok === n, 'the loft roof kept the player inside');
 });
+
+test('hills (2020): no walking up faces steeper than ~40 deg, you slide down them; and nowhere on the map traps you', async () => {
+  const { trappedCells } = await import('../src/world/mapgen');
+  const t = trappedCells(world as any);
+  console.log('trapped pockets after generation:', t.comps.length);
+  assert.equal(t.comps.length, 0, 'every playable spot can walk out to the POIs');
+  // find a steep face (terrain only, nothing built on it)
+  const hf = world.hf; let sx = 0, sz = 0, found = false;
+  for (let z = 400; z < 1400 && !found; z += 6) for (let x = 400; x < 2800 && !found; x += 6) {
+    const n = hf.normal(x, z); if (n[1] > 0.6 || n[1] < 0.45) continue;
+    if (world.col.groundAt(x, z, hf.at(x, z) + 1) > hf.at(x, z) + 0.05) continue;
+    // a stretch of steep ground uphill of here
+    const l = Math.hypot(n[0], n[2]), ux = -n[0] / l, uz = -n[2] / l; let ok = true;
+    for (let d = 0; d <= 9; d += 3) if (hf.normal(x + ux * d, z + uz * d)[1] > 0.7) ok = false;
+    if (ok) { sx = x; sz = z; found = true; }
+  }
+  assert.ok(found, 'a steep face exists');
+  const sim = new Sim(world, 1, { humans: 1 });
+  const p: any = freshPlayer(sim);
+  const n = hf.normal(sx, sz), l = Math.hypot(n[0], n[2]);
+  Object.assign(p, { x: sx, z: sz, y: hf.at(sx, sz), vx: 0, vy: 0, vz: 0, onGround: true, stance: 0 }); p.fallStartY = p.y;
+  const y0 = p.y;
+  for (let i = 0; i < 180; i++) { p.intent.yaw = Math.atan2(n[0] / l, n[2] / l); p.intent.mz = 1; p.intent.sprint = true; sim.tick(1 / 60); sim.events.length = 0; } // facing uphill, running
+  console.log('steep face: tried to run uphill 3 s, height change', (p.y - y0).toFixed(2), 'm');
+  assert.ok(p.y < y0 + 0.5, 'could not run up the steep face');
+});

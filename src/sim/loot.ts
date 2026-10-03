@@ -110,7 +110,7 @@ export function tryPickup(sim: Sim, p: Player, it: Item, explicit: boolean): boo
         const empty = p.weapons.findIndex((w) => !w);
         if (empty < 0) return false;
         p.weapons[empty] = { id: it.weapon!, rarity: it.rarity!, mag: it.mag! };
-        if (!p.weapons[p.cur]) p.cur = empty;
+        if (!p.weapons[p.cur]) { p.cur = empty; pickupRaise(p); }
         took = true; break;
       }
       const empty = p.weapons.findIndex((w) => !w);
@@ -118,7 +118,7 @@ export function tryPickup(sim: Sim, p: Player, it: Item, explicit: boolean): boo
       const old = p.weapons[slot];
       if (old) sim.dropItem({ kind: ItemKind.Weapon, weapon: old.id, rarity: old.rarity, mag: old.mag }, p.x, p.y + 0.1, p.z);
       p.weapons[slot] = { id: it.weapon!, rarity: it.rarity!, mag: it.mag! };
-      p.cur = slot; p.swapT = 0.5; p.reloadT = 0;
+      p.cur = slot; p.reloadT = 0; pickupRaise(p);
       // top up a mag of reserve for the new gun if empty-handed on ammo
       const am = WEAPON[it.weapon!].ammo; if (p.ammo[am] < magSize(it.weapon!, it.rarity!)) p.ammo[am] = Math.min(AMMO_MAX[am], p.ammo[am] + magSize(it.weapon!, it.rarity!));
       took = true; break;
@@ -126,6 +126,11 @@ export function tryPickup(sim: Sim, p: Player, it: Item, explicit: boolean): boo
   }
   if (took) { it.alive = false; sim.removeItem(it); sim.emit({ t: 'pickup', p: p.id, kind: it.kind, label: itemLabel(it) }); }
   return took;
+}
+
+/** Picking up a gun: a quick raise from below (no drop half - the old gun is already on the ground), ~0.4 s. */
+function pickupRaise(p: Player) {
+  const P = p as any; p.swapT = 0.4; P.swapDur = 0.4; P.swapDrop = 0; P.swapFrom = -1;
 }
 
 /** Everything a dead player carried spills out in a pile. */

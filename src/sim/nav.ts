@@ -25,7 +25,7 @@ export class NavGrid {
       const k = j * n + i;
       if (col.waterAt(x, z) > h + 1) cost[k] = 5;
       const nrm = hf.normal(x, z)[1];
-      if (nrm < 0.55) cost[k] = Math.max(cost[k], 4);
+      if (nrm < 0.766) cost[k] = Math.max(cost[k], 9); // too steep to climb (SLOPE.slideNy): only worth it going down
       if (h < -6) cost[k] = 0;
     }
     // structures: mark cells covered by ground-level collidable parts taller than a crouch

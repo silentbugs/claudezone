@@ -337,8 +337,11 @@ export class ViewModel {
     const ads = p.ads;
     // sway lags the mouse; less when aiming
     const sw = 1 - ads * 0.92; // aimed: the sight picture barely sways (MW)
-    this.swayX += (-mouseDX * 0.0006 * sw - this.swayX) * Math.min(1, dt * 10);
-    this.swayY += (mouseDY * 0.0006 * sw - this.swayY) * Math.min(1, dt * 10);
+    // 2020 feel: a small trail that saturates (a fast flick moves the gun ~1 cm, never swings it round) and settles
+    // in ~0.1 s; the target is capped so spinning the mouse doesn't leave the gun "catching up"
+    const cap = 0.012 * sw, tx = Math.max(-cap, Math.min(cap, -mouseDX * 0.00035 * sw)), ty = Math.max(-cap, Math.min(cap, mouseDY * 0.00035 * sw));
+    this.swayX += (tx - this.swayX) * Math.min(1, dt * 18);
+    this.swayY += (ty - this.swayY) * Math.min(1, dt * 18);
     this.bobT += dt * (speed > 0.5 ? 2 + speed * 1.1 : 0.8);
     const bobA = (speed > 0.5 ? 0.012 + speed * 0.0022 : 0.003) * (1 - ads * 0.96); // walking while aimed: the sights stay steady
     const bx = Math.sin(this.bobT) * bobA, by = -Math.abs(Math.cos(this.bobT)) * bobA;

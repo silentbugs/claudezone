@@ -43,6 +43,9 @@ export class Heightfield {
   readonly size: number;
   readonly step: number;
   readonly h: Float32Array;
+  /** cells graded around buildings / landmarks: always walkable (no sliding on their banks) */
+  graded?: Uint8Array;
+  isGraded(x: number, z: number) { if (!this.graded) return false; const i = Math.round(x / this.step), j = Math.round(z / this.step); return i >= 0 && j >= 0 && i < this.res && j < this.res && this.graded[j * this.res + i] === 1; }
   constructor(size: number, res: number, h?: Float32Array) {
     this.size = size; this.res = res; this.step = size / (res - 1);
     this.h = h ?? new Float32Array(res * res);
