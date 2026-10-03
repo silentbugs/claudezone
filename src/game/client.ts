@@ -376,7 +376,9 @@ export class Match {
       case 'down': if (e.victim === 0) audio.play('downed', { vol: 0.8 }); break;
       case 'revive': if (e.p === 0) audio.play('revive', { vol: 0.6 }); break;
       case 'buy': if (e.p === 0) audio.play('uiBuy', { ui: true, vol: 0.6 }); if (sim.players[e.p].squad === me.squad) { if (e.item === 'uav') {} else if (e.item === 'loadout') audio.say('Loadout drop inbound.'); } break;
-      case 'uav': audio.say(e.squad === me.squad ? 'UAV online.' : 'Enemy UAV overhead.'); break;
+      case 'uav': audio.play('uavOn', { ui: true, vol: 0.6 }); audio.say(e.squad === me.squad ? 'UAV online.' : 'Enemy UAV overhead.'); break;
+      case 'horn': if (d(e.x, e.y, e.z) < 260) audio.play(e.kind === 'truck' ? 'hornTruck' : 'horn', { x: e.x, y: e.y, z: e.z, range: 90, vol: 1 }); break;
+      case 'uavEnd': if (e.squad === me.squad) { audio.play('uavOff', { ui: true, vol: 0.6 }); audio.say('UAV offline.'); } break;
       case 'eping': if (e.squad === me.squad) { audio.play('beep', { vol: 0.45, rate: 1.35 }); if (e.by === this.me.id) audio.say('Enemy spotted.'); } break;
       case 'door': if (d(e.x, e.y, e.z) < 40) audio.play(e.loud ? 'doorSlam' : e.open ? 'doorOpen' : 'doorClose', { x: e.x, y: e.y, z: e.z, range: e.loud ? 14 : 6, vol: e.loud ? 1 : 0.6 }); break;
       case 'glass': this.sm.structures?.breakPane(e.s, e.i); if (d(e.x, e.y, e.z) < 60) { audio.play('impactGlass', { x: e.x, y: e.y, z: e.z, range: 22, vol: 1, rate: 0.7 }); audio.play('impactGlass', { x: e.x, y: e.y, z: e.z, range: 22, vol: 0.8, rate: 1.15 }); } break;

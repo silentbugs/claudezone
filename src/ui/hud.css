@@ -311,3 +311,6 @@
 /* fire mode by the ammo counter (2020: small caps above the mag count) */
 .hud .ammo .fmode { position: absolute; right: 0; top: calc(var(--px) * -18); font-size: calc(var(--px) * 13); letter-spacing: 0.08em; color: #d8d8d0; text-shadow: 0 1px 2px #000; }
 .hud .ammo { position: relative; }
+
+/* incoming air support warning (2020: red caps across the upper middle of the screen) */
+.hud .strikewarn { position: absolute; left: 50%; top: 21%; transform: translateX(-50%); color: #ff3b2f; font-size: calc(var(--px) * 30); font-weight: 700; letter-spacing: 0.06em; text-shadow: 0 0 calc(var(--px) * 8) rgba(0,0,0,0.9); white-space: nowrap; }

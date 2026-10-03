@@ -210,3 +210,27 @@ test('fire mode switch (B): full auto <-> semi on an M4, burst <-> auto on the F
   p.intent.fireMode = true; s.tick(1 / 60); s.events.length = 0;
   assert.equal(p.weapons[0].mode, 'auto');
 });
+
+test('armor satchel: shows its plates; carrying one already you take only the plates and the bag stays', async () => {
+  const { tryPickup, itemLabel } = await import('../src/sim/loot');
+  const s: any = new Sim(world, 3, { humans: 1 }); s.time = 120;
+  const p = s.players[0]; Object.assign(p, { phase: 4, alive: true });
+  const it: any = { id: s.nextId++, kind: 9, n: 3, x: p.x, y: p.y, z: p.z, alive: true };
+  s.addItem(it);
+  assert.equal(itemLabel(it), 'Armor Satchel · 3 plates');
+  p.maxPlates = 5; p.plates = 4;
+  tryPickup(s, p, it, true);
+  assert.equal(p.maxPlates, 8); assert.equal(p.plates, 7); assert.ok(!it.alive, 'took the satchel and its plates');
+  const it2: any = { id: s.nextId++, kind: 9, n: 3, x: p.x, y: p.y, z: p.z, alive: true }; s.addItem(it2);
+  tryPickup(s, p, it2, true);
+  assert.equal(p.plates, 8, 'topped up to 8'); assert.equal(it2.n, 2, 'two plates left in the bag'); assert.ok(it2.alive, 'second satchel stays on the ground');
+});
+
+test('UAVs stack: a second one sweeps faster, a third is an Advanced UAV; going offline is announced', () => {
+  const s: any = new Sim(world, 3, { humans: 1 }); s.time = 120;
+  const p = s.players[0]; Object.assign(p, { phase: 4, alive: true });
+  for (let i = 1; i <= 3; i++) { p.killstreak = 'uav'; s.useKillstreak(p); assert.equal(s.squadUav.get(p.squad).level, i, `UAV #${i} -> level ${i}`); }
+  let ended = false; s.time = s.squadUav.get(p.squad).until + 0.01; s.events.length = 0; s.tick(1 / 60);
+  for (const e of s.events) if (e.t === 'uavEnd' && e.squad === p.squad) ended = true;
+  assert.ok(ended && !s.squadUav.has(p.squad), 'offline event when it runs out');
+});

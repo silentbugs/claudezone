@@ -150,6 +150,7 @@ export class Hud {
   private eqhm = el('div', 'eqhm'); private eqT = 0; private eqKind = '';
   private specId = -1;
   private gstat = el('div', 'gstat'); private gcount = el('div', 'gcount');
+  private strikeWarn = (() => { const e = el('div', 'strikewarn'); e.style.display = 'none'; return e; })();
   private ctr = el('div', 'ctr'); private threat = el('div', 'threat');
   private uavSnapT = -99; private uavDots: [number, number][] = [];
   private dmgArcs: { a: number; t: number; e: HTMLElement }[] = [];
@@ -203,7 +204,7 @@ export class Hud {
       if (me.ping && Math.hypot(me.ping.x - x, me.ping.z - z) < 14 * v.span / (FM_W - 2 * FM_B) * 2) { this.pings = []; me.ping = undefined; return; }
       this.pings = [{ x, z, t: 999 }]; me.ping = { x, z };
     });
-    this.root.append(this.ctr, this.threat, this.eqhm, this.gstat, this.gcount, this.low, this.hurtEl, this.breakEl, this.vig, this.scope, mmw, this.circ, this.compass, this.cpings, this.heading, this.loc, this.counters, this.feed, this.squad, this.inv, this.fu, this.weap, this.xh, this.hm, this.tags, this.lcard, this.hold, this.prog, this.ctx, this.alt, this.banner, this.note, this.dmg, this.flash, this.dot, this.fullmap);
+    this.root.append(this.strikeWarn, this.ctr, this.threat, this.eqhm, this.gstat, this.gcount, this.low, this.hurtEl, this.breakEl, this.vig, this.scope, mmw, this.circ, this.compass, this.cpings, this.heading, this.loc, this.counters, this.feed, this.squad, this.inv, this.fu, this.weap, this.xh, this.hm, this.tags, this.lcard, this.hold, this.prog, this.ctx, this.alt, this.banner, this.note, this.dmg, this.flash, this.dot, this.fullmap);
     this.buildCompass();
   }
 
@@ -265,6 +266,7 @@ export class Hud {
       case 'reveal': if (e.squad === me.squad) this.showBanner('Recon complete', `Future safe zone revealed (${this.sim.revealedCircles(me.squad).length} ahead)`); break;
       case 'contract': if (this.sim.players[e.p].squad === me.squad) this.showBanner(`${({ bounty: 'Bounty', scavenger: 'Scavenger', recon: 'Recon', mostwanted: 'Most Wanted', supply: 'Supply Run' } as Record<string, string>)[e.kind] ?? e.kind} contract`, e.msg === 'start' ? 'Contract accepted' : e.msg === 'done' ? 'Contract complete' : e.msg === 'fail' ? 'Contract failed' : e.kind === 'mostwanted' ? 'Supply box opened: -15 s' : 'Next target marked'); break;
       case 'uav': this.showNote(e.squad === me.squad ? 'UAV online' : 'Enemy UAV overhead'); break;
+      case 'uavEnd': if (e.squad === me.squad) this.showNote('UAV offline'); break;
       case 'cuav': this.showNote(e.squad === me.squad ? 'Counter UAV online' : 'Enemy Counter UAV deployed'); break;
       case 'pickup': if (e.p === this.localId) this.showNote(e.label); break;
       case 'squadwipe': if (e.squad !== me.squad) this.feedLine(`<span style="color:#ff5a4a">Squad eliminated</span>`); break;
@@ -281,6 +283,10 @@ export class Hud {
     this.eqT = Math.max(0, this.eqT - dt / 0.9); this.eqhm.style.opacity = this.eqT > 0 ? String(Math.min(1, this.eqT * 2)) : '0'; this.eqhm.style.transform = `translate(-50%, -50%) scale(${1 + (1 - this.eqT) * 0.15 + (this.eqT > 0.85 ? (this.eqT - 0.85) * 2 : 0)})`;
     this.gulagHud(); this.contractHud();
     const sim = this.sim, me = sim.players[this.localId], view = opts.spectating ?? me;
+    // you're under incoming air support (2020: a red warning across the top of the screen)
+    { const inside = sim.strikes.some((st) => { const dx = view.x - st.x, dz = view.z - st.z, c = Math.cos(st.yaw), s2 = Math.sin(st.yaw), u = dx * c - dz * s2, v = dx * s2 + dz * c; return st.kind === 'cluster' ? Math.hypot(dx, dz) < st.len / 2 + 6 : Math.abs(u) < st.wid / 2 + 6 && Math.abs(v) < st.len / 2 + 6; });
+      const k = inside ? (sim.strikes.find((st) => st.kind === 'airstrike') ? 'PRECISION AIRSTRIKE INBOUND' : 'CLUSTER STRIKE INBOUND') : '';
+      if (this.strikeWarn.textContent !== k) { this.strikeWarn.textContent = k; this.strikeWarn.style.display = k ? 'block' : 'none'; } }
     const c = sim.circle;
     const inGas = sim.inGas(view);
     const air = view.phase === Phase.Freefall || view.phase === Phase.Chute || view.phase === Phase.Plane;
@@ -475,7 +481,7 @@ export class Hud {
         case ItemKind.Killstreak: icon = ICON[STREAK_ICON[it.killstreak!]]; t1 = KILLSTREAK_NAMES[it.killstreak!]; t2 = 'Killstreak'; rc = '#b45cff'; break;
         case ItemKind.SelfRevive: icon = ICON.selfRevive; t1 = 'Self-Revive Kit'; t2 = 'Combat Defense'; rc = '#b45cff'; break;
         case ItemKind.GasMask: icon = ICON.gasMask; t1 = 'Gas Mask'; t2 = 'Combat Defense'; rc = '#4aa3ff'; break;
-        case ItemKind.Satchel: icon = ICON.satchel; t1 = 'Armor Satchel'; t2 = 'Combat Defense'; rc = '#ffb52e'; break;
+        case ItemKind.Satchel: { icon = ICON.satchel; const n = it.n ?? 0, has = me.maxPlates > 5; t1 = n > 0 ? `Armor Satchel · ${n} Plate${n === 1 ? '' : 's'}` : 'Armor Satchel'; t2 = has ? (n > 0 ? 'Take the plates' : 'You already carry one') : 'Carry 8 plates'; rc = '#ffb52e'; break; }
       }
     } else if (t.kind === 'chest') { const ch = this.sim.chests.find((q) => q.id === t.id); verb = 'Open'; icon = ICON.supply; t1 = ch?.legendary ? 'Legendary Supply Box' : 'Supply Box'; t2 = 'Loot'; rc = ch?.legendary ? '#ffb52e' : '#9aa0a6'; }
     else if (t.kind === 'buy') { verb = 'Use'; icon = ICON.cart; t1 = 'Buy Station'; t2 = 'Loadouts, killstreaks, buybacks'; rc = '#f39a2a'; }
@@ -584,6 +590,19 @@ export class Hud {
       else { g.strokeStyle = color; g.lineWidth = 1.6 * px; g.beginPath(); g.moveTo(x - size * px, z - size * px); g.lineTo(x - size * 0.6 * px, z + size * 0.4 * px); g.lineTo(x + size * px, z + size * 0.4 * px); g.lineTo(x + size * 1.1 * px, z - size * 0.5 * px); g.stroke(); g.beginPath(); g.arc(x - size * 0.4 * px, z + size * px, size * 0.3 * px, 0, 7); g.arc(x + size * 0.7 * px, z + size * px, size * 0.3 * px, 0, 7); g.fill(); }
     };
     for (const b of sim.buyStations) { const r = (mini ? 10 : 14) * px; g.drawImage(buyStationIcon(), b.x - r, b.z - r, r * 2, r * 2); }
+    // incoming air support (2020): the strike area outlined in red (blue for our own), hatched, with the bombing run
+    for (const st of sim.strikes) {
+      const own = st.squad === me.squad, colr = own ? '74,168,255' : '230,48,40';
+      g.save(); g.translate(st.x, st.z); g.rotate(-st.yaw);
+      g.fillStyle = `rgba(${colr},0.22)`; g.strokeStyle = `rgba(${colr},0.95)`; g.lineWidth = 2 * px;
+      if (st.kind === 'cluster') { g.beginPath(); g.arc(0, 0, st.len / 2, 0, Math.PI * 2); g.fill(); g.stroke(); }
+      else {
+        g.fillRect(-st.wid / 2, -st.len / 2, st.wid, st.len); g.strokeRect(-st.wid / 2, -st.len / 2, st.wid, st.len);
+        g.beginPath(); g.moveTo(0, st.len / 2 + 14 * px); g.lineTo(0, -st.len / 2 - 6 * px); g.stroke();
+        g.beginPath(); g.moveTo(-6 * px, -st.len / 2 + 2 * px); g.lineTo(0, -st.len / 2 - 8 * px); g.lineTo(6 * px, -st.len / 2 + 2 * px); g.stroke(); // direction of the run
+      }
+      g.restore();
+    }
     // contracts: large static yellow badges (2020)
     for (const k of sim.contracts) if (!k.taken) { const r = (mini ? 13 : 16) * px; g.drawImage(contractBadge(k.kind), k.x - r, k.z - r, r * 2, r * 2); }
     // vehicles (2020): everyone sees every vehicle on both maps; the icon is tinted by who is inside, so riders show up too

@@ -63,6 +63,8 @@ export class Sim {
   fires: { x: number; y: number; z: number; r: number; t: number; owner: number }[] = [];
   smokes: { x: number; y: number; z: number; t: number }[] = [];
   pending: Explosion[] = [];
+  /** incoming air support shown on every map until it lands: precision airstrikes are a line, cluster strikes an area */
+  strikes: { x: number; z: number; yaw: number; len: number; wid: number; kind: 'airstrike' | 'cluster'; squad: number; until: number }[] = [];
   events: SimEvent[] = [];
   nextId = 1;
   localId = 0;
@@ -161,7 +163,7 @@ export class Sim {
     (p as any).respawnAt = undefined;
   }
   private endWarmup() {
-    this.bullets.length = 0; this.throwables.length = 0; this.fires.length = 0; this.smokes.length = 0; this.pending.length = 0;
+    this.bullets.length = 0; this.throwables.length = 0; this.fires.length = 0; this.smokes.length = 0; this.pending.length = 0; this.strikes.length = 0;
     for (const p of this.players) {
       if ((p as any).vehicle !== undefined) exitVehicle(this, p);
       Object.assign(p, { phase: Phase.Plane, alive: true, health: 100, armor: 100, plates: 0, kills: 0, damage: 0, cash: 0, lethal: null, tactical: null, killstreak: null, fieldUpgrade: null, selfRevive: false, hasMask: false, gasMask: 0, gulagUsed: false, stance: Stance.Stand, reloadT: 0, plateT: 0, swapT: 0, ads: 0, downT: 0, reviveBy: -1, killedBy: -1 });
@@ -651,6 +653,9 @@ export class Sim {
     for (const u of this.squadUav.values()) { const b = u.by !== undefined ? this.players[u.by] : null; if (b && b.alive && (b.phase === Phase.Alive || b.phase === Phase.Downed)) { u.x = b.x; u.z = b.z; } }
     for (const e of this.pending) { e.delay -= dt; if (e.delay <= 0) this.explode(e.x, e.y, e.z, e.r, e.dmg, e.owner, e.kind); }
     this.pending = this.pending.filter((e) => e.delay > 0);
+    if (this.strikes.length) this.strikes = this.strikes.filter((s2) => s2.until > this.time);
+    // UAVs going offline (2020: a falling tone and "UAV offline")
+    for (const [sq, u] of this.squadUav) if (u.until <= this.time) { this.squadUav.delete(sq); this.emit({ t: 'uavEnd', squad: sq }); }
   }
 
   /** The enemy under (or right next to) p's crosshair with a clear line of sight, if any. */
@@ -705,6 +710,7 @@ export class Sim {
     if (tx !== undefined && tz !== undefined) { x = tx; z = tz; }
     const g = this.world.hf.at(x, z);
     this.emit({ t: 'marker', x, z, kind: k, squad: p.squad, dur: 6, yaw: p.yaw });
+    this.strikes.push(k === 'cluster' ? { x, z, yaw: p.yaw, len: 44, wid: 44, kind: 'cluster', squad: p.squad, until: this.time + 6.5 } : { x, z, yaw: p.yaw, len: 56, wid: 30, kind: 'airstrike', squad: p.squad, until: this.time + 5.6 });
     if (k === 'cluster') for (let i = 0; i < 12; i++) this.pending.push({ x: x + this.rng.range(-18, 18), y: g + 0.5, z: z + this.rng.range(-18, 18), r: 8, dmg: 140, owner: p.id, delay: 3.5 + i * 0.22, kind: 'cluster' });
     else for (let i = 0; i < 3; i++) { const o = (i - 1) * 14; const a = p.yaw; this.pending.push({ x: x - Math.sin(a) * o, y: g + 0.5, z: z - Math.cos(a) * o, r: 14, dmg: 260, owner: p.id, delay: 4.5 + i * 0.35, kind: 'airstrike' }); }
   }
@@ -905,7 +911,7 @@ export class Sim {
   openChest(c: Chest, p: Player) {
     if (c.opened) return; c.opened = true;
     for (const itm of chestContents(this, c.x, c.y, c.z, c.legendary)) this.addItem(itm);
-    if ((c as any).satchel) this.addItem({ id: this.nextId++, kind: ItemKind.Satchel, x: c.x + 0.8, y: c.y + 0.1, z: c.z, alive: true, vy: 3 } as Item);
+    if ((c as any).satchel) this.addItem({ id: this.nextId++, kind: ItemKind.Satchel, n: 3, x: c.x + 0.8, y: c.y + 0.1, z: c.z, alive: true, vy: 3 } as Item);
     this.emit({ t: 'chest', p: p.id, x: c.x, y: c.y, z: c.z });
     // Most Wanted (2020): every supply box the marked squad opens knocks time off the countdown
     const mw = this.active.find((a) => a.kind === 'mostwanted' && a.squad === p.squad && a.t > 0);

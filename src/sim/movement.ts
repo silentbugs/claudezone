@@ -201,6 +201,7 @@ function ground(sim: Sim, p: Player, dt: number) {
     } else (p as any).sliding = false;
   } else (p as any).sliding = false;
   const acc = (p.slideT > 0 ? 80 : p.onGround || p.swimming ? MOVE.accel : MOVE.airAccel) * slopeCtl;
+  if (!Number.isFinite(tx) || !Number.isFinite(tz)) { (globalThis as any).__badMove?.(p, tx, tz, speed, mx, mz, fx, fz); tx = 0; tz = 0; } // never integrate a bad vector
   const dvx = tx - p.vx, dvz = tz - p.vz, dl = Math.hypot(dvx, dvz), step = acc * dt;
   if (dl <= step) { p.vx = tx; p.vz = tz; } else { p.vx += (dvx / dl) * step; p.vz += (dvz / dl) * step; }
   // --- jump / mantle

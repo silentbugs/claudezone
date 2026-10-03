@@ -5,7 +5,7 @@
 export type Action =
   | 'forward' | 'back' | 'left' | 'right' | 'sprint' | 'jump' | 'crouch' | 'prone'
   | 'fire' | 'ads' | 'reload' | 'interact' | 'plate' | 'weapon1' | 'weapon2' | 'swap'
-  | 'lethal' | 'tactical' | 'fieldUpgrade' | 'killstreak' | 'ping' | 'map' | 'scoreboard' | 'thirdPerson' | 'melee' | 'scopeZoom' | 'fireMode';
+  | 'lethal' | 'tactical' | 'fieldUpgrade' | 'killstreak' | 'ping' | 'map' | 'scoreboard' | 'thirdPerson' | 'melee' | 'scopeZoom' | 'fireMode' | 'horn';
 
 export const ACTIONS: { id: Action; label: string; group: string }[] = [
   { id: 'forward', label: 'Move forward', group: 'Movement' },
@@ -25,6 +25,7 @@ export const ACTIONS: { id: Action; label: string; group: string }[] = [
   { id: 'melee', label: 'Melee', group: 'Combat' },
   { id: 'scopeZoom', label: 'Variable zoom (scopes, while aiming)', group: 'Combat' },
   { id: 'fireMode', label: 'Fire mode (auto / semi / burst)', group: 'Combat' },
+  { id: 'horn', label: 'Vehicle horn', group: 'Movement' },
   { id: 'lethal', label: 'Lethal equipment', group: 'Combat' },
   { id: 'tactical', label: 'Tactical equipment', group: 'Combat' },
   { id: 'plate', label: 'Armor plate', group: 'Combat' },
@@ -72,7 +73,7 @@ export const DEFAULT_SETTINGS: Settings = {
     weapon1: ['Digit1', ''], weapon2: ['Digit2', ''], swap: ['WheelDown', 'WheelUp'],
     // mouse back button throws the lethal, forward the tactical
     lethal: ['KeyG', 'Mouse3'], tactical: ['KeyQ', 'Mouse4'], fieldUpgrade: ['KeyX', ''], killstreak: ['Digit5', ''],
-    ping: ['Mouse1', 'AltLeft'], melee: ['KeyV', 'KeyE'], map: ['KeyM', ''], scoreboard: ['Tab', ''], thirdPerson: ['KeyQ', ''], scopeZoom: ['KeyB', ''], fireMode: ['KeyB', ''],
+    ping: ['Mouse1', 'AltLeft'], melee: ['KeyV', 'KeyE'], map: ['KeyM', ''], scoreboard: ['Tab', ''], thirdPerson: ['KeyQ', ''], scopeZoom: ['KeyB', ''], fireMode: ['KeyB', ''], horn: ['KeyH', ''],
   },
   crouchMode: 'toggle', proneMode: 'toggle', adsMode: 'hold', sprintMode: 'hold', tacSprint: 'doubleTap', plateMode: 'hold', slideMode: 'tap',
   sens: 1, adsSens: 1, invertY: false,

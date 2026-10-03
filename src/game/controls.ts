@@ -7,7 +7,7 @@ import type { Action, Settings } from '../core/settings';
 import { Phase, Player, Stance } from '../sim/types';
 
 export class Controls {
-  private pend = { melee: false, jump: false, crouch: false, prone: false, reload: false, swap: false, slot: 0, lethal: false, tactical: false, killstreak: false, fieldUpgrade: false, tac: false, ping: false, map: false, scoreboard: false, interactPress: false, fireMode: false };
+  private pend = { melee: false, jump: false, crouch: false, prone: false, reload: false, swap: false, slot: 0, lethal: false, tactical: false, killstreak: false, fieldUpgrade: false, tac: false, ping: false, map: false, scoreboard: false, interactPress: false, fireMode: false, horn: false };
   private adsToggled = false;
   private sprintToggled = false;
   private lastSprintTap = -1;
@@ -55,6 +55,7 @@ export class Controls {
     if (this.pressed('fieldUpgrade')) P.fieldUpgrade = true;
     if (this.pressed('ping')) P.ping = true;
     if (this.pressed('fireMode') && !(p.ads > 0.5 && (p as any).scoped)) P.fireMode = true;
+    if (this.pressed('horn')) P.horn = true;
     if (this.pressed('map')) P.map = true;
     if (this.pressed('plate') && s.plateMode === 'tap') this.plateLatch = true;
     if (this.pressed('interact')) P.interactPress = true;
@@ -80,7 +81,7 @@ export class Controls {
     it.jump = P.jump; it.crouch = P.crouch; it.prone = P.prone; it.reload = P.reload;
     it.swap = P.swap; it.slot = P.slot; it.lethal = P.lethal; it.tactical = P.tactical; it.killstreak = P.killstreak;
     (it as any).slideHold = s.slideMode === 'hold'; (it as any).crouchHoldMode = s.crouchMode === 'hold'; (it as any).crouchHeld = this.down('crouch');
-    (it as any).fieldUpgrade = P.fieldUpgrade; (it as any).melee = P.melee; (it as any).fireMode = P.fireMode;
+    (it as any).fieldUpgrade = P.fieldUpgrade; (it as any).melee = P.melee; (it as any).fireMode = P.fireMode; (it as any).horn = P.horn;
     (it as any).tacHeld = this.down('tactical'); // heartbeat sensor: held up while the key is down
     it.fire = this.down('fire');
     it.ads = s.adsMode === 'toggle' ? this.adsToggled : this.down('ads');
@@ -91,7 +92,7 @@ export class Controls {
     it.plate = this.down('plate') || this.plateLatch;
     (it as any).up = this.down('jump'); (it as any).down = this.down('crouch') || this.down('prone');
     it.yaw = yaw; it.pitch = pitch;
-    Object.assign(P, { melee: false, jump: false, crouch: false, prone: false, reload: false, swap: false, slot: 0, lethal: false, tactical: false, killstreak: false, fieldUpgrade: false, tac: false, interactPress: false, fireMode: false });
+    Object.assign(P, { melee: false, jump: false, crouch: false, prone: false, reload: false, swap: false, slot: 0, lethal: false, tactical: false, killstreak: false, fieldUpgrade: false, tac: false, interactPress: false, fireMode: false, horn: false });
     if (p.phase !== Phase.Alive) this.adsToggled = false;
   }
 }

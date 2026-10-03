@@ -188,9 +188,12 @@ function rideDecision(sim: Sim, b: BotBrain, p: Player) {
   if (b.target >= 0 || p.phase !== Phase.Alive || vehicleOf(sim, p) || sim.inWarmup) return;
   // a squadmate's car waiting for us
   for (const v of sim.vehicles) {
-    if (!v.alive || v.seats[0] < 0 || v.speed > 4) continue;
+    const called = ((v as any).callUntil ?? 0) > sim.time; // the driver honked for the squad
+    if (!v.alive || v.seats[0] < 0 || v.speed > (called ? 7 : 4)) continue;
     const drv = sim.players[v.seats[0]]; if (drv.squad !== p.squad || !v.seats.some((sid) => sid < 0)) continue;
-    const d = Math.hypot(v.x - p.x, v.z - p.z); if (d > 60) continue;
+    const d = Math.hypot(v.x - p.x, v.z - p.z); if (d > (called ? 120 : 60)) continue;
+    // not forced: a bot busy fighting or working a contract may stay (unless the car is right there)
+    if (!called && d > 20 && (b.strategy === 'hold' || b.strategy === 'hide') ) continue;
     if (d < VEHICLES[v.type].len / 2 + 2.2) { enterVehicle(sim, p, v); return; }
     b.goal = 'rotate'; b.tx = v.x; b.tz = v.z; return;
   }

@@ -16,7 +16,7 @@ export type SoundName =
   | 'hit' | 'hitArmor' | 'armorBreak' | 'headshot' | 'kill' | 'down' | 'selfArmorBreak' | 'bodyHit'
   | 'plate' | 'magOut' | 'magIn' | 'bolt' | 'swap' | 'dry' | 'melee' | 'throw' | 'pin'
   | 'step_dirt' | 'step_concrete' | 'step_metal' | 'step_wood' | 'land' | 'jump' | 'slide' | 'gear'
-  | 'flareLaunch' | 'reconTick' | 'hbPing' | 'reconThud' | 'reconStab' | 'reconPulse' | 'reconHat' | 'reconPad' | 'vehicleCrash' | 'chestHum' | 'jet' | 'callin' | 'contractStart' | 'contractDone' | 'contractStep' | 'pickup' | 'cash' | 'chute' | 'chuteCut' | 'explosion' | 'explosionFar' | 'whiz' | 'impact' | 'impactMetal' | 'impactWood' | 'impactGlass' | 'impactWater'
+  | 'flareLaunch' | 'reconTick' | 'hbPing' | 'uavOn' | 'uavOff' | 'horn' | 'hornTruck' | 'reconThud' | 'reconStab' | 'reconPulse' | 'reconHat' | 'reconPad' | 'vehicleCrash' | 'chestHum' | 'jet' | 'callin' | 'contractStart' | 'contractDone' | 'contractStep' | 'pickup' | 'cash' | 'chute' | 'chuteCut' | 'explosion' | 'explosionFar' | 'whiz' | 'impact' | 'impactMetal' | 'impactWood' | 'impactGlass' | 'impactWater'
   | 'musicInfil' | 'musicVictory' | 'musicDefeat'
   | 'uiOpen' | 'uiHover' | 'uiBuy' | 'uiDeny' | 'downed' | 'cough' | 'heartbeat' | 'breath' | 'doorOpen' | 'doorClose' | 'doorSlam' | 'beep' | 'revive' | 'crate' | 'stinger' | 'flag' | 'rock';
 
@@ -431,6 +431,12 @@ export class Audio {
     this.add('reconPulse', tone(BAR, (t) => { const u = t % (BAR / 8); let v = 0; for (let k = 1; k <= 5; k++) v += Math.sin(2 * Math.PI * 55 * k * t) / k; return v * Math.exp(-u * 18) * Math.min(1, u / 0.004) * 0.3; }));
     this.add('reconHat', N(BAR, 6060).filter('bp', 7500, 1.2).env((t) => { const q = BAR / 16, u = t % q, acc = Math.floor(t / q) % 4 === 2 ? 1 : 0.55; return Math.exp(-u * 80) * acc * 0.9; }));
     this.add('reconPad', tone(BAR, (t) => { const trem = 0.6 + 0.4 * Math.sin(2 * Math.PI * 9 * t); return (Math.sin(2 * Math.PI * 440 * t) * 0.5 + Math.sin(2 * Math.PI * 466.2 * t) * 0.35 + Math.sin(2 * Math.PI * 659.3 * t) * 0.2) * trem * 0.22 * Math.min(1, t / 0.02, (BAR - t) / 0.02); }));
+    // UAV online / offline: a rising / falling two-tone radio chirp with a little static
+    const chirp = (up: boolean) => tone(0.7, (t) => { const f = up ? 600 + t * 900 : 1300 - t * 900; return (Math.sin(2 * Math.PI * f * t) * 0.5 + Math.sin(2 * Math.PI * f * 1.5 * t) * 0.2) * Math.min(1, t / 0.02) * Math.exp(-t * 3.2); }).mix(N(0.7, up ? 811 : 812).filter('bp', 2400, 1.5).env((t) => Math.exp(-t * 6) * 0.25), 1);
+    // car horn: two detuned square-ish tones (~400 / 500 Hz), a deeper air horn for the cargo truck
+    const horn = (f1: number, f2: number, len: number) => tone(len, (t) => { const sq = (f: number) => Math.tanh(Math.sin(2 * Math.PI * f * t) * 3); return (sq(f1) + sq(f2) * 0.8) * 0.28 * Math.min(1, t / 0.015, (len - t) / 0.04); }).filter('lp', 3200);
+    this.add('horn', horn(405, 507, 0.45)); this.add('hornTruck', horn(220, 277, 0.8));
+    this.add('uavOn', chirp(true)); this.add('uavOff', chirp(false));
     // heartbeat sensor contact: a soft electronic blip
     this.add('hbPing', tone(0.25, (t) => (Math.sin(2 * Math.PI * 1480 * t) * 0.6 + Math.sin(2 * Math.PI * 2960 * t) * 0.15) * Math.min(1, t / 0.004) * Math.exp(-t * 22)));
     // vehicle crash: a heavy body thump, crunching sheet metal and a short metallic ring

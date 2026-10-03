@@ -83,6 +83,7 @@ export function updateVehicles(sim: Sim, dt: number) {
     for (let i = 0; i < v.seats.length; i++) { const id = v.seats[i]; if (id >= 0) { const p = sim.players[id]; if (!p.alive || p.phase !== Phase.Alive || (p as any).vehicle !== v.id) v.seats[i] = -1; } }
     const driver = v.seats[0] >= 0 ? sim.players[v.seats[0]] : null;
     const it = driver?.intent;
+    if (it && (it as any).horn) { (it as any).horn = false; if (((v as any).hornCd ?? 0) <= sim.time) { (v as any).hornCd = sim.time + 0.6; (v as any).callUntil = sim.time + 8; sim.emit({ t: 'horn', x: v.x, y: v.y + 1, z: v.z, kind: v.type }); } }
     if (d.air) heli(sim, v, d, driver, dt);
     else {
       const throttle = it ? it.mz : 0, steer = it ? -it.mx : 0, brake = !!(it as any)?.up;

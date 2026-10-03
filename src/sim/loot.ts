@@ -35,7 +35,7 @@ export function itemLabel(it: Item): string {
     case ItemKind.Killstreak: return KILLSTREAK_NAMES[it.killstreak!];
     case ItemKind.SelfRevive: return 'Self-Revive Kit';
     case ItemKind.GasMask: return 'Gas Mask';
-    case ItemKind.Satchel: return 'Armor Satchel';
+    case ItemKind.Satchel: return `Armor Satchel${(it.n ?? 0) > 0 ? ` · ${it.n} plate${it.n === 1 ? '' : 's'}` : ''}`;
   }
 }
 
@@ -52,7 +52,7 @@ export function randomItem(sim: Sim, x: number, y: number, z: number, bonus = 0)
   if (r < 0.975) return { ...base, kind: ItemKind.Killstreak, killstreak: rng.pick(['uav', 'uav', 'cluster', 'airstrike'] as KillstreakType[]) };
   if (r < 0.978) return { ...base, kind: ItemKind.GasMask };
   if (r < 0.985) return { ...base, kind: ItemKind.SelfRevive };
-  return { ...base, kind: ItemKind.Satchel };
+  return { ...base, kind: ItemKind.Satchel, n: rng.int(0, 3) }; // satchels on the floor carry a few plates
 }
 
 /** Supply box contents: a weapon, ammo, plates, cash and a chance of equipment. */
@@ -72,7 +72,7 @@ export function chestContents(sim: Sim, x: number, y: number, z: number, legenda
       if (r < 0.35) out.push({ ...base, kind: ItemKind.Lethal, lethal: rng.pick(LETHALS), n: 1 });
       else if (r < 0.65) out.push({ ...base, kind: ItemKind.Tactical, tactical: rng.pick(TACTICALS), n: 1 });
       else if (r < 0.68) out.push({ ...base, kind: ItemKind.Plate, n: 1 });
-      else if (r < 0.8) out.push({ ...base, kind: ItemKind.Satchel }); // armor satchels mostly come from supply boxes
+      else if (r < 0.8) out.push({ ...base, kind: ItemKind.Satchel, n: rng.int(1, 3) }); // armor satchels mostly come from supply boxes, with plates in them
       else if (r < 0.92) out.push({ ...base, kind: ItemKind.Killstreak, killstreak: rng.pick(['uav', 'cluster', 'airstrike'] as KillstreakType[]) });
       else out.push({ ...base, kind: rng.chance(0.5) ? ItemKind.SelfRevive : ItemKind.GasMask });
     }
@@ -92,7 +92,15 @@ export function tryPickup(sim: Sim, p: Player, it: Item, explicit: boolean): boo
     }
     case ItemKind.Plate: if (p.plates < p.maxPlates) { p.plates++; took = true; } break;
     case ItemKind.Cash: p.cash += it.n!; took = true; break;
-    case ItemKind.Satchel: if (!explicit) return false; p.maxPlates = HEALTH.carrySatchel; took = true; break;
+    case ItemKind.Satchel: {
+      // 2020: the satchel shows the plates in it; carrying one already, you take just the plates and leave the bag
+      const has = p.maxPlates >= HEALTH.carrySatchel, inside = it.n ?? 0;
+      if (!has) { if (!explicit) return false; p.maxPlates = HEALTH.carrySatchel; const t = Math.min(inside, p.maxPlates - p.plates); p.plates += t; took = true; if (inside - t > 0) for (let k = 0; k < inside - t; k++) sim.dropItem({ kind: ItemKind.Plate, n: 1 }, it.x + (k - 1) * 0.3, it.y, it.z + 0.3); break; }
+      const t = Math.min(inside, p.maxPlates - p.plates); if (t <= 0) return false;
+      p.plates += t; it.n = inside - t;
+      sim.emit({ t: 'pickup', p: p.id, kind: ItemKind.Plate, label: `+${t} Armor Plate${t === 1 ? '' : 's'}` });
+      return false; // the (now lighter) satchel stays on the ground
+    }
     case ItemKind.SelfRevive: if (!explicit || p.selfRevive) return false; p.selfRevive = true; took = true; break;
     case ItemKind.GasMask: if (!explicit || p.hasMask) return false; p.hasMask = true; p.gasMask = 12; took = true; break;
     case ItemKind.Lethal:
@@ -138,7 +146,8 @@ export function dropBag(sim: Sim, p: Player) {
   const items: Partial<Item>[] = [];
   for (const w of p.weapons) if (w) items.push({ kind: ItemKind.Weapon, weapon: w.id, rarity: w.rarity, mag: w.mag });
   items.push({ kind: ItemKind.Plate, n: 1 }); items.push({ kind: ItemKind.Plate, n: 1 });
-  for (let i = 0; i < Math.min(3, p.plates); i++) items.push({ kind: ItemKind.Plate, n: 1 });
+  if (p.maxPlates >= HEALTH.carrySatchel) items.push({ kind: ItemKind.Satchel, n: Math.min(p.plates, HEALTH.carrySatchel) }); // their satchel, plates and all
+  else for (let i = 0; i < Math.min(3, p.plates); i++) items.push({ kind: ItemKind.Plate, n: 1 });
   if (p.cash > 0) items.push({ kind: ItemKind.Cash, n: p.cash });
   // ammo (2020): some of what they carried, and always at least a box for each gun they had, so a kill restocks you
   const carried = new Set(p.weapons.filter((w) => w).map((w) => WEAPON[w!.id].ammo as AmmoType));

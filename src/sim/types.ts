@@ -103,6 +103,8 @@ export type SimEvent =
   | { t: 'reload'; p: number; w: string }
   | { t: 'pickup'; p: number; kind: ItemKind; label: string }
   | { t: 'chest'; p: number; x: number; y: number; z: number }
+  | { t: 'uavEnd'; squad: number }
+  | { t: 'horn'; x: number; y: number; z: number; kind: string }
   | { t: 'firemode'; p: number; mode: FireMode }
   | { t: 'vcrash'; x: number; y: number; z: number; impact: number }
   | { t: 'contractGone'; x: number; y: number; z: number }
