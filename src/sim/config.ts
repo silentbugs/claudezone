@@ -20,7 +20,9 @@ export const MOVE = {
   slideSpeed: 10.2, slideTime: 1.05, slideCooldown: 0.9,
   height: 1.8, crouchH: 1.25, proneH: 0.6, radius: 0.34, step: 0.55,
   mantleMax: 2.7,
-  fallSafe: 5.5, fallLethal: 16,
+  // 2020: a fall too short to open the parachute (under fallSafe, ~3 storeys) never hurts; past it you can pull the chute,
+  // and only falling the whole way without it is deadly (~28 m)
+  fallSafe: 10, fallLethal: 28,
 };
 
 export const HEALTH = { max: 100, plate: 50, maxArmor: 150, plateTime: 1.25, regenDelay: 5, regenRate: 40, stimRate: 160, carry: 5, carrySatchel: 8 };

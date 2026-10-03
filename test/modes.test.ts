@@ -171,3 +171,25 @@ test('bots fly the helicopter: climb, turn and fly to a destination ~600 m away,
   assert.ok(d < 120, 'flew to the destination');
   assert.ok(!vehicleOf(s, p) && p.alive, 'landed and got out');
 });
+
+test('bots never shoot (or track) a target behind a wall; with a clear view they do', () => {
+  const s: any = new Sim(world, 9, { humans: 1 }); s.time = 120;
+  for (const q of s.players) { q.phase = 6; q.alive = false; }
+  const box = world.col.structures.find((q: any) => q.kind === 'prop' && q.parts.length === 1 && q.parts[0].y1 > 2.4 && q.parts[0].x1 - q.parts[0].x0 > 5)!; // a shipping container
+  const L = (lx: number, lz: number) => [box.x + lx * box.cos + lz * box.sin, box.z - lx * box.sin + lz * box.cos];
+  const bot = s.players[1], me = s.players[0];
+  const place = (p: any, lx: number, lz: number) => { const [x, z] = L(lx, lz); Object.assign(p, { phase: 4, alive: true, x, z, y: world.col.groundAt(x, z, box.y + 0.5), vx: 0, vy: 0, vz: 0, health: 1e6, armor: 0, stance: 0 }); p.fallStartY = p.y; };
+  place(bot, 0, -6); place(me, 0, 6); me.bot = false; bot.bot = true; bot.squad = 1; me.squad = 0;
+  bot.weapons = [{ id: 'm4', rarity: 2, mag: 30 }, null]; bot.cur = 0; bot.ammo.heavy = 999;
+  const b = s.brains[1]; b.target = 0; b.seenAt = s.time; b.engageStart = s.time; b.lastSeenX = me.x; b.lastSeenZ = me.z; b.reactAt = 0; b.goal = 'idle';
+  me.health = 100; me.armor = 150; bot.health = 100; bot.armor = 150;
+  let shots = 0; const count = () => { for (const e of s.events) if (e.t === 'shot' && e.p === 1) shots++; s.events.length = 0; };
+  for (let i = 0; i < 120; i++) { me.x = L(Math.sin(i / 20) * 2, 6)[0]; s.tick(1 / 60); count(); }
+  console.log('behind the container: bot fired', shots);
+  assert.equal(shots, 0, 'no shots through the container');
+  // in plain view, in front of the bot wherever it went
+  { const [x, z] = L(12, -6); Object.assign(me, { x, z, y: world.col.groundAt(x, z, bot.y + 2) }); bot.yaw = bot.intent.yaw = Math.atan2(-(x - bot.x), -(z - bot.z)); }
+  for (let i = 0; i < 120; i++) { s.tick(1 / 60); count(); }
+  console.log('in the open: bot fired', shots, 'target', b.target, 'seen ago', (s.time - b.seenAt).toFixed(2), 'dist', Math.hypot(me.x - bot.x, me.z - bot.z).toFixed(1), 'canSee', s.world.col.los(bot.x, bot.y + 1.6, bot.z, me.x, me.y + 1.4, me.z), 'phase', bot.phase, 'goal', b.goal, 'wpn', JSON.stringify(bot.weapons[bot.cur]), 'react', b.reactAt.toFixed(1), 't', s.time.toFixed(1));
+  assert.ok(shots > 0, 'fires once the target is visible');
+});

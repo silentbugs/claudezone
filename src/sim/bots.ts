@@ -56,6 +56,7 @@ export class BotBrain {
   hideX = 0; hideZ = 0; hideUntil = 0; retreatUntil = 0; slideUsed = 0;
   /** personality: sneaky players crouch-walk near enemies and hide when found; others push */
   sneaky = false;
+  shotCheckAt = -99; shotCheckTarget = -1; shotClear = false;
   constructor(public id: number, r: number) {
     this.skill = 0.35 + r * 0.55; this.wanderA = r * 6.28;
     const k = ((id * 2654435761) >>> 0) % 100;
@@ -209,6 +210,14 @@ function grabNearby(sim: Sim, p: Player) {
     if (!itm.alive || Math.abs(itm.y - p.y) > 1.8 || Math.hypot(itm.x - p.x, itm.z - p.z) > 3.5) continue;
     if (itm.kind === ItemKind.Cash || (itm.kind === ItemKind.Plate && p.plates < p.maxPlates) || (itm.kind === ItemKind.Ammo && useful(p, itm.kind, itm))) simTake(sim, p, itm.id);
   }
+}
+
+/** Line of sight right now (re-checked at most every 0.1 s): no shooting at someone who just stepped behind a wall. */
+function clearShot(sim: Sim, b: BotBrain, p: Player, q: Player): boolean {
+  if (sim.time - b.shotCheckAt < 0.1 && b.shotCheckTarget === q.id) return b.shotClear;
+  b.shotCheckAt = sim.time; b.shotCheckTarget = q.id; b.shotClear = canSee(sim, p, q);
+  if (b.shotClear) { b.seenAt = sim.time; b.lastSeenX = q.x; b.lastSeenZ = q.z; b.lastSeenY = q.y; }
+  return b.shotClear;
 }
 
 /** Toggle toward a stance (crouch / prone are toggles in the controls, like a player's keys). */
@@ -481,13 +490,15 @@ export function botThink(sim: Sim, b: BotBrain, p: Player, dt: number, think: bo
   // --- combat
   if (b.target >= 0) {
     const q = sim.players[b.target];
-    const visible = sim.time - b.seenAt < 0.25;
-    const dx = q.x - p.x, dz = q.z - p.z, dist = Math.hypot(dx, dz);
-    const aimY = q.y + (q.phase === Phase.Downed || q.stance === Stance.Prone ? 0.3 : q.stance === Stance.Crouch ? 0.95 : 1.25);
+    const visible = sim.time - b.seenAt < 0.12;
+    // out of sight we aim where we last saw them (pre-aiming a corner), never at where they really are
+    const kx = visible ? q.x : b.lastSeenX, kz = visible ? q.z : b.lastSeenZ, ky = visible ? q.y : (b.lastSeenY || q.y);
+    const dx = kx - p.x, dz = kz - p.z, dist = Math.hypot(dx, dz);
+    const aimY = ky + (q.phase === Phase.Downed || q.stance === Stance.Prone ? 0.3 : q.stance === Stance.Crouch ? 0.95 : 1.25);
     const ey = p.y + eyeHeight(p);
     // lead moving targets a little, plus a tracking error that shrinks while we keep sight
     const tof = def ? dist / def.velocity : 0;
-    const ax = q.x + q.vx * tof, az = q.z + q.vz * tof;
+    const ax = kx + (visible ? q.vx * tof : 0), az = kz + (visible ? q.vz * tof : 0);
     const wantYaw = Math.atan2(-(ax - p.x), -(az - p.z));
     const wantPitch = Math.atan2(aimY - ey, dist) + (def ? 0.5 * 9.8 * 0.55 * tof * tof / Math.max(1, dist) : 0);
     const T = BotBrain.tune;
@@ -498,7 +509,7 @@ export function botThink(sim: Sim, b: BotBrain, p: Player, dt: number, think: bo
     it.pitch += (wantPitch + errPitch - p.recoil * (0.4 + b.skill * 0.5) - it.pitch) * turn;
     const aimed = Math.abs(wrapAngle(p.yaw - wantYaw)) < 0.12 + 2 / Math.max(5, dist);
     it.ads = dist > 12 && visible && p.stance !== Stance.Prone || (def?.scope ?? false) && visible;
-    if (visible && sim.time >= b.reactAt && aimed && def) {
+    if (visible && sim.time >= b.reactAt && aimed && def && clearShot(sim, b, p, q)) {
       const maxRange = def.cls === 'shotgun' ? 30 : def.cls === 'smg' ? 90 : def.cls === 'pistol' ? 70 : 450;
       if (dist < maxRange) {
         // bursts at range, full auto up close
@@ -630,7 +641,7 @@ function decide(sim: Sim, b: BotBrain, p: Player, inGulag: boolean) {
   // an enemy pinged by the squad becomes our target when we have none and it's close enough
   if (b.target < 0) for (const e of sim.enemyPings) if (e.squad === p.squad && e.until > sim.time && e.by !== p.id) {
     const q = sim.players[e.target]; if (!q.alive || Math.hypot(q.x - p.x, q.z - p.z) > 160) continue;
-    b.target = q.id; b.targetSince = sim.time; b.seenAt = sim.time; b.lastSeenX = e.x; b.lastSeenZ = e.z; b.lastSeenY = e.y; b.reactAt = sim.time + 0.4; break;
+    b.target = q.id; b.targetSince = sim.time; b.seenAt = -99; b.lastSeenX = e.x; b.lastSeenZ = e.z; b.lastSeenY = e.y; b.reactAt = sim.time + 0.4; break; // a ping is a position, not sight
   }
   // killstreaks: scans as soon as a fight starts, strikes on a target that has been dug in for a while
   if (p.killstreak && p.killstreak !== 'turret' && b.target >= 0 && !inGulag && p.phase === Phase.Alive) {
