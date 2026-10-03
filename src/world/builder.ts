@@ -115,7 +115,7 @@ export class Builder {
     seg(u, len, 0, h, mat);
   }
   /** Floor slab with optional rectangular holes (stairwells). */
-  slab(x0: number, z0: number, x1: number, z1: number, y: number, t: number, mat: Mat, holes: [number, number, number, number][] = []) {
+  slab(x0: number, z0: number, x1: number, z1: number, y: number, t: number, mat: Mat, holes: [number, number, number, number][] = [], color?: number) {
     // split along x into strips at hole edges, then along z
     const xs = [x0, x1]; for (const [hx0, , hx1] of holes) xs.push(hx0, hx1);
     const ux = [...new Set(xs)].filter((v) => v >= x0 && v <= x1).sort((p, q) => p - q);
@@ -123,8 +123,8 @@ export class Builder {
       const sx0 = ux[i], sx1 = ux[i + 1], mx = (sx0 + sx1) / 2;
       const hs = holes.filter(([hx0, , hx1]) => mx > hx0 && mx < hx1).map(([, hz0, , hz1]) => [hz0, hz1] as [number, number]).sort((p, q) => p[0] - q[0]);
       let z = z0;
-      for (const [hz0, hz1] of hs) { if (hz0 > z) this.box(sx0, y - t, z, sx1, y, hz0, mat); z = Math.max(z, hz1); }
-      if (z < z1) this.box(sx0, y - t, z, sx1, y, z1, mat);
+      for (const [hz0, hz1] of hs) { if (hz0 > z) this.box(sx0, y - t, z, sx1, y, hz0, mat, color !== undefined ? { color } : undefined); z = Math.max(z, hz1); }
+      if (z < z1) this.box(sx0, y - t, z, sx1, y, z1, mat, color !== undefined ? { color } : undefined);
     }
   }
   ramp(x0: number, y0: number, z0: number, x1: number, y1: number, z1: number, axis: 0 | 1, dir: 1 | -1, mat = Mat.Concrete, color?: number) {
@@ -205,10 +205,10 @@ export function house(rng: Rng, w: number, d: number, floors: number, st: Style)
   const ridge = loft ? Math.min(3.4, Math.max(2.9, d * 0.42)) : Math.min(2.6, d * 0.28);
   if (loft) {
     b.ramp(Math.min(sxLo, sxHi), E + 0.05, -0.55, Math.max(sxLo, sxHi), top, 0.55, 0, side > 0 ? -1 : 1, Mat.Wood);
-    b.slab(-hw - 0.3, -hd - 0.3, hw + 0.3, hd + 0.3, top, 0.25, st.roof, [[Math.min(sxLo, sxHi) - 0.1, -0.65, Math.max(sxLo, sxHi) + 0.1, 0.65]]);
+    b.slab(-hw - 0.3, -hd - 0.3, hw + 0.3, hd + 0.3, top, 0.25, st.roof, [[Math.min(sxLo, sxHi) - 0.1, -0.65, Math.max(sxLo, sxHi) + 0.1, 0.65]], st.roofColor);
     b.light(0, top + ridge - 0.45, 0);
     b.addLoot(-side * (hw - 1.5), top, 0);
-  } else b.slab(-hw - 0.3, -hd - 0.3, hw + 0.3, hd + 0.3, top, 0.25, st.roof);
+  } else b.slab(-hw - 0.3, -hd - 0.3, hw + 0.3, hd + 0.3, top, 0.25, st.roof, [], st.roofColor);
   b.box(-hw - 0.4, top, -hd - 0.4, hw + 0.4, top + ridge, hd + 0.4, st.roof, { shape: 'gable', noCollide: true, color: st.roofColor });
   b.ramp(-hw - 0.4, top, -hd - 0.4, hw + 0.4, top + ridge, 0, 1, 1, st.roof);
   b.ramp(-hw - 0.4, top, 0, hw + 0.4, top + ridge, hd + 0.4, 1, -1, st.roof);
@@ -225,7 +225,7 @@ export function house(rng: Rng, w: number, d: number, floors: number, st: Style)
     b.wall(0, ax0, ax1, az0 + 0.1, ay, ah, 0.2, st.wall, [{ u0: 1.4, u1: 2.4, v0: 0, v1: 2.15 }], st.wallColor, -1, st.trim);
     b.wall(0, ax0, ax1, az1 - 0.1, ay, ah, 0.2, st.wall, [], st.wallColor, 1, st.trim);
     b.wall(1, az0 + 0.2, az1 - 0.2, ax1 - 0.1, ay, ah, 0.2, st.wall, [{ u0: 1.8, u1: 3.0, v0: 1.0, v1: 2.1 }], st.wallColor, 1, st.trim);
-    b.slab(ax0 - 0.1, az0 - 0.15, ax1 + 0.15, az1 + 0.15, ay + ah + 0.2, 0.2, st.roof);
+    b.slab(ax0 - 0.1, az0 - 0.15, ax1 + 0.15, az1 + 0.15, ay + ah + 0.2, 0.2, st.roof, [], st.roofColor);
     b.addLoot(ax0 + 2, ay, az0 + 3);
   }
   return b;
@@ -398,7 +398,7 @@ export function warehouse(rng: Rng, w: number, d: number, h: number, st: Style, 
     b.block(cx, cz, rng.range(1.2, 2.4), rng.range(1.2, 2.4), 0.1, 0.1 + rng.pick([1.2, 1.2, 2.4]), rng.chance(0.5) ? Mat.Wood : Mat.Container, { color: rng.pick([0x7a5a38, 0x5e6e44, 0x6a4a30]) });
   }
   if (mezz) for (let x = -hw + 5; x <= hw - 5; x += 8) b.light(x, my - 0.3, hd - 2.5); // low bay under the mezzanine
-  b.slab(-hw - 0.2, -hd - 0.2, hw + 0.2, hd + 0.2, h + 0.1, 0.3, st.roof);
+  b.slab(-hw - 0.2, -hd - 0.2, hw + 0.2, hd + 0.2, h + 0.1, 0.3, st.roof, [], st.roofColor);
   for (let lx = -hw + 5; lx <= hw - 5; lx += 8) for (let lz = -hd + 5; lz <= (mezz ? hd - 6 : hd - 5); lz += 8) b.light(lx, h - 0.25, lz);
   b.ladder(-hw + 1.2, -hd - 0.15, 0, -1, 0.1, h + 0.1); // roof by the exterior ladder only (front corner)
   b.addLoot(-hw + 2, 0.1, -hd + 3.5); b.addLoot(hw - 2, 0.1, -hd + 3.5); b.addLoot(0, 0.1, 0);
@@ -416,7 +416,7 @@ export function shop(rng: Rng, w: number, d: number, st: Style): Builder {
   // counter/shelves
   b.block(0, hd * 0.3, w * 0.5, 0.8, 0.1, 1.1, Mat.Wood, { color: 0x6b4a2f });
   for (let lx = -hw + 2.5; lx <= hw - 2.5; lx += 4) b.light(lx, h + 0.08 - 0.02 - 0.3, 0);
-  b.slab(-hw - 0.3, -hd - 0.3, hw + 0.3, hd + 0.3, h + 0.1, 0.3, st.roof);
+  b.slab(-hw - 0.3, -hd - 0.3, hw + 0.3, hd + 0.3, h + 0.1, 0.3, st.roof, [], st.roofColor);
   b.ladder(hw - 1.2, hd + 0.125, 0, 1, 0.1, h + 0.1); // roof ladder at the back
   // signage band
   b.box(-hw - 0.05, h - 0.6, -hd - 0.35, hw + 0.05, h + 0.4, -hd - 0.25, Mat.Trim, { color: rng.pick([0xb03a2e, 0x2e5eaa, 0xd8a31a, 0x2f8a4a]), noCollide: true });
@@ -441,6 +441,6 @@ export function garageRow(rng: Rng, w: number, d: number, st: Style): Builder {
     if (rng.chance(0.3)) b.addLoot(-hw + (u0 + u1) / 2, 0.1, 0);
   }
   b.wall(0, -hw, hw, -hd, 0.1, h, 0.2, st.wall, ops, st.wallColor);
-  b.slab(-hw - 0.2, -hd - 0.3, hw + 0.2, hd + 0.2, h + 0.1, 0.2, Mat.Roof);
+  b.slab(-hw - 0.2, -hd - 0.3, hw + 0.2, hd + 0.2, h + 0.1, 0.2, Mat.Roof, [], st.roofColor);
   return b;
 }

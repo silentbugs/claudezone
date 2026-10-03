@@ -165,7 +165,7 @@ export function block2020(rng: Rng, w: number, d: number, st: Style, o: BlockOpt
   for (let f = 1; f < F; f++) {
     for (const s of secs) if (s.open) b.slab(s.cx - secW / 2 + T / 2, -hd + T / 2, s.cx + secW / 2 - T / 2, hd - T / 2, lvl(f), 0.25, Mat.Concrete, holes[f].filter((hh) => hh.x1 > s.cx - secW / 2 && hh.x0 < s.cx + secW / 2).map((hh) => [hh.x0, hh.z0, hh.x1, hh.z1] as [number, number, number, number]));
   }
-  b.slab(-hw, -hd, hw, hd, top, 0.3, st.roof, holes[F].map((hh) => [hh.x0, hh.z0, hh.x1, hh.z1] as [number, number, number, number]));
+  b.slab(-hw, -hd, hw, hd, top, 0.3, st.roof, holes[F].map((hh) => [hh.x0, hh.z0, hh.x1, hh.z1] as [number, number, number, number]), st.roofColor);
   // parapet + slab-edge bands + roof clutter
   const par = 0.8;
   b.wall(0, -hw, hw, -hd + 0.15, top, par, 0.3, st.wall, [], st.wallColor);
@@ -246,7 +246,7 @@ export function tenement2020(rng: Rng, w: number, d: number, st: Style): Builder
     wallX(b, 1, xl, xr, y, wh, st, doorsAlong(xl, xr), 0, 0.2, Mat.Plaster, inner(f));
     for (const lx of [cw + 3.5, (xl + xr) / 2, ce - 3.5, xl + 6, xr - 6]) b.light(lx, y + wh - 0.1, lx === cw + 3.5 || lx === ce - 3.5 ? cz0 + 1 : 0);
     // floor above (holes for both shafts)
-    b.slab(-hw, -hd, hw, hd, lvl(f + 1), 0.25, Mat.Concrete, shafts);
+    b.slab(-hw, -hd, hw, hd, lvl(f + 1), 0.25, f + 1 === F ? st.roof : Mat.Concrete, shafts, f + 1 === F ? st.roofColor : undefined); // the top one is the roof
   }
   // entrance steps: front doors of both stairwells, rear double doors
   const steps = (x0: number, x1: number, zo: number, sgn: number) => { b.box(x0, -0.6, zo + sgn * 0.1, x1, E * 0.5, zo + sgn * 1.1, Mat.Concrete, { color: 0x8a8680 }); b.box(x0, -0.6, zo + sgn * 0.1, x1, E, zo + sgn * 0.6, Mat.Concrete, { color: 0x8a8680 }); };

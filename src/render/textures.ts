@@ -143,7 +143,7 @@ export interface PhotoSpec { layer: number; name: string; gray?: boolean }
 /** Building layers (index = Mat): gray = tinted by vertex colour, otherwise the photo's own colour is kept. */
 export const BUILDING_PHOTOS: PhotoSpec[] = [
   { layer: 0, name: 'concrete', gray: true }, { layer: 1, name: 'brick' }, { layer: 2, name: 'plaster', gray: true }, { layer: 3, name: 'metal', gray: true },
-  { layer: 4, name: 'wood' }, { layer: 6, name: 'stone' }, { layer: 7, name: 'asphalt', gray: true }, { layer: 8, name: 'roof', gray: true },
+  { layer: 4, name: 'wood' }, { layer: 6, name: 'stone', gray: true }, { layer: 7, name: 'asphalt', gray: true }, { layer: 8, name: 'roof', gray: true },
   { layer: 9, name: 'container', gray: true }, { layer: 10, name: 'trim', gray: true }, { layer: 13, name: 'pavers', gray: true }, { layer: 14, name: 'snow' },
 ];
 /** Terrain layers: 0 grass, 1 dry grass, 2 dirt, 3 rock, 4 snow, 5 asphalt, 6 sand, 7 ice, 8 pavement. */

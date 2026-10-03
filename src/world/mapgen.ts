@@ -32,21 +32,24 @@ export function districtAt(x: number, z: number): { d: District; poi: Poi | null
   return { d: DISTRICT[best.id] ?? 'rural', poi: best };
 }
 
+// 2020 Verdansk reads earthy and weathered, not pastel: ochre / yellow / sand / faded green / blue-grey plaster,
+// rusty-red, green and slate corrugated roofs (sampled from the 2020 location shots in .harness/ref)
 const PALETTE = {
-  plaster: [0xd9cfbd, 0xc9bda6, 0xb8b2a4, 0xd4c7a1, 0xa9b3a8, 0xc4a98c, 0xe0dcd0, 0x9fa7ad],
+  plaster: [0xc4ad7e, 0xc9a957, 0xb9ab8c, 0x9aa48c, 0xa7aeb0, 0xb99a7a, 0xbab09c, 0x8f9a86, 0xcfc4ad, 0xa89a80],
   brick: [0x8c5a44, 0x9a6a50, 0x7a4c3a, 0xa87c62],
-  concrete: [0xa39e96, 0x8f8b84, 0xb2ada4, 0x7f8084, 0x9a968c],
+  concrete: [0x99948a, 0x8a8b86, 0xa39885, 0x7d7d79, 0xab9f8e, 0x8e8a80],
   metal: [0x7c8286, 0x6f7a74, 0x8a7f70, 0x5f6b72, 0x9a9588],
-  roof: [0x8a6a5a, 0x7a5a48, 0x6a7078, 0x9a7a62, 0x80858a, 0x9a5a44, 0x6e6a64],
+  roof: [0x5e6b4a, 0x7a3e30, 0x5a4a40, 0x4c5257, 0x8a5236, 0x6b6f6a, 0x47563f, 0x6a3a2e],
 };
 
 function styleFor(rng: Rng, kind: 'house' | 'block' | 'tower' | 'industrial' | 'shop'): Style {
   switch (kind) {
-    case 'house': { const brick = rng.chance(0.3); return { wall: brick ? Mat.Brick : Mat.Plaster, wallColor: rng.pick(brick ? PALETTE.brick : PALETTE.plaster), trim: 0xe8e4dc, roof: Mat.Roof, roofColor: rng.pick(PALETTE.roof) }; }
-    case 'block': return { wall: Mat.Concrete, wallColor: rng.pick([...PALETTE.concrete, ...PALETTE.plaster.slice(0, 4)]), trim: 0xcccccc, roof: Mat.Roof, roofColor: 0x9a9c9e };
-    case 'tower': return { wall: Mat.Concrete, wallColor: rng.pick([0xb8b4aa, 0x9ea4a8, 0x8e8a82, 0xc2bcae, 0x7a8288]), trim: 0xcccccc, roof: Mat.Roof, roofColor: 0x8e9194 };
-    case 'industrial': return { wall: Mat.Metal, wallColor: rng.pick(PALETTE.metal), trim: 0x999999, roof: Mat.Roof, roofColor: 0x9a9ea2 };
-    case 'shop': return { wall: Mat.Plaster, wallColor: rng.pick(PALETTE.plaster), trim: 0xffffff, roof: Mat.Roof, roofColor: 0x8e9194 };
+    // village houses: mostly corrugated-metal roofs (green, rusty red, slate), some tiles; a few brick walls
+    case 'house': { const brick = rng.chance(0.2); return { wall: brick ? Mat.Brick : Mat.Plaster, wallColor: rng.pick(brick ? PALETTE.brick : PALETTE.plaster), trim: 0xd8d2c4, roof: rng.chance(0.6) ? Mat.Metal : Mat.Roof, roofColor: rng.pick(PALETTE.roof) }; }
+    case 'block': return { wall: Mat.Concrete, wallColor: rng.pick([...PALETTE.concrete, ...PALETTE.plaster.slice(0, 4)]), trim: 0xcccccc, roof: Mat.Roof, roofColor: rng.pick([0x6e6d69, 0x5f605c, 0x75706a]) }; // flat tar / felt roofs
+    case 'tower': return { wall: Mat.Concrete, wallColor: rng.pick([0xb8b4aa, 0x9ea4a8, 0x8e8a82, 0xc2bcae, 0x7a8288]), trim: 0xcccccc, roof: Mat.Roof, roofColor: rng.pick([0x6a6b68, 0x5c5e5b]) };
+    case 'industrial': return { wall: Mat.Metal, wallColor: rng.pick(PALETTE.metal), trim: 0x999999, roof: Mat.Metal, roofColor: rng.pick([0x7a7f82, 0x6a6f6c, 0x7e6a58]) }; // corrugated sheds
+    case 'shop': return { wall: Mat.Plaster, wallColor: rng.pick(PALETTE.plaster), trim: 0xe8e4dc, roof: Mat.Roof, roofColor: rng.pick([0x6a6b68, 0x5c5e5b, 0x77726b]) };
   }
 }
 
@@ -308,7 +311,9 @@ function placeFootprints(ctx: GenContext, roadField: (x: number, z: number) => n
     if (!occ.free(fx, fz, fang, fw * 0.8, fd * 0.8, 0, true)) continue; // a landmark already stands here (roads under a footprint are the old trace)
     const { d: dist, poi } = districtAt(fx, fz);
     const c = Math.cos(fang), s = Math.sin(fang);
-    if (round) { placeTank(ctx, fx, fz, Math.min(fw, fd) / 2); n++; continue; }
+    // round footprints: storage tanks and silos are small; big round shapes (plazas, canopies, a bandstand) are not tanks
+    if (round && Math.min(fw, fd) >= 3 && Math.max(fw, fd) <= 14) { placeTank(ctx, fx, fz, Math.min(fw, fd) / 2); n++; continue; }
+    if (round && Math.max(fw, fd) > 14) continue;
     const rects: [number, number, number, number][] = parts ? parts : [[0, 0, fw, fd]];
     const area = rects.reduce((a, r) => a + r[2] * r[3], 0);
     const wingSeed = rng.next();
@@ -413,8 +418,8 @@ function buildingFor(rng: Rng, dist: District, w: number, d: number, area: numbe
   }
   // suburbs and countryside: houses; big plain sheds are barns, mid-size blocks walk-ups
   const st = styleFor(rng, 'house');
-  if (dist === 'suburb' && big > 160 && ok(10, 8) && lean < 2.2) { const s2 = styleFor(rng, 'block'); return { b: block2020(rng, w, d, s2, { kind: 'walkup', floors: 2 + Math.floor(seed * 2) }), kind: 'block', style: 1, lod: s2.wallColor }; }
-  if (big > 170) { const s2 = styleFor(rng, 'industrial'); return { b: warehouse(rng, w, d, 6, s2), kind: 'barn', style: 4, lod: s2.wallColor }; }
+  if (dist === 'suburb' && big > 230 && ok(12, 9) && lean < 2.2) { const s2 = styleFor(rng, 'block'); return { b: block2020(rng, w, d, s2, { kind: 'walkup', floors: 2 + Math.floor(seed * 2) }), kind: 'block', style: 1, lod: s2.wallColor }; }
+  if (big > 230 || (big > 170 && lean > 2.2)) { const s2 = styleFor(rng, 'industrial'); return { b: warehouse(rng, w, d, 6, s2), kind: 'barn', style: 4, lod: s2.wallColor }; }
   return { b: house(rng, w, d, big > 85 && seed < 0.6 ? 2 : 1, st), kind: 'house', style: 0, lod: st.wallColor };
 }
 

@@ -164,7 +164,7 @@ export class SceneMgr {
       this.scene.traverse((o) => { const m = (o as THREE.Mesh).material as THREE.Material; if (m) m.needsUpdate = true; });
       this.setupCsm();
     } else if (this.sun) {
-      this.sun.intensity = 3.6;
+      this.sun.intensity = 3.0;
       // undo CSM completely: original shader hook, default program cache key, no CSM defines
       this.scene.traverse((o) => {
         const mats = (o as THREE.Mesh).material; if (!mats) return;

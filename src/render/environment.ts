@@ -5,7 +5,7 @@ import { RIVER_DEPTH } from '../world/terrain';
 import { SHADER_NOISE } from './terrainMesh';
 
 export const SUN_DIR = new THREE.Vector3(-0.45, 0.62, -0.35).normalize();
-export const FOG_COLOR = new THREE.Color(0xd2c9b4);
+export const FOG_COLOR = new THREE.Color(0xc8ccc8); // blue-white haze (2020 location shots), warmer toward the sun
 
 /**
  * Aerial perspective for every fogged material: exponential haze that thins with altitude (valleys and
@@ -107,7 +107,7 @@ export function makeSky(): THREE.Mesh {
   const geo = new THREE.SphereGeometry(9000, 32, 16);
   const mat = new THREE.ShaderMaterial({
     side: THREE.BackSide, depthWrite: false, fog: false,
-    uniforms: { uSun: { value: SUN_DIR }, uHorizon: { value: new THREE.Color(0xdcd3bd) }, uZenith: { value: new THREE.Color(0x4a7fbf) }, uGround: { value: new THREE.Color(0xa89c84) } },
+    uniforms: { uSun: { value: SUN_DIR }, uHorizon: { value: new THREE.Color(0xd2d6d4) }, uZenith: { value: new THREE.Color(0x5b8cc6) }, uGround: { value: new THREE.Color(0xa89c84) } },
     vertexShader: `varying vec3 vDir; void main(){ vDir = normalize(position); vec4 p = projectionMatrix * modelViewMatrix * vec4(position,1.0); gl_Position = p.xyww; }`,
     fragmentShader: `uniform vec3 uSun, uHorizon, uZenith, uGround; varying vec3 vDir;
       ${SHADER_NOISE}
@@ -132,9 +132,9 @@ export function makeSky(): THREE.Mesh {
 }
 
 export function makeLights(scene: THREE.Scene) {
-  const hemi = new THREE.HemisphereLight(0xc4d4e8, 0x86704f, 0.85);
+  const hemi = new THREE.HemisphereLight(0xc4d4e8, 0x86704f, 0.7);
   scene.add(hemi);
-  const sun = new THREE.DirectionalLight(0xffe6c6, 3.6);
+  const sun = new THREE.DirectionalLight(0xffe6c6, 3.0);
   sun.position.copy(SUN_DIR).multiplyScalar(200);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
