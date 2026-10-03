@@ -170,6 +170,8 @@ class Models {
    * Build every gun's HUD icon and baked loot mesh in idle time (a few per idle slot) so a kill-feed line,
    * loot card or new gun on the ground never stalls the game while it is drawn for the first time.
    */
+  /** icons still to draw (loading screen waits for 0) */
+  iconsPending() { return this.iconWant.length + this.iconPending.size; }
   warmIcons(ids: string[]) {
     for (const id of ids) if (this.hasGun(id)) for (const r of [0, 1, 3, 4, 2]) this.iconWant.push([id, r]);
     this.pumpIcons();

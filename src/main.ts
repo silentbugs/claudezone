@@ -20,17 +20,37 @@ const ui = document.getElementById('ui')!;
 const settings: Settings = loadSettings();
 
 async function boot() {
-  const loading = document.createElement('div'); loading.className = 'loading'; loading.textContent = 'BUILDING VERDANSK...'; ui.appendChild(loading);
+  // first launch: everything that would otherwise be built or compiled mid-match happens here, behind a progress bar
+  const boot = document.createElement('div'); boot.className = 'boot';
+  boot.innerHTML = '<div class="blogo">VERDANSK<span>BATTLE ROYALE · 2020</span></div><div class="bbar"><i></i></div><div class="bstep">Loading</div>';
+  ui.appendChild(boot);
+  const bar = boot.querySelector('.bbar i') as HTMLElement, stepEl = boot.querySelector('.bstep') as HTMLElement;
+  const step = async (k: number, label: string) => { bar.style.width = (k * 100).toFixed(1) + '%'; stepEl.textContent = label; await new Promise((r) => setTimeout(r, 16)); };
+  await step(0.02, 'Loading textures, models and the map');
   const sm = new SceneMgr(canvas);
   const [masks] = await Promise.all([loadMasksBrowser(), sm.loadPhotoMaterials(), models.load()]);
-  await new Promise((r) => setTimeout(r, 30));
+  await step(0.22, 'Building Verdansk');
   const world = generateWorld(masks, 1);
+  await step(0.42, 'Building meshes');
   sm.buildWorld(world);
   sm.ao = settings.ao; sm.drawDistance = settings.drawDistance; sm.setQuality(settings.quality); sm.setRenderScale(settings.renderScale); sm.setFoliage(settings.foliage); sm.renderer.toneMappingExposure = settings.brightness;
+  await step(0.55, 'Drawing the tac map');
   const tac = renderTacMap(world);
-  sm.prewarm(); // behind the loading screen: every mesh uploaded, every shader compiled
-  models.warmIcons(Object.keys(WEAPON)); // gun icons + loot meshes in idle time (they used to stall the game when first shown)
-  loading.remove();
+  await step(0.6, 'Compiling shaders');
+  sm.prewarm([], true); // every world mesh uploaded, every shader compiled
+  models.warmIcons(Object.keys(WEAPON));
+  await step(0.66, 'Bot navigation and a warm-up match');
+  {
+    // a hidden throwaway match: its nav grid is cached on the world, and drawing it compiles every match shader
+    const warmInput = new Input(document.createElement('canvas'));
+    const wm = new Match(sm, world, warmInput, tac, ui, settings, 7, 3, 'normal');
+    await wm.warmGraphics((k) => { bar.style.width = ((0.66 + k * 0.22) * 100).toFixed(1) + '%'; });
+    wm.dispose();
+  }
+  await step(0.9, 'Weapon icons');
+  for (let t = 0; t < 400 && models.iconsPending() > 0; t++) { await step(0.9 + 0.09 * (1 - Math.min(1, models.iconsPending() / 300)), `Weapon icons (${models.iconsPending()} left)`); await new Promise((r) => setTimeout(r, 50)); }
+  await step(1, 'Ready');
+  boot.remove();
   const input = new Input(canvas);
   let match: Match | null = null;
   let menuT = 0;

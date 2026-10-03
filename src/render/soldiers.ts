@@ -63,6 +63,8 @@ export class Soldiers {
     this.corpses.push({ s, t0: now });
   }
 
+  /** loading screen: create every slot now (one skinned clone each, the slow part) so none is built mid-fight */
+  warm() { if (!this.ready) return; while (this.slots.length < MAX) { const s = this.make(); s.root.visible = true; this.slots.push(s); } }
   get ready() { return models.gltf.has('soldier_swat'); }
 
   private make(): Slot {

@@ -234,3 +234,15 @@ test('UAVs stack: a second one sweeps faster, a third is an Advanced UAV; going 
   for (const e of s.events) if (e.t === 'uavEnd' && e.squad === p.squad) ended = true;
   assert.ok(ended && !s.squadUav.has(p.squad), 'offline event when it runs out');
 });
+
+test('a bot fighting with a knife keeps a valid aim and position (knives have no bullet speed)', () => {
+  const s: any = new Sim(world, 3, { humans: 1 }); s.time = 120;
+  for (const q of s.players) { q.phase = 6; q.alive = false; }
+  const bot = s.players[1], me = s.players[0];
+  for (const [p, dx] of [[bot, 0], [me, 6]] as const) { const x = 1500 + dx, z = 2500; Object.assign(p, { phase: 4, alive: true, x, z, y: world.col.groundAt(x, z, 300), vx: 0, vy: 0, vz: 0, health: 1e6 }); }
+  bot.bot = true; me.bot = false; bot.squad = 1; me.squad = 0;
+  bot.weapons = [{ id: 'knife', rarity: 0, mag: 1 }, null]; bot.cur = 0;
+  const b = s.brains[1]; b.target = 0; b.seenAt = s.time; b.engageStart = s.time; b.reactAt = 0;
+  for (let i = 0; i < 180; i++) { s.tick(1 / 60); s.events.length = 0; }
+  assert.ok(Number.isFinite(bot.x + bot.z + bot.yaw + bot.intent.yaw), 'still finite');
+});

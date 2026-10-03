@@ -400,7 +400,7 @@ function botFly(sim: Sim, b: BotBrain, p: Player, v: import('./vehicles').Vehicl
   void dt;
 }
 
-const lerpYaw = (a: number, b: number, t: number) => a + wrapAngle(b - a) * t;
+const lerpYaw = (a: number, b: number, t: number) => (Number.isFinite(b) ? a + wrapAngle(b - a) * t : a);
 
 function humanIn(sim: Sim, p: Player): boolean { for (const q of sim.players) if (q.squad === p.squad && !q.bot) return true; return false; }
 function canSee(sim: Sim, p: Player, q: Player): boolean {
@@ -500,7 +500,7 @@ export function botThink(sim: Sim, b: BotBrain, p: Player, dt: number, think: bo
     const aimY = ky + (q.phase === Phase.Downed || q.stance === Stance.Prone ? 0.3 : q.stance === Stance.Crouch ? 0.95 : 1.25);
     const ey = p.y + eyeHeight(p);
     // lead moving targets a little, plus a tracking error that shrinks while we keep sight
-    const tof = def ? dist / def.velocity : 0;
+    const tof = def && def.velocity > 0 ? dist / def.velocity : 0; // knives have no bullet speed (dividing by it put NaN in the aim, then the position)
     const ax = kx + (visible ? q.vx * tof : 0), az = kz + (visible ? q.vz * tof : 0);
     const wantYaw = Math.atan2(-(ax - p.x), -(az - p.z));
     const wantPitch = Math.atan2(aimY - ey, dist) + (def ? 0.5 * 9.8 * 0.55 * tof * tof / Math.max(1, dist) : 0);

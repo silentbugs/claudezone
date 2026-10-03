@@ -4,6 +4,7 @@ import type { Difficulty } from '../sim/bots';
 import { Sim } from '../sim/sim';
 import { Phase, Player, SimEvent, Stance } from '../sim/types';
 import { WEAPON, rarityMods } from '../data/weapons';
+import { models } from '../render/models';
 import { eyeHeight } from '../sim/movement';
 import { FixedStep } from '../core/loop';
 import { Input } from '../core/input';
@@ -90,6 +91,35 @@ export class Match {
     this.camYaw = this.me.yaw;
   }
 
+/**
+   * Build and draw every kind of object once so the GPU compiles every shader and uploads every mesh behind the
+   * loading screen (first launches used to hitch the first time a soldier, gun, vehicle or effect appeared). Yields
+   * between steps; onStep(fraction) drives the progress bar.
+   */
+  async warmGraphics(onStep: (k: number) => void) {
+    const yieldFrame = () => new Promise((r) => setTimeout(r, 0));
+    const me = this.me, sv = { x: me.x, y: me.y, z: me.z, phase: me.phase, alive: me.alive, weapons: me.weapons, cur: me.cur };
+    const ids = Object.keys(WEAPON);
+    // every gun model (soldier + loot) at every rarity look
+    for (let i = 0; i < ids.length; i++) { if (models.hasGun(ids[i])) for (const r of [0, 2, 4]) models.gun(ids[i], r); if (i % 8 === 0) { onStep(0.3 * i / ids.length); await yieldFrame(); } }
+    // every viewmodel gun, drawn once
+    Object.assign(me, { phase: Phase.Alive, alive: true });
+    const r = this.sm.renderer, rt = new THREE.WebGLRenderTarget(64, 64);
+    for (let i = 0; i < ids.length; i++) {
+      me.weapons = [{ id: ids[i], rarity: 2, mag: 10 }, null]; me.cur = 0;
+      this.vm.update(me, 1 / 60, 0, 0, 0, false);
+      r.setRenderTarget(rt); this.vm.render(r); r.setRenderTarget(null);
+      if (i % 6 === 0) { onStep(0.3 + 0.4 * i / ids.length); await yieldFrame(); }
+    }
+    rt.dispose();
+    Object.assign(me, sv);
+    // soldiers, vehicles, loot, effects, viewmodel: compile and upload with everything visible
+    (this.soldiers as any).warm?.();
+    onStep(0.8); await yieldFrame();
+    this.vehMeshes.update(this.sim.vehicles, 1, 0, this.sm.camera.position);
+    this.sm.prewarm([this.vm.scene], true);
+    onStep(1);
+  }
   dispose() {
     this.sm.scene.remove(this.chars.group); this.sm.scene.remove(this.soldiers.group); this.sm.scene.remove(this.ambient.group); if (this.trainMesh) this.sm.scene.remove(this.trainMesh.group); if (this.doorMesh) this.sm.scene.remove(this.doorMesh.group); this.sm.scene.remove(this.fx.group); this.sm.scene.remove(this.vehMeshes.group); this.sm.scene.remove(this.loot.group);
     this.hud.root.remove(); this.pauseEl?.remove(); this.fpsEl.remove(); this.closeSettings(); this.input.onUnlock = () => {};
