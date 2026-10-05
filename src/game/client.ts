@@ -58,6 +58,25 @@ export class Match {
   onEnd: (won: boolean, placement: number, me: Player) => void = () => {};
   private pauseEl: HTMLElement | null = null;
   private tpDist = 0;
+  /** third-person camera distance after collision, smoothed: pulls in fast when a wall gets close, eases back out */
+  private camFree = 1; private camHit = { t: 0, nx: 0, ny: 0, nz: 0, structure: -1, part: -1, mat: 0, terrain: false, water: false } as any;
+  private camCollide(px: number, py: number, pz: number, tx: number, ty: number, tz: number, dt: number): [number, number, number] {
+    const dx = tx - px, dy = ty - py, dz = tz - pz, L = Math.hypot(dx, dy, dz);
+    if (L < 0.01) return [tx, ty, tz];
+    const ux = dx / L, uy = dy / L, uz = dz / L;
+    // the camera is a ball ~0.4 m across: five rays (centre and four offsets) so it can't slip through doorways or
+    // gaps, stopping 0.35 m short of the nearest hit. Glass and foliage don't block the view
+    const sx = -uz, sz = ux, sl = Math.hypot(sx, sz) || 1; let tmin = L + 0.35;
+    for (const [ox, oy] of [[0, 0], [0.4, 0], [-0.4, 0], [0, 0.4], [0, -0.4]]) {
+      const ex = px + ux * L + (sx / sl) * ox, ey = py + uy * L + oy, ez = pz + uz * L + (sz / sl) * ox;
+      const rx = ex - px, ry = ey - py, rz = ez - pz, rl = Math.hypot(rx, ry, rz);
+      if (this.sim.world.col.raycast(px, py, pz, rx / rl, ry / rl, rz / rl, rl + 0.35, this.camHit, (m) => m === 5 || m === 12, false)) tmin = Math.min(tmin, this.camHit.t * (L / rl));
+    }
+    const want = tmin < L + 0.35 ? Math.max(0.25, (tmin - 0.35) / L) : 1;
+    this.camFree += (want - this.camFree) * (want < this.camFree ? Math.min(1, dt * 30) : Math.min(1, dt * 3));
+    const k = Math.min(this.camFree, want); // never behind the wall, even for a frame
+    return [px + dx * k, py + dy * k, pz + dz * k];
+  }
   private reloadCue: { at: number; bolt: number } | null = null;
   private surfCache = new Map<number, string>();
   private tpBlend = 0; private eye = 1.62; private eyeFor = -1; private roll = 0;
@@ -552,7 +571,7 @@ export class Match {
       const fx = x, fy = y + 1.62, fz = z;
       const tx = x + Math.sin(this.camYaw) * Math.cos(cp) * this.tpDist, ty = y + 1.6 - Math.sin(cp) * this.tpDist + 1.5, tz = z + Math.cos(this.camYaw) * Math.cos(cp) * this.tpDist;
       const k = this.tpBlend;
-      cam.position.set(fx + (tx - fx) * k, fy + (ty - fy) * k, fz + (tz - fz) * k);
+      { const [cx, cy, cz] = this.camCollide(fx, fy, fz, tx, ty, tz, dt); cam.position.set(fx + (cx - fx) * k, fy + (cy - fy) * k, fz + (cz - fz) * k); }
       // canopy opening tugs the view down and back up; steering banks the view smoothly
       if (phase === Phase.Chute && this.lastAirPhase === Phase.Freefall) this.tugT = 0.8;
       this.lastAirPhase = phase; this.tugT = Math.max(0, this.tugT - dt);
@@ -570,7 +589,7 @@ export class Match {
       const v = vehicleOf(sim, vp)!, d = VEHICLES[v.type];
       const dist = d.len * 1.4 + 5, cp = Math.max(-0.6, Math.min(0.9, this.camPitch));
       const vx = v.px + (v.x - v.px) * a, vy = v.py + (v.y - v.py) * a, vz = v.pz + (v.z - v.pz) * a;
-      cam.position.set(vx + Math.sin(this.camYaw) * Math.cos(cp) * dist, vy + d.hgt + 1.5 - Math.sin(cp) * dist, vz + Math.cos(this.camYaw) * Math.cos(cp) * dist);
+      { const px = vx, py = vy + d.hgt * 0.9, pz = vz; const [cx, cy, cz] = this.camCollide(px, py, pz, vx + Math.sin(this.camYaw) * Math.cos(cp) * dist, vy + d.hgt + 1.5 - Math.sin(cp) * dist, vz + Math.cos(this.camYaw) * Math.cos(cp) * dist, dt); cam.position.set(cx, cy, cz); }
       cam.lookAt(vx, vy + d.hgt * 0.8, vz);
       this.chars.hidden = -1;
       audio.loop(d.air ? 'heli' : 'vehicle', 0.35 + Math.min(0.35, v.speed / 60), d.air ? 0.8 + v.rotor * 0.3 : 0.7 + v.speed / 30, d.air ? 3000 : 1200);
