@@ -70,7 +70,11 @@ export class Builder {
         if (axis === 0) this.box(a + uu0, y0 + vv0, f, a + uu1, y0 + vv1, f + depth * out, Mat.Trim, { color: trim, noCollide: true });
         else this.box(f, y0 + vv0, a + uu0, f + depth * out, y0 + vv1, a + uu1, Mat.Trim, { color: trim, noCollide: true });
       };
-      if (o.v0 > 0.2) { add(u0 - 0.1, u1 + 0.1, o.v0 - 0.08, o.v0, 0.16); add(u0 - 0.06, u1 + 0.06, o.v1, o.v1 + 0.12, 0.06); }
+      if (o.v0 > 0.2) {
+        add(u0 - 0.1, u1 + 0.1, o.v0 - 0.08, o.v0, 0.16); add(u0 - 0.06, u1 + 0.06, o.v1, o.v1 + 0.12, 0.06); // sill, head
+        add(u0 - 0.08, u0, o.v0, o.v1, 0.05); add(u1, u1 + 0.08, o.v0, o.v1, 0.05); // jambs: a full frame round every window
+        if (o.glass && u1 - u0 > 0.9) add((u0 + u1) / 2 - 0.025, (u0 + u1) / 2 + 0.025, o.v0, o.v1, 0.035); // mullion on glazed sashes
+      }
       else { add(u0 - 0.1, u0, 0, o.v1 + 0.1, 0.06); add(u1, u1 + 0.1, 0, o.v1 + 0.1, 0.06); add(u0 - 0.1, u1 + 0.1, o.v1, o.v1 + 0.12, 0.06); }
       void e;
     }
@@ -418,8 +422,22 @@ export function shop(rng: Rng, w: number, d: number, st: Style): Builder {
   for (let lx = -hw + 2.5; lx <= hw - 2.5; lx += 4) b.light(lx, h + 0.08 - 0.02 - 0.3, 0);
   b.slab(-hw - 0.3, -hd - 0.3, hw + 0.3, hd + 0.3, h + 0.1, 0.3, st.roof, [], st.roofColor);
   b.ladder(hw - 1.2, hd + 0.125, 0, 1, 0.1, h + 0.1); // roof ladder at the back
-  // signage band
-  b.box(-hw - 0.05, h - 0.6, -hd - 0.35, hw + 0.05, h + 0.4, -hd - 0.25, Mat.Trim, { color: rng.pick([0xb03a2e, 0x2e5eaa, 0xd8a31a, 0x2f8a4a]), noCollide: true });
+  // 2020 shopfront: a coloured fascia with a pale sign board and blocky lettering, a striped awning over the windows,
+  // AC units on the side wall and a drainpipe
+  const brand = rng.pick([0xb03a2e, 0x2e5eaa, 0xd8a31a, 0x2f8a4a, 0x7a2e6a, 0xc8642a]);
+  b.box(-hw - 0.05, h - 0.6, -hd - 0.35, hw + 0.05, h + 0.4, -hd - 0.25, Mat.Trim, { color: brand, noCollide: true });
+  const sw = Math.min(w * 0.6, 9), letters = Math.max(3, Math.round(sw / 0.9));
+  b.box(-sw / 2, h - 0.45, -hd - 0.4, sw / 2, h + 0.25, -hd - 0.35, Mat.Trim, { color: 0xeeeae0, noCollide: true });
+  for (let i = 0; i < letters; i++) { const lx = -sw / 2 + (i + 0.5) * (sw / letters), lw = (sw / letters) * (0.45 + rng.next() * 0.3); if (rng.chance(0.12)) continue; b.box(lx - lw / 2, h - 0.33, -hd - 0.43, lx + lw / 2, h + 0.13, -hd - 0.4, Mat.Trim, { color: brand, noCollide: true }); }
+  // awning: sloped canvas over each window run, alternating stripes
+  for (const [u0, u1] of [[0.8, w / 2 - 1], [w / 2 + 1, w - 0.8]] as const) {
+    if (u1 - u0 < 1.5) continue;
+    const n = Math.max(2, Math.round((u1 - u0) / 0.6)), awnC = rng.pick([0x2f6a4a, 0xa83a2a, 0x2e4e8a, 0xc8a02a]);
+    for (let i = 0; i < n; i++) { const x0 = -hw + u0 + (i * (u1 - u0)) / n, x1 = -hw + u0 + ((i + 1) * (u1 - u0)) / n; b.box(x0, 2.75, -hd - 1.1, x1, 3.0, -hd - 0.12, Mat.Trim, { color: i % 2 ? 0xe8e2d4 : awnC, noCollide: true }); }
+    b.box(-hw + u0, 2.6, -hd - 1.12, -hw + u1, 2.78, -hd - 1.05, Mat.Trim, { color: awnC, noCollide: true }); // valance
+  }
+  for (let i = 0; i < Math.min(3, Math.floor(d / 4)); i++) b.box(hw + 0.12, 1.6 + (i % 2) * 0.9, -hd + 2 + i * 3, hw + 0.75, 2.3 + (i % 2) * 0.9, -hd + 2.9 + i * 3, Mat.Metal, { color: 0xa8acae, noCollide: true }); // AC units
+  b.box(-hw - 0.18, 0.1, hd - 0.4, -hw - 0.06, h + 0.3, hd - 0.28, Mat.Metal, { color: 0x6a6e70, noCollide: true }); // drainpipe
   b.addLoot(-hw + 1.2, 0.1, hd - 1.2); b.addLoot(hw - 1.2, 0.1, 0);
   return b;
 }

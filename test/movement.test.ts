@@ -250,7 +250,7 @@ test('glass: jumping at a shop window smashes it and vaults out; a bullet smashe
   const shops = world.col.structures.filter((q) => q.kind === 'shop');
   let done = false;
   for (const s of shops.slice(0, 12)) {
-    const gi = s.parts.findIndex((q) => q.mat === 5 && q.z1 - q.z0 < 0.5 && q.x1 - q.x0 > 1 && q.z0 < s.bz0 + 0.8);
+    const gi = s.parts.findIndex((q) => q.mat === 5 && q.z1 - q.z0 < 0.5 && q.x1 - q.x0 > 1 && q.z0 < s.bz0 + 2.0); // (bz0 includes the awning)
     if (gi < 0) continue;
     const g = s.parts[gi], p: any = freshPlayer(sim);
     const [x, z] = toWorld(s, (g.x0 + g.x1) / 2, g.z1 + 0.5);

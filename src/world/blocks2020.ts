@@ -42,7 +42,10 @@ export function block2020(rng: Rng, w: number, d: number, st: Style, o: BlockOpt
   const lift = o.kind !== 'walkup' && (F >= 5 || o.kind === 'tower');
   const Lh = 1.3, L = Math.max(lift ? 3.8 : 1.8, d - Lh - 6.2);
   const z0 = -hd + T / 2, z1 = hd - T / 2;
-  const stairsTo = o.kind === 'tower' ? Math.min(2, F) : F; // towers: stairs stop at 3F (two flights up)
+  // most small walk-ups have a pitched roof (rusty red, green or slate corrugated metal, no roof access) as on the
+  // 2020 Promenade; the rest are flat with a roof hut
+  const pitched = o.kind === 'walkup' && F >= 2 && !glassy && rng.chance(0.65);
+  const stairsTo = o.kind === 'tower' ? Math.min(2, F) : pitched ? F - 1 : F; // towers: stairs stop at 3F (two flights up)
   const LZ0 = z0 + 1.45, LZ1 = z0 + 3.6, LZC = (LZ0 + LZ1) / 2; // lift shaft span along z (opening centred on it)
   // plinth / ground slab
   b.box(-hw - 0.1, -1.6, -hd - 0.1, hw + 0.1, E, hd + 0.1, Mat.Concrete, { color: 0x7d7a76 });
@@ -69,6 +72,13 @@ export function block2020(rng: Rng, w: number, d: number, st: Style, o: BlockOpt
           const c = fa + (fb - fa) * ((k + 0.5) / n);
           const win = { v0: 0.9, v1: 2.3, glass: glassy || !accessible };
           front.push(op(-hw, c - 0.7, c + 0.7, win.v0, win.v1, { glass: win.glass }));
+          // Soviet panel-block balconies on alternate front windows (slab, solid parapet, rails)
+          if (o.kind === 'panel' && f >= 1 && !glassy && (k + f) % 2 === 0) {
+            const by = lvl(f) - 0.05, bc = 0xa8a49c;
+            b.box(c - 1.0, by - 0.15, -hd - 1.05, c + 1.0, by, -hd - 0.15, Mat.Concrete, { color: bc });
+            b.box(c - 1.0, by, -hd - 1.08, c + 1.0, by + 0.95, -hd - 0.98, Mat.Concrete, { color: st.wallColor });
+            for (const sx of [-1, 1]) b.box(c + sx * 1.0 - 0.04, by, -hd - 1.05, c + sx * 1.0 + 0.04, by + 0.95, -hd - 0.15, Mat.Metal, { color: 0x4a4a48, noCollide: true });
+          }
           back.push(op(-hw, c - 0.7, c + 0.7, win.v0, win.v1, { glass: win.glass }));
         }
       }
@@ -166,18 +176,27 @@ export function block2020(rng: Rng, w: number, d: number, st: Style, o: BlockOpt
     for (const s of secs) if (s.open) b.slab(s.cx - secW / 2 + T / 2, -hd + T / 2, s.cx + secW / 2 - T / 2, hd - T / 2, lvl(f), 0.25, Mat.Concrete, holes[f].filter((hh) => hh.x1 > s.cx - secW / 2 && hh.x0 < s.cx + secW / 2).map((hh) => [hh.x0, hh.z0, hh.x1, hh.z1] as [number, number, number, number]));
   }
   b.slab(-hw, -hd, hw, hd, top, 0.3, st.roof, holes[F].map((hh) => [hh.x0, hh.z0, hh.x1, hh.z1] as [number, number, number, number]), st.roofColor);
-  // parapet + slab-edge bands + roof clutter
+  // pitched: a gable roof with eaves (collision on the slopes, like a house); flat: parapet
   const par = 0.8;
-  b.wall(0, -hw, hw, -hd + 0.15, top, par, 0.3, st.wall, [], st.wallColor);
-  b.wall(0, -hw, hw, hd - 0.15, top, par, 0.3, st.wall, [], st.wallColor);
-  b.wall(1, -hd, hd, -hw + 0.15, top, par, 0.3, st.wall, [], st.wallColor);
-  b.wall(1, -hd, hd, hw - 0.15, top, par, 0.3, st.wall, [], st.wallColor);
+  if (pitched) {
+    const ridge = Math.min(3.2, d * 0.32), rc = rng.pick([0x8a3e2c, 0x7a3a2c, 0x5e6b4a, 0x4c5257, 0x8a5236]);
+    b.box(-hw - 0.45, top, -hd - 0.45, hw + 0.45, top + ridge, hd + 0.45, Mat.Metal, { shape: 'gable', noCollide: true, color: rc });
+    b.ramp(-hw - 0.45, top, -hd - 0.45, hw + 0.45, top + ridge, 0, 1, 1, Mat.Roof);
+    b.ramp(-hw - 0.45, top, 0, hw + 0.45, top + ridge, hd + 0.45, 1, -1, Mat.Roof);
+    b.box(-hw - 0.5, top - 0.18, -hd - 0.5, hw + 0.5, top, hd + 0.5, Mat.Trim, { color: 0x6a5a4a, noCollide: true }); // eaves fascia
+    for (const cx of [-hw * 0.5, hw * 0.45]) b.box(cx - 0.35, top + ridge * 0.45, -0.35 + d * 0.1, cx + 0.35, top + ridge + 0.8, 0.35 + d * 0.1, Mat.Brick, { color: 0x8a6a5a }); // chimneys
+  } else {
+    b.wall(0, -hw, hw, -hd + 0.15, top, par, 0.3, st.wall, [], st.wallColor);
+    b.wall(0, -hw, hw, hd - 0.15, top, par, 0.3, st.wall, [], st.wallColor);
+    b.wall(1, -hd, hd, -hw + 0.15, top, par, 0.3, st.wall, [], st.wallColor);
+    b.wall(1, -hd, hd, hw - 0.15, top, par, 0.3, st.wall, [], st.wallColor);
+  }
   for (let f = 1; f <= F; f++) {
     const y = lvl(f), col = glassy ? 0x8a8e92 : 0xb8b4aa;
     b.box(-hw - 0.08, y - 0.22, -hd - 0.08, hw + 0.08, y + 0.02, -hd + 0.02, Mat.Trim, { color: col, noCollide: true });
     b.box(-hw - 0.08, y - 0.22, hd - 0.02, hw + 0.08, y + 0.02, hd + 0.08, Mat.Trim, { color: col, noCollide: true });
   }
-  for (let i = 0; i < Math.floor(w / 10) + 1; i++) {
+  for (let i = 0; i < (pitched ? 0 : Math.floor(w / 10) + 1); i++) {
     const cx = rng.range(-hw + 2, hw - 2), cz = rng.range(-hd + 1.5, hd - 1.5);
     if (secs.some((s) => Math.abs(cx - s.cx) < BAY + 1)) continue;
     b.block(cx, cz, 1.8, 1.2, top, top + 1.2, Mat.Metal, { color: 0xa0a6aa });
