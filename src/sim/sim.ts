@@ -63,6 +63,8 @@ export class Sim {
   fires: { x: number; y: number; z: number; r: number; t: number; owner: number }[] = [];
   smokes: { x: number; y: number; z: number; t: number }[] = [];
   pending: Explosion[] = [];
+  /** squads already announced as wiped */
+  wiped = new Set<number>();
   /** incoming air support shown on every map until it lands: precision airstrikes are a line, cluster strikes an area */
   strikes: { x: number; z: number; yaw: number; len: number; wid: number; kind: 'airstrike' | 'cluster'; squad: number; until: number }[] = [];
   events: SimEvent[] = [];
@@ -608,6 +610,7 @@ export class Sim {
   }
 
   kill(v: Player, attacker: number, weapon: string, head: boolean, finish: boolean) {
+    if (attacker >= 0 && attacker !== v.id) v.killedBy = attacker;
     if (v.turret >= 0) this.unmanTurret(v);
     if ((v as any).vehicle !== undefined) exitVehicle(this, v);
     if (this.inWarmup) { this.emit({ t: 'kill', victim: v.id, attacker, w: weapon, head, finish, x: v.x, y: v.y, z: v.z, yaw: v.yaw, lying: v.phase === Phase.Downed || v.stance === Stance.Prone }); if (attacker >= 0) this.players[attacker].kills++; v.phase = Phase.Dead; (v as any).respawnAt = this.time + 3; return; }
@@ -634,7 +637,6 @@ export class Sim {
     // squad wipe: everyone left downed dies
     if (!this.squadHasStanding(v.squad, -1)) {
       for (const q of this.players) if (q.squad === v.squad && q.phase === Phase.Downed) this.kill(q, q.killedBy, 'bleed', false, true);
-      if (!this.players.some((q) => q.squad === v.squad && (q.phase === Phase.GulagWait || q.phase === Phase.Gulag))) this.emit({ t: 'squadwipe', squad: v.squad });
     }
     this.aliveCount = this.players.filter((q) => q.alive).length;
   }
@@ -654,6 +656,17 @@ export class Sim {
     for (const e of this.pending) { e.delay -= dt; if (e.delay <= 0) this.explode(e.x, e.y, e.z, e.r, e.dmg, e.owner, e.kind); }
     this.pending = this.pending.filter((e) => e.delay > 0);
     if (this.strikes.length) this.strikes = this.strikes.filter((s2) => s2.until > this.time);
+    // team wiped (2020 kill feed): the moment a squad has nobody left alive - whether the last one fell in the field,
+    // bled out or lost in the Gulag - credited to whoever killed that last player. Not in Solos.
+    if (this.squadSize > 1 && !this.inWarmup) {
+      for (const p of this.players) {
+        if (this.wiped.has(p.squad) || p.alive) continue;
+        if (this.players.some((q) => q.squad === p.squad && q.alive)) continue;
+        this.wiped.add(p.squad);
+        const last = this.players.filter((q) => q.squad === p.squad).sort((a, b) => b.deadAt - a.deadAt)[0];
+        this.emit({ t: 'squadwipe', squad: p.squad, by: last?.killedBy ?? -1 });
+      }
+    }
     // UAVs going offline (2020: a falling tone and "UAV offline")
     for (const [sq, u] of this.squadUav) if (u.until <= this.time) { this.squadUav.delete(sq); this.emit({ t: 'uavEnd', squad: sq }); }
   }
@@ -835,7 +848,7 @@ export class Sim {
         else { f.flagOwner = -1; f.flagT = 0; }
         if (f.t > GULAG.overtime + 30) { // nobody took the flag: both lose
           g.fights.splice(g.fights.indexOf(f), 1);
-          for (const p of [A, B]) { p.phase = Phase.Dead; p.alive = false; this.emit({ t: 'gulag', p: p.id, msg: 'lose' }); }
+          for (const p of [A, B]) { p.phase = Phase.Dead; p.alive = false; p.deadAt = this.time; this.emit({ t: 'gulag', p: p.id, msg: 'lose' }); }
           this.aliveCount = this.players.filter((q) => q.alive).length;
         }
       }
@@ -864,7 +877,7 @@ export class Sim {
     g.fights.splice(g.fights.indexOf(f), 1);
     const winId = loserId === f.a ? f.b : f.a;
     const loser = this.players[loserId], win = this.players[winId];
-    loser.phase = Phase.Dead; loser.alive = false; loser.weapons = [null, null];
+    loser.phase = Phase.Dead; loser.alive = false; loser.weapons = [null, null]; loser.deadAt = this.time;
     this.emit({ t: 'gulag', p: loserId, msg: 'lose' });
     // a moment to take the win in (held in place, screen fades) before the redeploy
     if (win) { this.emit({ t: 'gulag', p: winId, msg: 'win' }); (win as any).frozenUntil = this.time + 2.5; (win as any).redeployAt = this.time + 2.5; }

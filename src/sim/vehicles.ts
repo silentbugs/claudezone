@@ -182,12 +182,12 @@ function heli(sim: Sim, v: Vehicle, d: VehicleDef, driver: Player | null, dt: nu
     v.vy += (tvy - v.vy) * Math.min(1, dt * 2);
   }
   if (agl > 320 && v.vy > 0) v.vy = 0;
-  // the sticks fly it, the mouse / right stick only looks around: A/D (left stick x) turn, W/S (left stick y) fly
-  // forward / back, the altitude keys climb and descend
+  // W/S fly forward / back, A/D strafe, the altitude keys climb and descend. Hovering, the mouse only looks around;
+  // flying forward, the nose swings round to where you're looking (A/D never turn it - that's for ground vehicles)
   const fwd = it ? it.mz : 0, side = it ? it.mx : 0;
-  if (driver && v.rotor > 0.6 && agl > 1) v.yaw -= side * d.turn * dt;
+  if (driver && v.rotor > 0.6 && agl > 1 && fwd > 0.1) v.yaw += wrapAngle(driver.yaw - v.yaw) * Math.min(1, dt * d.turn * fwd);
   const c = Math.cos(v.yaw), s = Math.sin(v.yaw);
-  const tx = -s * fwd * d.maxSpeed * (agl > 2 ? 1 : 0), tz = -c * fwd * d.maxSpeed * (agl > 2 ? 1 : 0);
+  const tx = (-s * fwd + c * side * 0.7) * d.maxSpeed * (agl > 2 ? 1 : 0), tz = (-c * fwd - s * side * 0.7) * d.maxSpeed * (agl > 2 ? 1 : 0);
   if (!abandoned) { const k = Math.min(1, dt * d.accel / 7); v.vx += (tx - v.vx) * k; v.vz += (tz - v.vz) * k; } else { v.vx *= Math.exp(-dt * 0.15); v.vz *= Math.exp(-dt * 0.15); }
   if (!abandoned) v.pitch += (-fwd * 0.25 - v.pitch) * Math.min(1, dt * 3); v.roll += (-side * 0.3 - v.roll) * Math.min(1, dt * 3);
   v.x += v.vx * dt; v.y += v.vy * dt; v.z += v.vz * dt;

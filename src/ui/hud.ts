@@ -270,7 +270,12 @@ export class Hud {
       case 'uavEnd': if (e.squad === me.squad) this.showNote('UAV offline'); break;
       case 'cuav': this.showNote(e.squad === me.squad ? 'Counter UAV online' : 'Enemy Counter UAV deployed'); break;
       case 'pickup': if (e.p === this.localId) this.showNote(e.label); break;
-      case 'squadwipe': if (e.squad !== me.squad) this.feedLine(`<span style="color:#ff5a4a">Squad eliminated</span>`); break;
+      case 'squadwipe': {
+        if (e.squad === me.squad) break; // you get the full-screen result instead
+        const k = e.by >= 0 ? this.sim.players[e.by] : null, ours = !!k && k.squad === me.squad;
+        this.feedLine(`${k ? `<span style="color:${ours ? '#f6c343' : '#ff5a4a'}">${k.name}</span> ` : ''}<b style="color:${ours ? '#f6c343' : '#fff'};letter-spacing:0.06em">TEAM WIPED</b>`);
+        break;
+      }
       case 'flash': if (e.p === this.localId) this.flash.style.opacity = String(Math.min(1, 0.6 + e.s)); break;
     }
   }

@@ -246,3 +246,17 @@ test('a bot fighting with a knife keeps a valid aim and position (knives have no
   for (let i = 0; i < 180; i++) { s.tick(1 / 60); s.events.length = 0; }
   assert.ok(Number.isFinite(bot.x + bot.z + bot.yaw + bot.intent.yaw), 'still finite');
 });
+
+test('TEAM WIPED goes to the kill feed once per squad (credited to the last kill); never in Solos', () => {
+  for (const size of [3, 1]) {
+    const s: any = new Sim(world, 5, { humans: 0, squadSize: size }); s.time = 200; s.warmup = 0; s.gulag.closed = true;
+    const victims = s.players.filter((q: any) => q.squad === 4);
+    for (const q of [...victims, s.players[0]]) Object.assign(q, { phase: 4, alive: true, gulagUsed: true });
+    let wipes = 0, by = -2;
+    for (const v of victims) { s.kill(v, 0, 'm4', false, true); }
+    for (let i = 0; i < 3; i++) { s.tick(1 / 60); for (const e of s.events) if (e.t === 'squadwipe' && e.squad === 4) { wipes++; by = e.by; } s.events.length = 0; }
+    console.log('squad size', size, 'wipe lines', wipes, 'credited to', by);
+    assert.equal(wipes, size > 1 ? 1 : 0);
+    if (size > 1) assert.equal(by, 0);
+  }
+});

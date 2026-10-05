@@ -391,8 +391,9 @@ function botFly(sim: Sim, b: BotBrain, p: Player, v: import('./vehicles').Vehicl
   if (v.health < VEHICLES[v.type].health * 0.3 && agl > 30) { exitVehicle(sim, p); return; } // burning: jump and pull the chute
   if (dist > 90) {
     it.up = agl < 60; it.down = agl > 95;
-    it.mx = clamp(-err * 2, -1, 1);
-    it.mz = agl > 20 ? (Math.abs(err) < 0.5 ? 1 : 0.15) : 0;
+    // look where we're going; flying forward swings the nose round to the view
+    it.yaw = Math.atan2(-dx, -dz); it.mx = 0;
+    it.mz = agl > 20 ? (Math.abs(err) < 0.5 ? 1 : 0.35) : 0;
   } else {
     it.mx = 0; it.mz = dist > 25 ? 0.3 : 0; it.down = agl > 1.2;
     if (agl < 2.5 && v.speed < 6) { exitVehicle(sim, p); b.goal = 'idle'; }
