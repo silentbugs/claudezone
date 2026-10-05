@@ -9,6 +9,7 @@ import { clone as skClone } from 'three/addons/utils/SkeletonUtils.js';
 import { Phase, Player, Stance } from '../sim/types';
 import { WEAPON } from '../data/weapons';
 import { models } from './models';
+import { DOWNED } from '../sim/config';
 
 const MAX = 12, RANGE = 60;
 const SCALE = 0.94; // model is 1.82 m; our soldiers are ~1.72 m
@@ -21,7 +22,7 @@ interface Slot {
   actions: Map<string, THREE.AnimationAction>; cur: string; pid: number;
   bones: Record<string, THREE.Bone>; mats: THREE.MeshStandardMaterial[][];
   gun: THREE.Group; gunKey: string; grip: THREE.Vector3; guard: THREE.Vector3; pistol: boolean;
-  pitch: number; used: boolean; tilt: THREE.Group; proneK: number; downK?: number;
+  pitch: number; used: boolean; tilt: THREE.Group; proneK: number; downK?: number; revK?: number; inj?: THREE.Group;
 }
 
 const v1 = new THREE.Vector3(), v2 = new THREE.Vector3(), v3 = new THREE.Vector3(), v4 = new THREE.Vector3();
@@ -148,6 +149,30 @@ export class Soldiers {
     s.cur = name;
   }
 
+  /** self-revive in third person: right hand brought to the right thigh holding the injector, a stab at the start */
+  private injectPose(s: Slot, p: Player) {
+    const ul = s.bones.UpperLegR, ll = s.bones.LowerLegR, hip = s.bones.Hips;
+    if (!ul || !ll) return;
+    if (!s.inj) {
+      const g = new THREE.Group(), m = (geo: THREE.BufferGeometry, c: number) => new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color: c, roughness: 0.6 }));
+      g.add(m(new THREE.CylinderGeometry(0.02, 0.02, 0.16, 8).translate(0, 0.08, 0), 0x4f5a3a), m(new THREE.CylinderGeometry(0.021, 0.021, 0.025, 8).translate(0, 0.05, 0), 0xd8b02a),
+        m(new THREE.CylinderGeometry(0.014, 0.016, 0.035, 8).translate(0, 0.175, 0), 0xc84a1e));
+      s.inj = g; this.group.add(g);
+    }
+    const u = Math.min(1, p.reviveT / DOWNED.reviveTime);
+    // a point on the outer front of the thigh, a third of the way to the knee; the hand rises before the stab
+    const a = ul.getWorldPosition(v1), b = ll.getWorldPosition(v2), mid = v3.copy(a).lerp(b, 0.4);
+    const right = v4.set(1, 0, 0).applyQuaternion(s.root.quaternion);
+    const raise = u < 0.33 ? Math.sin(Math.min(1, u / 0.3) * Math.PI / 2) * 0.22 : u > 0.75 ? 0.15 * Math.min(1, (u - 0.75) / 0.1) : 0;
+    const tgt = mid.addScaledVector(right, 0.07).add(new THREE.Vector3(0, 0.1 + raise, 0));
+    const pole = poleOf(s.root, 0.8, new THREE.Vector3(0, -0.3, 0));
+    ik(s.bones.UpperArmR, s.bones.LowerArmR, s.bones.WristR, tgt, pole);
+    if (u < 0.82) {
+      const w = (s.bones.WristR ?? s.bones.LowerArmR!).getWorldPosition(new THREE.Vector3());
+      s.inj.visible = true; s.inj.position.copy(w).y -= 0.16; s.inj.rotation.set(0, s.root.rotation.y, 0.15);
+    }
+    void hip;
+  }
   private pose(s: Slot, p: Player, alpha: number, dt: number) {
     const x = p.px + (p.x - p.px) * alpha, y = p.py + (p.y - p.py) * alpha, z = p.pz + (p.z - p.pz) * alpha;
     const yaw = p.pyaw + wrap(p.yaw - p.pyaw);
@@ -164,7 +189,11 @@ export class Soldiers {
     const pk = s.proneK;
     // downed: rolled half onto the side, curled up
     s.downK = (s.downK ?? 0) + ((downed ? 1 : 0) - (s.downK ?? 0)) * Math.min(1, dt * 5);
-    s.tilt.rotation.set(-Math.PI / 2 * pk, 0, 0.9 * s.downK, 'XYZ'); s.tilt.position.set(0, (0.2 + 0.05 * s.downK) * pk, 0.85 * pk);
+    // self-revive: up off the ground into a kneel while the injector goes into the thigh
+    const selfRev = downed && p.reviveBy === p.id;
+    s.revK = (s.revK ?? 0) + ((selfRev ? 1 : 0) - (s.revK ?? 0)) * Math.min(1, dt * 2.5);
+    const lie = pk * (1 - s.revK);
+    s.tilt.rotation.set(-Math.PI / 2 * lie, 0, 0.9 * s.downK * (1 - s.revK), 'XYZ'); s.tilt.position.set(0, (0.2 + 0.05 * s.downK) * lie, 0.85 * lie);
     let clip = 'Idle';
     if (inVeh) clip = 'Driving';
     else if (downed) clip = 'Crouch_Idle';
@@ -198,6 +227,8 @@ export class Soldiers {
     if (chest && !inVeh && pk < 0.5) rotateWorld(chest, right, s.pitch * 0.45);
     // prone: up on the elbows - chest propped up and the head raised to look ahead (lying flat buried the face)
     if (chest && !inVeh && pk > 0.01 && !downed) { rotateWorld(chest, right, (0.55 + s.pitch * 0.25) * pk); const head = s.bones.Head ?? s.bones.Neck; if (head) rotateWorld(head, right, 0.75 * pk); }
+    if (s.inj) s.inj.visible = false;
+    if (selfRev && s.revK > 0.35) this.injectPose(s, p);
     if (!armed) { s.gun.visible = false; return; }
     const key = `${w!.id}:${w!.rarity}`;
     if (key !== s.gunKey) {

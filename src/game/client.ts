@@ -6,6 +6,7 @@ import { Phase, Player, SimEvent, Stance } from '../sim/types';
 import { WEAPON, rarityMods } from '../data/weapons';
 import { models } from '../render/models';
 import { eyeHeight } from '../sim/movement';
+import { DOWNED } from '../sim/config';
 import { FixedStep } from '../core/loop';
 import { Input } from '../core/input';
 import { SceneMgr } from '../render/scene';
@@ -14,7 +15,7 @@ import { Soldiers } from '../render/soldiers';
 import { Ambient } from '../render/ambient';
 import { TrainMeshes } from '../render/trainMesh';
 import { DoorMeshes } from '../render/doorMesh';
-import { ViewModel } from '../render/viewmodel';
+import { ViewModel, reviveLook } from '../render/viewmodel';
 import { Effects } from '../render/effects';
 import { VehicleMeshes } from '../render/vehicles';
 import { LootMeshes } from '../render/loot';
@@ -455,7 +456,7 @@ export class Match {
         else if (eq) this.soldiers.oneShot(e.p, 'Throw', 0.8);
         break;
       }
-      case 'stim': if (e.p === this.viewId()) this.vm.useItem('stim'); else this.soldiers.oneShot(e.p, 'Consume', 0.9); break;
+      case 'stim': if (e.p === this.viewId()) { this.vm.useItem('stim'); setTimeout(() => audio.play('stimJab', { ui: true, vol: 0.7 }), 300); } else this.soldiers.oneShot(e.p, 'Consume', 0.9); break;
       case 'melee': if (e.p === 0) audio.play('melee', { vol: 0.6 }); break;
       case 'gulag': if (e.p === this.me.id && e.msg === 'win') this.fadeTo(1, 1.2, 1.3); break;
       case 'redeploy': if (e.p === this.me.id) { this.fadeK = 1; this.fadeTo(0, 0.9, 0); } break;
@@ -491,6 +492,7 @@ export class Match {
   }
   private hitTmp = { t: 0, nx: 0, ny: 0, nz: 0, structure: -1, part: -1, mat: 0 as any, terrain: false, water: false };
 
+  private revP = 0; private revR = 0; private revU = -1;
   private viewId() { return this.me.alive || this.me.phase === Phase.Downed ? 0 : this.spectate >= 0 ? this.spectate : 0; }
 
   /** Post-death sequence (2020 feel): ~1.4 s looking at your killer, a 5 s first-person killcam from their eyes, fades between. */
@@ -602,7 +604,9 @@ export class Match {
       audio.loop('wind', 0); audio.loop('engine', 0); audio.loop('heli', 0); audio.loop('vehicle', 0);
     } else {
       // first person: eye height eases between stances (prone is slower), slides tilt the view
-      const target = eyeHeight(vp) - (vp.slideT > 0 ? 0.15 : 0);
+      // self-revive: sit up, look down at the thigh for the jab, back up as you get to your feet
+      const rv = vp === me && me.phase === Phase.Downed && me.reviveBy === me.id ? reviveLook(Math.min(1, me.reviveT / DOWNED.reviveTime)) : null;
+      const target = eyeHeight(vp) - (vp.slideT > 0 ? 0.15 : 0) + (rv ? rv.rise : 0);
       if (this.eyeFor !== vp.id || Math.abs(target - this.eye) > 2) { this.eye = target; this.eyeFor = vp.id; }
       const rate = vp.stance === Stance.Prone || this.eye < 0.9 ? 5.5 : 11;
       this.eye += (target - this.eye) * (1 - Math.exp(-dt * rate));
@@ -611,7 +615,8 @@ export class Match {
       // mantle: the head dips toward the ledge and rolls slightly as you haul yourself over
       let mp = 0, mr = 0;
       if (vp === me && meR.mantleT > 0) { const T = (me as any).mantleDur ?? 0.5, u = Math.min(1, 1 - meR.mantleT / T), w = Math.sin(Math.PI * u); mp = -0.11 * w; mr = 0.035 * w * ((me as any).vaulting ? -1 : 1); }
-      cam.rotation.set(pitch + mp + this.flinchP, yaw + this.flinchY, this.roll + mr + this.flinchR, 'YXZ');
+      this.revP += ((rv ? rv.pitch : 0) - this.revP) * (1 - Math.exp(-dt * 12)); this.revR += ((rv ? rv.roll : 0) - this.revR) * (1 - Math.exp(-dt * 12));
+      cam.rotation.set(pitch + mp + this.flinchP + this.revP, yaw + this.flinchY, this.roll + mr + this.flinchR + this.revR, 'YXZ');
       if (vp.slideT > 0) fov += 4;
       if (def && me.ads > 0 && (this.settings.adsFovAffected || def.scope)) fov = fov / (1 + (this.zoomNow - 1) * meR.ads);
       if (me.tacSprint > 0) fov += 6;
@@ -674,6 +679,12 @@ export class Match {
       const who = this.postMode === 'replay' ? sim.players[this.post!.killer] : vp;
       if (who.weapons[who.cur]) { this.vm.simTime = sim.time; this.vm.update(who, dt, 0, 0, Math.hypot(who.vx, who.vz), who.sprinting); this.vm.render(this.sm.renderer); }
     }
+    { const rev = this.spectate < 0 && !this.debugCam && !this.postMode && me.phase === Phase.Downed && me.reviveBy === me.id;
+      const u = rev ? Math.min(1, me.reviveT / DOWNED.reviveTime) : -1;
+      if (u >= 0.33 && this.revU < 0.33) audio.play('stimJab', { ui: true, vol: 0.8 });
+      this.revU = u;
+      this.vm.simTime = sim.time; this.vm.updateRevive(rev ? u : null);
+      if (rev) this.vm.render(this.sm.renderer); }
     if (fp && this.spectate < 0 && !this.debugCam && !this.postMode) {
       this.vm.simTime = sim.time;
       // recon capture music: thud + "ta-ta-ta, ta-ta-ta" bars while your squad holds the zone (in or out of a vehicle),

@@ -392,7 +392,7 @@ export class Hud {
     this.updateCard(me);
     let hold = '', progTxt = '', progV = -1, ctx = '';
     if (me.phase === Phase.Downed) {
-      hold = me.selfRevive ? `Hold ${this.k('interact')} to Self-Revive` : `Bleeding out — ${Math.ceil(me.downT)}s`;
+      hold = me.reviveBy === me.id ? '' : me.selfRevive ? `Hold ${this.k('interact')} to Self-Revive` : `Bleeding out — ${Math.ceil(me.downT)}s`;
       if (me.reviveBy >= 0) { progV = me.reviveT / 5; progTxt = me.reviveBy === me.id ? 'Using Self-Revive' : `Being revived`; }
     }
     if (me.phase === Phase.Alive) {

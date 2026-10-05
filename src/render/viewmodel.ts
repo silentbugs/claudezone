@@ -64,6 +64,12 @@ function keyframe(keys: [number, THREE.Vector3][], u: number): THREE.Vector3 {
   return keys[keys.length - 1][1].clone();
 }
 
+/** self-revive camera: looks down to the thigh for the jab and back up as you get to your feet; a jolt at the stab */
+export function reviveLook(u: number) {
+  const down = smooth(u / 0.18) * (1 - smooth((u - 0.8) / 0.18)), jolt = u > 0.33 && u < 0.42 ? Math.sin((u - 0.33) / 0.09 * Math.PI) : 0;
+  return { pitch: -0.62 * down - 0.05 * jolt, roll: 0.06 * down, rise: 0.3 * smooth((u - 0.1) / 0.3) };
+}
+
 export class ViewModel {
   scene = new THREE.Scene();
   camera = new THREE.PerspectiveCamera(58, 1, 0.01, 10);
@@ -144,6 +150,14 @@ export class ViewModel {
     const m = (g: THREE.BufferGeometry, c: number) => new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: c, roughness: 0.6, metalness: 0.2 }));
     let o: THREE.Object3D;
     if (kind === 'stim') { const g = new THREE.Group(); g.add(m(new THREE.CylinderGeometry(0.012, 0.012, 0.12, 8), 0xd8dde0), m(new THREE.CylinderGeometry(0.003, 0.003, 0.05, 4).translate(0, -0.085, 0), 0xc0c4c8), m(new THREE.CylinderGeometry(0.016, 0.016, 0.02, 8).translate(0, 0.065, 0), 0x2a8a3a)); g.rotation.x = Math.PI / 2; o = g; }
+    else if (kind === 'revive') {
+      // self-revive auto-injector: olive body with a yellow band, needle down, plunger cap on top (pushed in during the hold)
+      const g = new THREE.Group();
+      g.add(m(new THREE.CylinderGeometry(0.016, 0.016, 0.13, 10), 0x4f5a3a), m(new THREE.CylinderGeometry(0.0165, 0.0165, 0.018, 10).translate(0, -0.035, 0), 0xd8b02a),
+        m(new THREE.CylinderGeometry(0.0025, 0.0025, 0.045, 4).translate(0, -0.087, 0), 0xc8ccd0));
+      const cap = m(new THREE.CylinderGeometry(0.011, 0.013, 0.03, 8), 0xc84a1e); cap.position.y = 0.075; cap.name = 'plunger'; g.add(cap);
+      g.position.set(0, -0.01, -0.035); g.rotation.x = -0.85; this.handItem = g; this.hand.add(g); return;
+    }
     else if (kind === 'heartbeat') { o = this.heartbeatDevice(); }
     else if (kind === 'frag') o = m(new THREE.SphereGeometry(0.035, 10, 8).scale(1, 1.2, 1), 0x3d4a2e);
     else if (kind === 'molotov') o = m(new THREE.CylinderGeometry(0.028, 0.028, 0.12, 8), 0x3a6a3a);
@@ -193,6 +207,42 @@ export class ViewModel {
   /** play the throw (lethal / tactical) or stim animation with the left hand */
   useItem(kind: string) {
     this.holdItem(kind); this.handKind = kind; this.handT = 0; this.handDur = kind === 'stim' ? 0.9 : 0.62;
+  }
+  /**
+   * Self-revive (first person, downed; u = 0..1 of the revive): the injector comes up into view, is raised, stabbed
+   * into the thigh, held while the plunger goes in (the hand trembles), pulled out and dropped away.
+   * The camera's look-down to the thigh is reviveLook(u). null: not reviving.
+   */
+  /** your own right thigh and knee, seen when you look down to inject */
+  private thigh = (() => {
+    const g = new THREE.Group(), mat = new THREE.MeshStandardMaterial({ color: 0x4d5140, roughness: 0.9 });
+    const up = new THREE.Mesh(new THREE.CylinderGeometry(0.085, 0.075, 0.46, 12).rotateX(Math.PI / 2).translate(0, 0, -0.23), mat);
+    const knee = new THREE.Mesh(new THREE.SphereGeometry(0.078, 12, 8).translate(0, 0, -0.46), mat);
+    const pad = new THREE.Mesh(new RoundedBoxGeometry(0.11, 0.05, 0.12, 2, 0.02).translate(0, 0.06, -0.45), new THREE.MeshStandardMaterial({ color: 0x2b2c28, roughness: 0.8 }));
+    const shin = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.06, 0.45, 10).translate(0, -0.22, -0.46), mat);
+    const pocket = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.03, 0.14).translate(0.06, 0.04, -0.2), new THREE.MeshStandardMaterial({ color: 0x41453a, roughness: 0.9 }));
+    g.add(up, knee, pad, shin, pocket); g.visible = false; return g;
+  })();
+  updateRevive(u: number | null) {
+    if (!this.thigh.parent) this.scene.add(this.thigh);
+    this.thigh.visible = u != null;
+    if (u == null) { if (this.handKind === 'revive') { this.hand.visible = false; this.handKind = ''; } return; }
+    // the leg is drawn up (knee bent) as you sit up, and straightens as you get to your feet
+    const look = smooth(u / 0.18) * (1 - smooth((u - 0.8) / 0.18));
+    this.thigh.position.set(0.0, -0.6 + 0.36 * look, 0.0); this.thigh.rotation.set(0.25 + 0.08 * look, 0.12, 0.04);
+    this.root.visible = false; this.tablet.visible = false;
+    if (this.handKind !== 'revive') { this.holdItem('revive'); this.handKind = 'revive'; this.handT = this.handDur = 0; }
+    this.hand.visible = true;
+    // forearm in from the bottom right (x right, y up, z ahead, pitch of the fist)
+    const k = [[0, 0.14, -0.36, -0.34, 0.9], [0.12, 0.07, -0.05, -0.33, 1.05], [0.28, 0.0, 0.04, -0.33, 0.8], [0.34, 0.03, -0.1, -0.29, 0.95],
+      [0.74, 0.03, -0.105, -0.29, 0.95], [0.83, 0.03, 0.02, -0.33, 1.0], [0.96, 0.18, -0.36, -0.32, 0.9], [1, 0.18, -0.36, -0.32, 0.9]];
+    let i = 1; while (i < k.length - 1 && u > k[i][0]) i++;
+    const [t0, x0, y0, z0, r0] = k[i - 1], [t1, x1, y1, z1, r1] = k[i], e = smooth((u - t0) / Math.max(1e-3, t1 - t0));
+    const hold = u > 0.34 && u < 0.74, tr = hold ? 0.003 : 0, t = this.simTime;
+    this.hand.position.set(x0 + (x1 - x0) * e + Math.sin(t * 41) * tr, y0 + (y1 - y0) * e + Math.sin(t * 53) * tr, z0 + (z1 - z0) * e);
+    this.hand.rotation.set(r0 + (r1 - r0) * e, 0.5, 0);
+    const cap = this.handItem?.getObjectByName('plunger');
+    if (cap) cap.position.y = 0.075 - 0.022 * smooth((u - 0.38) / 0.3);
   }
   /** killstreak tablet (call-in): a rugged tablet raised in both hands with a glowing map screen */
   private tablet = (() => {
@@ -484,7 +534,7 @@ export class ViewModel {
   }
   private envDone = false;
   render(r: THREE.WebGLRenderer) {
-    if (!this.root.visible && !this.air.visible) return;
+    if (!this.root.visible && !this.air.visible && !this.hand.visible) return;
     // a soft studio environment for the first-person scene: metal parts reflect something instead of reading black
     if (!this.envDone) { this.envDone = true; const pm = new THREE.PMREMGenerator(r); this.scene.environment = pm.fromScene(new RoomEnvironment(), 0.04).texture; this.scene.environmentIntensity = 0.55; pm.dispose(); }
     r.autoClear = false; r.clearDepth(); r.render(this.scene, this.camera); r.autoClear = true;

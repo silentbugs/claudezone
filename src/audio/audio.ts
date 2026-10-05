@@ -18,7 +18,7 @@ export type SoundName =
   | 'step_dirt' | 'step_concrete' | 'step_metal' | 'step_wood' | 'land' | 'jump' | 'slide' | 'gear'
   | 'flareLaunch' | 'reconTick' | 'hbPing' | 'uavOn' | 'uavOff' | 'horn' | 'hornTruck' | 'reconThud' | 'reconStab' | 'reconPulse' | 'reconHat' | 'reconPad' | 'vehicleCrash' | 'chestHum' | 'jet' | 'callin' | 'contractStart' | 'contractDone' | 'contractStep' | 'pickup' | 'cash' | 'chute' | 'chuteCut' | 'explosion' | 'explosionFar' | 'whiz' | 'impact' | 'impactMetal' | 'impactWood' | 'impactGlass' | 'impactWater'
   | 'musicInfil' | 'musicVictory' | 'musicDefeat'
-  | 'uiOpen' | 'uiHover' | 'uiBuy' | 'uiDeny' | 'downed' | 'cough' | 'heartbeat' | 'breath' | 'doorOpen' | 'doorClose' | 'doorSlam' | 'beep' | 'revive' | 'crate' | 'stinger' | 'flag' | 'rock';
+  | 'uiOpen' | 'uiHover' | 'uiBuy' | 'uiDeny' | 'downed' | 'cough' | 'heartbeat' | 'breath' | 'doorOpen' | 'doorClose' | 'doorSlam' | 'beep' | 'revive' | 'stimJab' | 'crate' | 'stinger' | 'flag' | 'rock';
 
 type Loop = 'engine' | 'wind' | 'gas' | 'chute' | 'vehicle' | 'heli' | 'tinnitus';
 
@@ -438,6 +438,9 @@ export class Audio {
     this.add('horn', horn(405, 507, 0.45)); this.add('hornTruck', horn(220, 277, 0.8));
     this.add('uavOn', chirp(true)); this.add('uavOff', chirp(false));
     // heartbeat sensor contact: a soft electronic blip
+    // stim / self-revive injector: cap click, spring-loaded thunk, pneumatic hiss as it injects
+    this.add('stimJab', S(0.7).mix(clk(2100, 0.05, 905)).mix(N(0.09, 906).filter('bp', 700, 1.2).env((t) => Math.exp(-t * 50)).mix(tone(0.09, (t) => Math.sin(2 * Math.PI * 180 * t) * Math.exp(-t * 45)), 0.9), 1, 0.1)
+      .mix(N(0.5, 907).filter('hp', 3500).env((t) => Math.min(1, t * 40) * Math.exp(-t * 6)), 0.25, 0.14));
     this.add('hbPing', tone(0.25, (t) => (Math.sin(2 * Math.PI * 1480 * t) * 0.6 + Math.sin(2 * Math.PI * 2960 * t) * 0.15) * Math.min(1, t / 0.004) * Math.exp(-t * 22)));
     // vehicle crash: a heavy body thump, crunching sheet metal and a short metallic ring
     const vcrunch = (sd: number) => tone(0.9, (t) => Math.sin(2 * Math.PI * (70 + 60 * Math.exp(-t * 20)) * t) * Math.exp(-t * 9) * 0.9 + (Math.sin(2 * Math.PI * 610 * t) * 0.25 + Math.sin(2 * Math.PI * 1370 * t) * 0.15) * Math.exp(-t * 7))
