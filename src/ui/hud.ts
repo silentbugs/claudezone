@@ -250,7 +250,8 @@ export class Hud {
       case 'kill': case 'down': {
         const w = WEAPON[e.w];
         const mid = w ? `<span class="gun">${sil(e.w, 0, '#fff')}</span>` : `<span style="opacity:.75">[${e.w === 'gas' ? 'Gas' : e.w === 'fall' ? 'Fall' : e.w === 'bleed' ? 'Bled out' : e.w === 'melee' ? 'Melee' : e.w}]</span>`;
-        this.feedLine(e.attacker >= 0 && e.attacker !== e.victim ? `${name(e.attacker)} ${mid} ${e.t === 'down' ? '<span style="opacity:.7">▼</span>' : ''}${name(e.victim)}` : `${mid} ${name(e.victim)}`);
+        const hs = e.head && w ? `<span class="hs">${ICON.headshot}</span>` : ''; // headshot: head-and-crosshair after the gun
+        this.feedLine(e.attacker >= 0 && e.attacker !== e.victim ? `${name(e.attacker)} ${mid}${hs} ${e.t === 'down' ? '<span style="opacity:.7">▼</span>' : ''}${name(e.victim)}` : `${mid}${hs} ${name(e.victim)}`);
         if (e.attacker === this.localId && e.victim !== this.localId) this.showNote(e.t === 'down' ? 'Enemy downed' : 'Enemy eliminated');
         if (e.victim === this.localId) { const by = e.attacker >= 0 && e.attacker !== this.localId ? this.sim.players[e.attacker].name : (e.w === 'gas' ? 'the gas' : e.w); this.showBanner(e.t === 'down' ? "You're down" : 'Eliminated', e.t === 'down' ? `Downed by ${by}` : `Killed by ${by}`); }
         break;

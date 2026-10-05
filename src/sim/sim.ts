@@ -586,7 +586,7 @@ export class Sim {
     let down = false;
     if (lethal) {
       if (v.phase === Phase.Gulag) { this.kill(v, attacker, weapon, head, false); }
-      else if (this.squadHasStanding(v.squad, v.id) && !this.inWarmup) { down = true; this.downPlayer(v, attacker, weapon); }
+      else if (this.squadHasStanding(v.squad, v.id) && !this.inWarmup) { down = true; this.downPlayer(v, attacker, weapon, head); }
       else this.kill(v, attacker, weapon, head, false);
     }
     if (att || attacker === -1) this.emit({ t: 'hit', attacker, victim: v.id, dmg: amount, head, armorBroke, armorHit, kill: lethal && !down, down, x: hx ?? v.x, y: hy ?? v.y + 1, z: hz ?? v.z });
@@ -596,12 +596,12 @@ export class Sim {
     for (const q of this.players) if (q.squad === squad && q.id !== except && (q.phase === Phase.Alive || q.phase === Phase.Freefall || q.phase === Phase.Chute || q.phase === Phase.Plane)) return true;
     return false;
   }
-  private downPlayer(v: Player, attacker: number, weapon: string) {
+  private downPlayer(v: Player, attacker: number, weapon: string, head = false) {
     if (v.turret >= 0) this.unmanTurret(v);
     if ((v as any).vehicle !== undefined) exitVehicle(this, v);
     v.phase = Phase.Downed; v.health = DOWNED.health; v.armor = 0; v.downT = DOWNED.bleed; v.reviveBy = -1; v.reviveT = 0;
     v.plateT = 0; v.reloadT = 0; v.ads = 0; v.stance = Stance.Prone; v.sprinting = false; v.slideT = 0;
-    this.emit({ t: 'down', victim: v.id, attacker, w: weapon });
+    this.emit({ t: 'down', victim: v.id, attacker, w: weapon, head });
   }
   revive(p: Player) {
     if (p.reviveBy === p.id) p.selfRevive = false;

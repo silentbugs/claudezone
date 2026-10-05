@@ -319,3 +319,7 @@
 .letterbox { position: absolute; inset: 0; pointer-events: none; z-index: 39; }
 .letterbox i { position: absolute; left: 0; right: 0; height: calc(12vh * var(--lb, 1)); background: #000; }
 .letterbox i:first-child { top: 0; } .letterbox i:last-child { bottom: 0; }
+
+/* kill feed headshot icon */
+.hud .feed .hs { display: inline-block; width: calc(var(--px) * 20); height: calc(var(--px) * 20); vertical-align: middle; margin: 0 calc(var(--px) * 4) 0 calc(var(--px) * 2); }
+.hud .feed .hs svg { width: 100%; height: 100%; }
